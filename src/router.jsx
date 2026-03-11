@@ -12,27 +12,39 @@ function AuthGuard({ children }) {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    let done = false
+
+    const finish = () => {
+      if (!done) { done = true; setReady(true) }
+    }
+
+    // Timeout de secours : si Supabase lock bloque > 3s, on continue quand même
+    const timeout = setTimeout(finish, 3000)
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      clearTimeout(timeout)
       setSession(session)
       if (session?.user) {
-        // On attend que le profile soit chargé avant d'afficher la page
-        await fetchProfile(session.user.id)
+        try { await fetchProfile(session.user.id) } catch (_) {}
       }
-      setReady(true)
-    })
+      finish()
+    }).catch(() => { clearTimeout(timeout); finish() })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session)
-      if (session?.user) await fetchProfile(session.user.id)
+      if (session?.user) {
+        try { await fetchProfile(session.user.id) } catch (_) {}
+      }
     })
-    return () => subscription.unsubscribe()
+
+    return () => { subscription.unsubscribe(); clearTimeout(timeout) }
   }, [])
 
   if (!ready) return (
-    <div style={{ minHeight: '100vh', background: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60A5FA', fontSize: 14, fontFamily: 'system-ui' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 32, marginBottom: 10 }}>⚡</div>
-        <div>Chargement PICPUS…</div>
+    <div style={{ minHeight: '100vh', background: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui' }}>
+      <div style={{ textAlign: 'center', color: '#60A5FA' }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
+        <div style={{ fontSize: 14 }}>Chargement PICPUS…</div>
       </div>
     </div>
   )
