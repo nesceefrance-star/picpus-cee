@@ -1,9 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import PICPUSHub from './Hub.jsx'
+import AppRouter from './router.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <PICPUSHub />
+    <AppRouter />
   </StrictMode>
 )
