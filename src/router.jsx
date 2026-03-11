@@ -14,8 +14,11 @@ function AuthGuard({ children }) {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
-      if (session?.user) fetchProfile(session.user.id).then(() => setLoading(false))
-      else setLoading(false)
+      if (session?.user) {
+        fetchProfile(session.user.id).finally(() => setLoading(false))
+      } else {
+        setLoading(false)
+      }
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
@@ -26,7 +29,10 @@ function AuthGuard({ children }) {
 
   if (loading) return (
     <div style={{ minHeight: '100vh', background: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60A5FA', fontSize: 14, fontFamily: 'system-ui' }}>
-      Chargement…
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 28, marginBottom: 10 }}>⚡</div>
+        <div>Chargement PICPUS…</div>
+      </div>
     </div>
   )
 
