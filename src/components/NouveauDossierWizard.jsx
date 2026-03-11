@@ -7,9 +7,9 @@ const getZoneClimatique = (codePostal) => {
   // H3 - DOM-TOM et régions côtières méditerranéennes
   if ([97, 98].includes(cp) || [13, 83, 84, 30, 34, 11, 66].includes(cp)) return 'H3'
   // H2 - Centre, Ouest, Sud-Ouest
-  if ([17, 16, 33, 40, 64, 65, 32, 31, 09, 12, 46, 47, 82, 81, 48,
+  if ([17, 16, 33, 40, 64, 65, 32, 31, 9, 12, 46, 47, 82, 81, 48,
        44, 85, 49, 53, 72, 37, 41, 28, 45, 36, 23, 87, 19, 15,
-       43, 63, 03, 18, 58, 71, 21, 89, 10].includes(cp)) return 'H2'
+       43, 63, 3, 18, 58, 71, 21, 89, 10].includes(cp)) return 'H2'
   // H1 - Nord, Est, Montagne
   return 'H1'
 }
