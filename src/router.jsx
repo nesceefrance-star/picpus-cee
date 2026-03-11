@@ -9,28 +9,29 @@ import PICPUSHub from './Hub'
 
 function AuthGuard({ children }) {
   const { session, setSession, fetchProfile } = useStore()
-  const [loading, setLoading] = useState(true)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session)
       if (session?.user) {
-        fetchProfile(session.user.id).finally(() => setLoading(false))
-      } else {
-        setLoading(false)
+        // On attend que le profile soit chargé avant d'afficher la page
+        await fetchProfile(session.user.id)
       }
+      setReady(true)
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session)
-      if (session?.user) fetchProfile(session.user.id)
+      if (session?.user) await fetchProfile(session.user.id)
     })
     return () => subscription.unsubscribe()
   }, [])
 
-  if (loading) return (
+  if (!ready) return (
     <div style={{ minHeight: '100vh', background: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60A5FA', fontSize: 14, fontFamily: 'system-ui' }}>
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 28, marginBottom: 10 }}>⚡</div>
+        <div style={{ fontSize: 32, marginBottom: 10 }}>⚡</div>
         <div>Chargement PICPUS…</div>
       </div>
     </div>
