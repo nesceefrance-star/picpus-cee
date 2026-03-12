@@ -1032,7 +1032,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
 
                 {/* Prime CEE */}
                 <tr>
-                  <td colSpan={6} style={{background:"#F0FDF4",padding:"6px 10px",fontWeight:700,fontSize:11,color:"#15803D",textTransform:"uppercase"}}>Prime CEE — PICPUS ÉNERGIE</td>
+                  <td colSpan={6} style={{background:"#F0FDF4",padding:"6px 10px",fontWeight:700,fontSize:11,color:"#15803D",textTransform:"uppercase"}}>Prime CEE — RÉGIE PICPUS</td>
                   <td style={{background:"#F0FDF4",padding:"6px 8px",textAlign:"right",color:"#15803D",fontWeight:700}}>
                     − <input type="number" value={prime} onChange={e=>setPrime(Number(e.target.value)||0)} style={{...INP,width:76,textAlign:"right",color:"#15803D",fontWeight:700}}/> €
                   </td>
@@ -1199,7 +1199,7 @@ const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVent
                 {l:"Total H.T",    v:fmtE(stats.totalHT)},
                 {l:"TVA (20%)",    v:fmtE(stats.totalTVA)},
                 {l:"Total T.T.C",  v:fmtE(stats.totalTTC),  bold:true,bt:true},
-                {l:`Prime CEE (PICPUS ÉNERGIE)`, v:"− "+fmtE(prime), color:"#16A34A",bt:true},
+                {l:`Prime CEE (RÉGIE PICPUS)`, v:"− "+fmtE(prime), color:"#16A34A",bt:true},
                 {l:"Reste à charge T.T.C",       v:fmtE(stats.resteTTC), bold:true,bt:true},
               ].map((r,i) => (
                 <tr key={i} style={{borderTop:r.bt?"1px solid #333":"none"}}>
@@ -1234,7 +1234,7 @@ const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVent
         ))}
         <div style={{borderTop:"0.5px solid #ccc",margin:"8px 0"}}/>
         <div style={{fontSize:8,fontWeight:800,color:"#111",margin:"4px 0 3px"}}>Termes et conditions CEE</div>
-        <div style={{fontSize:7,color:"#555",lineHeight:1.7,marginBottom:5}}>Les travaux objet du présent document donneront lieu à une contribution financière de <strong>PICPUS ÉNERGIE</strong> (SIREN 533 333 118), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : <strong>{fmtE(prime)}</strong>.</div>
+        <div style={{fontSize:7,color:"#555",lineHeight:1.7,marginBottom:5}}>Les travaux objet du présent document donneront lieu à une contribution financière de <strong>RÉGIE PICPUS</strong> (SIREN 533 333 118), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : <strong>{fmtE(prime)}</strong>.</div>
         <Ftr/>
       </div>
 
@@ -1530,20 +1530,25 @@ export default function PICPUSHub() {
               <span style={{fontSize:28,fontWeight:900,color:"#60A5FA",letterSpacing:2,lineHeight:1}}>PICPUS</span>
               <div style={{width:2,height:26,background:"#475569"}}/>
               <div>
-                <div style={{fontSize:14,fontWeight:600,color:"#CBD5E1",lineHeight:1.2}}>ÉNERGIE</div>
-                <div style={{fontSize:11,color:"#64748B"}}>SIREN 533 333 118</div>
+                <div style={{fontSize:14,fontWeight:600,color:"#CBD5E1",lineHeight:1.2}}>RÉGIE PICPUS</div>
               </div>
             </div>
             <div style={{fontSize:22,fontWeight:800,color:"#F8FAFC",marginBottom:4}}>Plateforme CEE — Outils internes</div>
             <div style={{fontSize:13,color:"#94A3B8"}}>Certificats d'Économies d'Énergie · Automatisation des processus</div>
           </div>
-          <div style={{display:"flex",gap:12}}>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:12}}>
+            <button onClick={()=>window.location.href="/"}
+              style={{background:"transparent",border:"1px solid #475569",color:"#94A3B8",borderRadius:7,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}}>
+              ← Dashboard
+            </button>
+            <div style={{display:"flex",gap:12}}>
             {[{n:MODULES.filter(m=>m.actif).length,l:"Disponibles",c:"#4ADE80"},{n:MODULES.filter(m=>!m.actif).length,l:"En développement",c:"#FCD34D"},{n:MODULES.length,l:"Total",c:"#94A3B8"}].map(s=>(
               <div key={s.l} style={{textAlign:"center",padding:"10px 18px",background:"#0F172A",borderRadius:10,border:"1px solid #334155"}}>
                 <div style={{fontSize:22,fontWeight:800,color:s.c,lineHeight:1}}>{s.n}</div>
                 <div style={{fontSize:11,color:"#64748B",marginTop:3,whiteSpace:"nowrap"}}>{s.l}</div>
               </div>
             ))}
+            </div>
           </div>
         </div>
       </div>
@@ -1599,7 +1604,7 @@ export default function PICPUSHub() {
         </div>
 
         <div style={{marginTop:28,paddingTop:16,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{fontSize:12,color:C.textSoft}}>PICPUS ÉNERGIE — Plateforme CEE interne — {new Date().toLocaleDateString("fr-FR")}</span>
+          <span style={{fontSize:12,color:C.textSoft}}>RÉGIE PICPUS — Plateforme CEE interne — {new Date().toLocaleDateString("fr-FR")}</span>
           <span style={{fontSize:11,color:C.border}}>Développé avec Claude · Anthropic</span>
         </div>
       </div>
