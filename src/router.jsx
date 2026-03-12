@@ -4,6 +4,7 @@ import { supabase } from './lib/supabase'
 import useStore from './store/useStore'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import DossierDetail from './pages/DossierDetail'
 import AdminUsers from './pages/AdminUsers'
 import ResetPassword from './pages/ResetPassword'
 import PICPUSHub from './Hub'
@@ -63,7 +64,7 @@ export default function AppRouter() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/" element={<AuthGuard><Dashboard /></AuthGuard>} />
         <Route path="/hub" element={<AuthGuard><PICPUSHub /></AuthGuard>} />
-        <Route path="/dossier/:id" element={<AuthGuard><Dashboard /></AuthGuard>} />
+        <Route path="/dossier/:id" element={<AuthGuard><DossierDetail /></AuthGuard>} />
         <Route path="/admin/users" element={<AuthGuard><AdminUsers /></AuthGuard>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -66,10 +66,15 @@ const useStore = create((set, get) => ({
   currentDossier: null,
 
   fetchDossiers: async () => {
-    const { data, error } = await supabase
+    const { user, profile } = get()
+    let query = supabase
       .from('dossiers')
-      .select(`*, prospects(*), profiles(nom, prenom, email)`)
+      .select(`*, prospects(*)`)
       .order('created_at', { ascending: false })
+    if (profile?.role !== 'admin' && user?.id) {
+      query = query.eq('assigne_a', user.id)
+    }
+    const { data, error } = await query
     if (!error) set({ dossiers: data || [] })
     return { data, error }
   },

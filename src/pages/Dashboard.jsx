@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useStore from '../store/useStore'
+import NouveauDossierWizard from '../components/NouveauDossierWizard'
 
 const STATUTS = [
   { id: 'simulation',  label: 'Simulation',   color: '#7C3AED', bg: '#EDE9FE' },
@@ -278,22 +279,30 @@ function NouveauDossierModal({ onClose, onCreate }) {
 // ── Dashboard principal ───────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { dossiers, fetchDossiers, setCurrentDossier, user, profile, signOut } = useStore()
+  const { dossiers, fetchDossiers, setCurrentDossier, user, profile, signOut, profiles, fetchProfiles } = useStore()
   const [showModal, setShowModal] = useState(false)
-  const [search, setSearch]       = useState('')
-  const [filtreStatut, setFiltreStatut] = useState('all')
-  const [loading, setLoading]     = useState(true)
+  const [search, setSearch]           = useState('')
+  const [filtreStatut, setFiltreStatut]       = useState('all')
+  const [filtreCommercial, setFiltreCommercial] = useState('all')
+  const [loading, setLoading]         = useState(true)
 
   useEffect(() => {
+    fetchProfiles()
     fetchDossiers().then(() => setLoading(false))
   }, [])
+
+  const profileName = (id) => {
+    const p = profiles.find(p => p.id === id)
+    return p ? (`${p.prenom || ''} ${p.nom || ''}`.trim() || p.email) : '—'
+  }
 
   const filtered = dossiers.filter(d => {
     const matchSearch = !search ||
       d.ref?.toLowerCase().includes(search.toLowerCase()) ||
       d.prospects?.raison_sociale?.toLowerCase().includes(search.toLowerCase())
     const matchStatut = filtreStatut === 'all' || d.statut === filtreStatut
-    return matchSearch && matchStatut
+    const matchCommercial = filtreCommercial === 'all' || d.assigne_a === filtreCommercial
+    return matchSearch && matchStatut && matchCommercial
   })
 
   const counts = STATUTS.reduce((acc, s) => {
@@ -381,11 +390,22 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Recherche */}
-        <div style={{ marginBottom: 16 }}>
+        {/* Recherche + filtre commercial (admin) */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Rechercher un dossier, prospect…"
-            style={{ ...INP, fontSize: 14, padding: '11px 16px', borderRadius: 9 }}/>
+            style={{ ...INP, flex: 1, fontSize: 14, padding: '11px 16px', borderRadius: 9 }}/>
+          {isAdmin && (
+            <select value={filtreCommercial} onChange={e => setFiltreCommercial(e.target.value)}
+              style={{ ...INP, width: 200, fontSize: 13, padding: '11px 14px', borderRadius: 9, cursor: 'pointer' }}>
+              <option value="all">Tous les commerciaux</option>
+              {profiles.filter(p => ['admin','commercial'].includes(p.role)).map(p => (
+                <option key={p.id} value={p.id}>
+                  {(`${p.prenom || ''} ${p.nom || ''}`.trim()) || p.email}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Liste dossiers */}
@@ -430,7 +450,7 @@ export default function Dashboard() {
                 <span style={{ fontSize: 12, color: C.textMid, alignSelf: 'center' }}>{d.fiche_cee}</span>
                 <span style={{ alignSelf: 'center' }}><StatutBadge statut={d.statut} /></span>
                 <span style={{ fontSize: 12, color: C.textMid, alignSelf: 'center' }}>
-                  {d.assigne_a ? d.assigne_a.slice(0, 8) + '…' : '—'}
+                  {profileName(d.assigne_a)}
                 </span>
                 <span style={{ fontSize: 11, color: C.textSoft, alignSelf: 'center' }}>
                   {new Date(d.created_at).toLocaleDateString('fr-FR')}
@@ -442,7 +462,7 @@ export default function Dashboard() {
       </div>
 
       {showModal && (
-        <NouveauDossierModal
+        <NouveauDossierWizard
           onClose={() => setShowModal(false)}
           onCreate={(d) => d && openDossier(d)}
         />
