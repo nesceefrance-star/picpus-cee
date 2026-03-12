@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { useNavigate } from 'react-router-dom'
 
 export default function Login() {
   const [email, setEmail]       = useState('')
@@ -7,6 +8,14 @@ export default function Login() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
   const [mode, setMode]         = useState('login')
+  const navigate = useNavigate()
+
+  // Si déjà connecté → redirige vers dashboard
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) navigate('/', { replace: true })
+    })
+  }, [])
 
   const INP = {
     width: '100%', boxSizing: 'border-box',
@@ -26,8 +35,13 @@ export default function Login() {
     setLoading(true)
     setError(null)
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-    if (error) setError(error.message)
-    setLoading(false)
+    if (error) {
+      setError(error.message)
+      setLoading(false)
+    } else {
+      // Redirection explicite après succès
+      navigate('/', { replace: true })
+    }
   }
 
   const handleReset = async () => {
@@ -38,7 +52,7 @@ export default function Login() {
       redirectTo: 'https://picpus-cee.vercel.app/reset-password',
     })
     if (error) setError(error.message)
-    else setError('✅ Email de réinitialisation envoyé')
+    else setError('✅ Email envoyé — vérifie ta boîte mail')
     setLoading(false)
   }
 
@@ -92,16 +106,23 @@ export default function Login() {
             </div>
             <ErrorBox/>
             <button onClick={handleLogin} disabled={loading} style={{
-              width: '100%', padding: '12px', background: loading ? '#1D4ED8' : '#2563EB',
-              color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700,
-              cursor: loading ? 'wait' : 'pointer', fontFamily: 'inherit',
+              width: '100%', padding: '13px',
+              background: loading ? '#1D4ED8' : '#2563EB',
+              color: '#fff', border: 'none', borderRadius: 8,
+              fontSize: 15, fontWeight: 700,
+              cursor: loading ? 'wait' : 'pointer',
+              fontFamily: 'inherit',
             }}>
               {loading ? 'Connexion…' : 'Se connecter'}
             </button>
             <button onClick={() => { setMode('reset'); setError(null); }} style={{
-              width: '100%', marginTop: 12, padding: '8px', background: 'transparent',
-              color: '#475569', border: 'none', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-            }}>Mot de passe oublié ?</button>
+              width: '100%', marginTop: 12, padding: '10px',
+              background: 'transparent', color: '#475569',
+              border: 'none', fontSize: 13, cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}>
+              Mot de passe oublié ?
+            </button>
           </div>
         ) : (
           <div>
@@ -116,15 +137,19 @@ export default function Login() {
             </div>
             <ErrorBox/>
             <button onClick={handleReset} disabled={loading} style={{
-              width: '100%', padding: '12px', background: '#2563EB', color: '#fff',
-              border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700,
+              width: '100%', padding: '13px',
+              background: '#2563EB', color: '#fff',
+              border: 'none', borderRadius: 8,
+              fontSize: 15, fontWeight: 700,
               cursor: 'pointer', fontFamily: 'inherit',
             }}>
               {loading ? 'Envoi…' : 'Envoyer le lien'}
             </button>
             <button onClick={() => { setMode('login'); setError(null); }} style={{
-              width: '100%', marginTop: 12, padding: '8px', background: 'transparent',
-              color: '#475569', border: 'none', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+              width: '100%', marginTop: 12, padding: '10px',
+              background: 'transparent', color: '#475569',
+              border: 'none', fontSize: 13, cursor: 'pointer',
+              fontFamily: 'inherit',
             }}>← Retour</button>
           </div>
         )}

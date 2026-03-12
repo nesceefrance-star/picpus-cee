@@ -1286,44 +1286,54 @@ const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVent
 });
 
 // ── Composant principal MargesDevis ────────────────────────────────────────
+const CACHE_KEY = "picpus_devis_cache";
+
+const normalizeDevis = d => ({
+  id: d.id,
+  nomClient: d.nom_client,
+  refDevis: d.ref_devis,
+  dateDevis: d.date_devis,
+  siret: d.siret,
+  adresseSite: d.adresse_site,
+  nomContact: d.nom_contact,
+  fonctionContact: d.fonction_contact,
+  sousTraitant: d.sous_traitant,
+  rgeNum: d.rge_num,
+  rgeValidite: d.rge_validite,
+  lignes: d.lignes || [],
+  batQte: d.bat_qte || 0,
+  batPuVente: d.bat_pu_vente || 0,
+  prime: d.prime || 0,
+  createdAt: new Date(d.created_at).getTime(),
+  updatedAt: new Date(d.updated_at).getTime(),
+});
+
 function MargesDevis() {
-  const [devisList, setDevisList] = useState([]);
+  // Affiche immédiatement le cache localStorage pendant le chargement Supabase
+  const [devisList, setDevisList] = useState(() => {
+    try { const c = localStorage.getItem(CACHE_KEY); return c ? JSON.parse(c) : []; } catch { return []; }
+  });
   const [loading, setLoading]     = useState(true);
   const [vue, setVue]             = useState("liste");
   const [devisId, setDevisId]     = useState(null);
-  const [step, setStep]           = useState(null);    // null | "infos" | "upload"
+  const [step, setStep]           = useState(null);
   const [infosEnCours, setInfosEnCours] = useState(null);
-  const [reuploadId, setReuploadId] = useState(null); // id du devis à re-uploader
+  const [reuploadId, setReuploadId] = useState(null);
 
-  // ── Chargement depuis Supabase ─────────────────────────────────────────
-  const fetchDevis = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("devis_hub")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (!error && data) {
-      // Normalise les clés snake_case → camelCase pour compatibilité avec le reste du code
-      setDevisList(data.map(d => ({
-        id: d.id,
-        nomClient: d.nom_client,
-        refDevis: d.ref_devis,
-        dateDevis: d.date_devis,
-        siret: d.siret,
-        adresseSite: d.adresse_site,
-        nomContact: d.nom_contact,
-        fonctionContact: d.fonction_contact,
-        sousTraitant: d.sous_traitant,
-        rgeNum: d.rge_num,
-        rgeValidite: d.rge_validite,
-        lignes: d.lignes || [],
-        batQte: d.bat_qte || 0,
-        batPuVente: d.bat_pu_vente || 0,
-        prime: d.prime || 0,
-        createdAt: new Date(d.created_at).getTime(),
-        updatedAt: new Date(d.updated_at).getTime(),
-      })));
-    }
+  // ── Chargement depuis Supabase (avec cache pour affichage instantané) ──
+  const fetchDevis = async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("devis_hub")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (!error && data) {
+        const normalized = data.map(normalizeDevis);
+        setDevisList(normalized);
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify(normalized)); } catch {}
+      }
+    } catch (_) {}
     setLoading(false);
   };
 
@@ -1386,7 +1396,9 @@ function MargesDevis() {
     await supabase.from("devis_hub")
       .update(toRow(updatedDevis))
       .eq("id", updatedDevis.id);
-    setDevisList(prev => prev.map(d => d.id === updatedDevis.id ? updatedDevis : d));
+    const updated = devisList.map(d => d.id === updatedDevis.id ? updatedDevis : d);
+    setDevisList(updated);
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(updated)); } catch {}
   };
 
   // ── Supprimer un devis ────────────────────────────────────────────────
@@ -1410,7 +1422,7 @@ function MargesDevis() {
     />;
   }
 
-  if (loading) return (
+  if (loading && devisList.length === 0) return (
     <div style={{height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:C.textMid,fontSize:14}}>
       ⏳ Chargement des devis…
     </div>

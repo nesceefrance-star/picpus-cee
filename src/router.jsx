@@ -14,13 +14,10 @@ function AuthGuard({ children }) {
 
   useEffect(() => {
     let done = false
+    const finish = () => { if (!done) { done = true; setReady(true) } }
 
-    const finish = () => {
-      if (!done) { done = true; setReady(true) }
-    }
-
-    // Timeout de secours : si Supabase lock bloque > 3s, on continue quand même
-    const timeout = setTimeout(finish, 3000)
+    // Timeout de secours — 8s pour laisser le temps sur mobile lent
+    const timeout = setTimeout(finish, 8000)
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       clearTimeout(timeout)
@@ -31,11 +28,14 @@ function AuthGuard({ children }) {
       finish()
     }).catch(() => { clearTimeout(timeout); finish() })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Écoute les changements d'auth (login/logout depuis n'importe quel onglet)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session)
       if (session?.user) {
         try { await fetchProfile(session.user.id) } catch (_) {}
       }
+      // Si on vient de se connecter et qu'on n'est pas encore ready, on l'est maintenant
+      if (!done) finish()
     })
 
     return () => { subscription.unsubscribe(); clearTimeout(timeout) }
@@ -45,7 +45,8 @@ function AuthGuard({ children }) {
     <div style={{ minHeight: '100vh', background: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui' }}>
       <div style={{ textAlign: 'center', color: '#60A5FA' }}>
         <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
-        <div style={{ fontSize: 14 }}>Chargement PICPUS…</div>
+        <div style={{ fontSize: 14, marginBottom: 8 }}>Chargement PICPUS…</div>
+        <div style={{ fontSize: 11, color: '#334155' }}>Connexion en cours…</div>
       </div>
     </div>
   )
