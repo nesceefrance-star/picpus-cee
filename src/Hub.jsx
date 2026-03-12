@@ -786,15 +786,23 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
 
   const lignes   = devis.lignes;
   const setLignes = fn => setDevis(d => ({...d, lignes: fn(d.lignes), updatedAt: Date.now()}));
-  const setPrime  = v  => setDevis(d => ({...d, prime: v, updatedAt: Date.now()}));
   const setBatPuVente = v => setDevis(d => ({...d, batPuVente: v, updatedAt: Date.now()}));
   const setBatQte = v => setDevis(d => ({...d, batQte: v, updatedAt: Date.now()}));
 
   const actives = lignes.filter(l => l.inclus);
   const cats    = [...new Set(actives.map(l => l.cat))];
-  const prime   = devis.prime || 0;
+  // Prime CEE simulateur — référence interne, lecture seule
+  const primeCEESimu = devis.prime || 0;
   const batPuVente = devis.batPuVente || 0;
   const batQte  = devis.batQte || 0;
+
+  // Prime faciale : null = auto (= TTC), sinon valeur manuelle
+  const [primeFaciale, setPrimeFaciale] = useState(devisInit.primeFaciale ?? null);
+
+  // Sync primeFaciale dans l'objet devis pour que onSave() l'inclue
+  useEffect(() => {
+    setDevis(d => ({...d, primeFaciale, updatedAt: Date.now()}));
+  }, [primeFaciale]);
 
   const stats = useMemo(() => {
     const achat    = actives.reduce((s,l) => s+l.qte*l.puAchat, 0);
@@ -802,8 +810,10 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
     const totalHT  = sousTot + batQte * batPuVente;
     const totalTVA = totalHT * .20;
     const totalTTC = totalHT + totalTVA;
-    return { achat, sousTot, marge: sousTot-achat, margePct: achat>0?(sousTot-achat)/achat*100:0, margeNette: sousTot>0?(sousTot-achat)/sousTot*100:0, totalHT, totalTVA, totalTTC, resteHT: totalHT-prime, resteTTC: totalTTC-prime };
-  }, [actives, batPuVente, batQte, prime]);
+    // Prime faciale effective : manuelle si saisie, sinon = TTC
+    const effectivePrimeFaciale = primeFaciale !== null ? primeFaciale : totalTTC;
+    return { achat, sousTot, marge: sousTot-achat, margePct: achat>0?(sousTot-achat)/achat*100:0, margeNette: sousTot>0?(sousTot-achat)/sousTot*100:0, totalHT, totalTVA, totalTTC, effectivePrimeFaciale, resteHT: totalHT-effectivePrimeFaciale, resteTTC: totalTTC-effectivePrimeFaciale };
+  }, [actives, batPuVente, batQte, primeFaciale]);
 
   const upd = (id, field, value) => setLignes(ls => ls.map(l => {
     if (l.id !== id) return l;
@@ -1042,13 +1052,37 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
                   <td style={{background:"#EFF6FF",borderTop:`2px solid ${C.border}`}}/>
                 </tr>
 
-                {/* Prime CEE */}
+                {/* Prime CEE simulateur — référence lecture seule */}
                 <tr>
-                  <td colSpan={6} style={{background:"#F0FDF4",padding:"6px 10px",fontWeight:700,fontSize:11,color:"#15803D",textTransform:"uppercase"}}>Prime CEE — RÉGIE PICPUS</td>
-                  <td style={{background:"#F0FDF4",padding:"6px 8px",textAlign:"right",color:"#15803D",fontWeight:700}}>
-                    − <input type="number" value={prime} onChange={e=>setPrime(Number(e.target.value)||0)} style={{...INP,width:76,textAlign:"right",color:"#15803D",fontWeight:700}}/> €
+                  <td colSpan={6} style={{background:"#F0FDF4",padding:"5px 10px",fontSize:10,color:"#15803D"}}>
+                    <span style={{fontWeight:700,textTransform:"uppercase"}}>Prime CEE simulateur</span>
+                    <span style={{fontWeight:400,marginLeft:6,fontSize:10,color:"#4ADE80"}}>(référence — lecture seule)</span>
+                  </td>
+                  <td style={{background:"#F0FDF4",padding:"5px 8px",textAlign:"right",color:"#15803D",fontWeight:700,fontSize:12}}>
+                    {fmtE(primeCEESimu)}
                   </td>
                   <td style={{background:"#F0FDF4"}}/>
+                </tr>
+                {/* Prime faciale — éditable, auto = TTC */}
+                <tr>
+                  <td colSpan={5} style={{background:"#DCFCE7",padding:"6px 10px",fontWeight:700,fontSize:11,color:"#15803D",textTransform:"uppercase"}}>
+                    Prime faciale (devis client)
+                    {primeFaciale === null && <span style={{fontWeight:400,fontSize:10,color:"#4ADE80",marginLeft:6,textTransform:"none"}}>auto = TTC</span>}
+                  </td>
+                  <td colSpan={2} style={{background:"#DCFCE7",padding:"6px 8px",textAlign:"right",color:"#15803D",fontWeight:700}}>
+                    − <input type="number"
+                        value={primeFaciale !== null ? primeFaciale : stats.effectivePrimeFaciale.toFixed(2)}
+                        onChange={e => setPrimeFaciale(Number(e.target.value) || 0)}
+                        style={{...INP,width:84,textAlign:"right",color:"#15803D",fontWeight:700,background:"#F0FDF4"}}
+                      /> €
+                    {primeFaciale !== null && (
+                      <button onClick={() => setPrimeFaciale(null)} title="Revenir à auto (= TTC)"
+                        style={{marginLeft:6,background:"transparent",border:"1px solid #86EFAC",borderRadius:4,color:"#15803D",fontSize:11,cursor:"pointer",padding:"2px 6px",fontFamily:"inherit"}}>
+                        ↺ Auto
+                      </button>
+                    )}
+                  </td>
+                  <td style={{background:"#DCFCE7"}}/>
                 </tr>
 
                 {/* Total */}
@@ -1063,7 +1097,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
 
         {/* APERÇU DEVIS */}
         <div style={{flex:1,overflow:"auto",background:"#E2E8F0",display:"flex",flexDirection:"column",alignItems:"center",padding:"16px 12px",gap:0}}>
-          <DevisPreviewDyn ref={printRef} devis={devis} lignes={actives} cats={cats} batPuVente={batPuVente} batQte={batQte} prime={prime} stats={stats}/>
+          <DevisPreviewDyn ref={printRef} devis={devis} lignes={actives} cats={cats} batPuVente={batPuVente} batQte={batQte} primeFaciale={stats.effectivePrimeFaciale} primeCEESimu={primeCEESimu} stats={stats}/>
         </div>
       </div>
 
@@ -1125,7 +1159,7 @@ function ModalEditInfo({ devis, onSave, onCancel }) {
 }
 
 // ── Aperçu devis dynamique (données du devis courant) ─────────────────────
-const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVente, batQte, prime, stats }, ref) {
+const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVente, batQte, primeFaciale, primeCEESimu, stats }, ref) {
   const PAGE = {background:"#fff",width:760,fontFamily:"Arial,Helvetica,sans-serif",fontSize:8,color:"#333",boxSizing:"border-box",padding:"12mm 14mm 14mm 14mm",flexShrink:0};
   const HR   = () => <div style={{borderTop:"0.5px solid #ccc",margin:"5px 0"}}/>;
   const AF2E_LOGO = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoH";
@@ -1211,7 +1245,7 @@ const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVent
                 {l:"Total H.T",    v:fmtE(stats.totalHT)},
                 {l:"TVA (20%)",    v:fmtE(stats.totalTVA)},
                 {l:"Total T.T.C",  v:fmtE(stats.totalTTC),  bold:true,bt:true},
-                {l:`Prime CEE (RÉGIE PICPUS)`, v:"− "+fmtE(prime), color:"#16A34A",bt:true},
+                {l:`Prime CEE (RÉGIE PICPUS)`, v:"− "+fmtE(primeFaciale), color:"#16A34A",bt:true},
                 {l:"Reste à charge T.T.C",       v:fmtE(stats.resteTTC), bold:true,bt:true},
               ].map((r,i) => (
                 <tr key={i} style={{borderTop:r.bt?"1px solid #333":"none"}}>
@@ -1246,7 +1280,7 @@ const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVent
         ))}
         <div style={{borderTop:"0.5px solid #ccc",margin:"8px 0"}}/>
         <div style={{fontSize:8,fontWeight:800,color:"#111",margin:"4px 0 3px"}}>Termes et conditions CEE</div>
-        <div style={{fontSize:7,color:"#555",lineHeight:1.7,marginBottom:5}}>Les travaux objet du présent document donneront lieu à une contribution financière de <strong>RÉGIE PICPUS</strong> (SIREN 533 333 118), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : <strong>{fmtE(prime)}</strong>.</div>
+        <div style={{fontSize:7,color:"#555",lineHeight:1.7,marginBottom:5}}>Les travaux objet du présent document donneront lieu à une contribution financière de <strong>RÉGIE PICPUS</strong> (SIREN 533 333 118), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : <strong>{fmtE(primeCEESimu || primeFaciale)}</strong>.</div>
         <Ftr/>
       </div>
 
@@ -1260,7 +1294,7 @@ const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVent
             {l:"Date",v:devis.dateDevis||"—"},
             {l:"Client",v:devis.nomClient||"—"},
             {l:"Total TTC",v:fmtE(stats.totalTTC)},
-            {l:"Prime CEE",v:"− "+fmtE(prime)},
+            {l:"Prime CEE",v:"− "+fmtE(primeFaciale)},
             {l:"Reste TTC",v:fmtE(stats.resteTTC),bold:true,color:"#16A34A"},
           ].map(r => (
             <div key={r.l}>
@@ -1316,6 +1350,7 @@ const normalizeDevis = d => ({
   batQte: d.bat_qte || 0,
   batPuVente: d.bat_pu_vente || 0,
   prime: d.prime || 0,
+  primeFaciale: d.prime_faciale ?? null,
   createdAt: new Date(d.created_at).getTime(),
   updatedAt: new Date(d.updated_at).getTime(),
 });
