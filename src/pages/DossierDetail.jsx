@@ -411,6 +411,7 @@ export default function DossierDetail() {
                           prime: sim.prime_estimee || 0,
                           batQte: sim.nb_equipements || 0,
                           batPuVente: simParams.cout_unitaire_destrat ? parseFloat(simParams.cout_unitaire_destrat) : 0,
+                          batDebit: simParams.debit_unitaire || '14000',
                         },
                       },
                     })}

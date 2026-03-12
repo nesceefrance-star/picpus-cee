@@ -576,20 +576,6 @@ function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
   const [preview, setPreview] = useState(null); // lignes extraites pour preview
   const fileRef = useRef();
 
-  // Charge pdf.js dynamiquement depuis CDN
-  const loadPdfJs = () => new Promise((res, rej) => {
-    if (window.pdfjsLib) return res(window.pdfjsLib);
-    const s = document.createElement("script");
-    s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
-    s.onload = () => {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-      res(window.pdfjsLib);
-    };
-    s.onerror = rej;
-    document.head.appendChild(s);
-  });
-
   // Détecte la catégorie à partir de mots-clés dans la désignation
   const detectCat = txt => {
     const t = txt.toUpperCase();
@@ -598,91 +584,92 @@ function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
     return "MATÉRIEL";
   };
 
-  // Parse le texte brut du PDF pour extraire les lignes de devis
-  const parseLignes = (texte) => {
-    const lignes = [];
-    const lines = texte.split("\n").map(l => l.trim()).filter(Boolean);
-
-    // Regex pour détecter un prix (ex: 1 234,56 ou 1234.56 ou 62,00)
-    const prixRe = /(\d[\d\s]*[\.,]\d{2})\s*€?/g;
-    // Regex pour détecter une quantité en début de motif (ex: "30 U" "8 U" "1 Jours")
-    const qteRe = /^(\d+(?:[.,]\d+)?)\s*(U|Jours?|Forfait|ml|m²|h|unités?|pcs?)\b/i;
-    // Mots à ignorer (totaux, TVA, etc.)
-    const ignorer = /^(total|tva|ttc|ht|sous.total|acompte|reste|règlement|paiement|désignation|qté|p\.u|montant|référence|devis|client|siret|adresse|date|page|conditions)/i;
-
-    let i = 0;
-    while (i < lines.length) {
-      const line = lines[i];
-      if (ignorer.test(line) || line.length < 8) { i++; continue; }
-
-      // Cherche des prix dans la ligne
-      const prix = [...line.matchAll(prixRe)].map(m => parseFloat(m[1].replace(/\s/g,"").replace(",",".")));
-
-      if (prix.length >= 2) {
-        // Ligne avec au moins 2 prix → probablement qté × PU = total
-        // On prend le plus petit comme PU et le plus grand comme total
-        const sorted = [...prix].sort((a,b)=>a-b);
-        const puAchat = sorted[0];
-        const total   = sorted[sorted.length-1];
-
-        // Cherche la désignation (lignes précédentes sans prix)
-        let desig = line.replace(prixRe,"").replace(/\d+\s*(U|Jours?|Forfait)\b/gi,"").trim();
-        if (desig.length < 5 && i > 0) desig = lines[i-1].replace(prixRe,"").trim();
-        if (desig.length < 5) { i++; continue; }
-
-        // Déduit la quantité
-        let qte = 1;
-        if (puAchat > 0 && total > puAchat) qte = Math.round(total / puAchat) || 1;
-        const qteMatch = line.match(/\b(\d+)\s*(U|Jours?|Forfait|ml|m²)\b/i);
-        if (qteMatch) qte = parseInt(qteMatch[1]);
-
-        const unite = qteMatch?.[2] || "U";
-        const cat   = detectCat(desig);
-        const marge = cat === "MAIN D'ŒUVRE" ? 25 : cat === "DIVERS" ? 10 : 30;
-
-        lignes.push({
-          id: lignes.length + 1,
-          cat, designation: desig.substring(0, 200),
-          qte, unite,
-          puAchat: +puAchat.toFixed(2),
-          margePct: marge,
-          puVente: +(puAchat * (1 + marge/100)).toFixed(2),
-          inclus: true,
-        });
-      }
-      i++;
-    }
-    return lignes;
-  };
-
   const extraire = async () => {
     if (!file) return;
     setLoading(true);
     setError("");
     try {
-      const pdfjsLib = await loadPdfJs();
+      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+      if (!apiKey) throw new Error("Clé API Anthropic manquante (VITE_ANTHROPIC_API_KEY)");
+
+      // Convertir le PDF en base64
       const ab = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
-      let texteTotal = "";
-      for (let p = 1; p <= pdf.numPages; p++) {
-        const page = await pdf.getPage(p);
-        const content = await page.getTextContent();
-        // Reconstitue le texte en respectant les positions Y (même ligne = même Y arrondi)
-        const items = content.items.map(it => ({ x: it.transform[4], y: Math.round(it.transform[5]), t: it.str }));
-        const byY = {};
-        items.forEach(it => { byY[it.y] = byY[it.y] || []; byY[it.y].push(it); });
-        Object.values(byY).sort((a,b) => b[0].y - a[0].y).forEach(row => {
-          texteTotal += row.sort((a,b)=>a.x-b.x).map(it=>it.t).join(" ") + "\n";
+      const b64 = btoa(String.fromCharCode(...new Uint8Array(ab)));
+
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 4096,
+          messages: [{
+            role: "user",
+            content: [
+              {
+                type: "document",
+                source: { type: "base64", media_type: "application/pdf", data: b64 },
+              },
+              {
+                type: "text",
+                text: `Analyse le tableau de ce devis PDF et extrais chaque ligne produit/prestation.
+Pour chaque ligne du tableau (ignore les lignes de total, sous-total, TVA, acompte, en-tête), retourne un objet JSON avec :
+- designation : string (description complète du produit ou prestation)
+- qte : number (quantité, ex: 1, 2, 30)
+- puAchat : number (prix unitaire HT en euros, avec centimes, ex: 62.47)
+- unite : string (unité : U, ml, m², h, Forfait, Jours — "U" si non précisé)
+
+Réponds UNIQUEMENT avec un tableau JSON valide, sans texte avant ni après, sans markdown.
+Exemple : [{"designation":"Rail acier","qte":30,"puAchat":62.47,"unite":"U"}]`,
+              },
+            ],
+          }],
+        }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `Erreur API ${resp.status}`);
+      }
+
+      const result = await resp.json();
+      const raw = result.content?.[0]?.text?.trim() || "";
+
+      // Extraire le JSON même si Claude ajoute du texte autour
+      const match = raw.match(/\[[\s\S]*\]/);
+      if (!match) throw new Error("Réponse Claude invalide : " + raw.substring(0, 200));
+
+      const items = JSON.parse(match[0]);
+      if (!Array.isArray(items) || items.length === 0) throw new Error("Aucune ligne extraite par Claude");
+
+      const cent = v => Math.round(v * 100) / 100;
+      const lignes = items
+        .filter(it => it.puAchat > 0 && it.designation?.length > 2)
+        .map((it, idx) => {
+          const cat   = detectCat(it.designation);
+          const marge = cat === "MAIN D'ŒUVRE" ? 25 : cat === "DIVERS" ? 10 : 30;
+          return {
+            id: idx + 1,
+            cat,
+            designation: String(it.designation).substring(0, 200),
+            qte:     cent(Number(it.qte)     || 1),
+            unite:   it.unite || "U",
+            puAchat: cent(Number(it.puAchat) || 0),
+            margePct: marge,
+            puVente: cent((Number(it.puAchat) || 0) * (1 + marge / 100)),
+            inclus: true,
+          };
         });
-      }
-      const lignes = parseLignes(texteTotal);
-      if (lignes.length === 0) {
-        setError("Aucune ligne détectée automatiquement. Vérifie que le PDF contient bien un tableau de prix, ou utilise la saisie manuelle.");
-      } else {
-        setPreview(lignes);
-      }
+
+      if (lignes.length === 0) throw new Error("Aucune ligne valide extraite");
+      setPreview(lignes);
+
     } catch (e) {
-      setError("Erreur lecture PDF : " + e.message);
+      setError("Erreur extraction : " + e.message);
     }
     setLoading(false);
   };
@@ -817,14 +804,15 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
 
   const upd = (id, field, value) => setLignes(ls => ls.map(l => {
     if (l.id !== id) return l;
-    const u = {...l, [field]: ["qte","puAchat","puVente","margePct"].includes(field) ? Number(value)||0 : value};
-    if (field === "puVente" && u.puAchat>0) u.margePct = +((u.puVente/u.puAchat-1)*100).toFixed(1);
-    if (field === "margePct") u.puVente = +(u.puAchat*(1+Number(value)/100)).toFixed(2);
-    if (field === "puAchat") u.puVente = +(Number(value)*(1+u.margePct/100)).toFixed(2);
+    const toNum = v => parseFloat(parseFloat(v).toFixed(2)) || 0;
+    const u = {...l, [field]: ["qte","puAchat","puVente","margePct"].includes(field) ? toNum(value) : value};
+    if (field === "puVente" && u.puAchat>0) u.margePct = parseFloat(((u.puVente/u.puAchat-1)*100).toFixed(2));
+    if (field === "margePct") u.puVente = parseFloat((u.puAchat*(1+toNum(value)/100)).toFixed(2));
+    if (field === "puAchat") u.puVente = parseFloat((toNum(value)*(1+u.margePct/100)).toFixed(2));
     return u;
   }));
 
-  const applyGlobal = pct => setLignes(ls => ls.map(l => ({...l, margePct: pct, puVente: +(l.puAchat*(1+pct/100)).toFixed(2)})));
+  const applyGlobal = pct => setLignes(ls => ls.map(l => ({...l, margePct: pct, puVente: parseFloat((l.puAchat*(1+pct/100)).toFixed(2))})));
 
   const addLigne = () => {
     const newId = Math.max(0, ...lignes.map(l=>l.id)) + 1;
@@ -950,6 +938,18 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
                 {p}%
               </button>
             ))}
+            {/* Marge CEE auto : (primeCEESimu / 2) / TTC à 0% marge */}
+            {primeCEESimu > 0 && stats.achat > 0 && (() => {
+              const ttcZero = (stats.achat + batQte * batPuVente) * 1.20;
+              const pCEE = parseFloat(((primeCEESimu / 2) / ttcZero * 100 - 100).toFixed(2));
+              return (
+                <button onClick={() => applyGlobal(pCEE)}
+                  title={`(Prime CEE ${fmtE(primeCEESimu)} ÷ 2) ÷ TTC à 0% marge ${fmtE(ttcZero)}`}
+                  style={{background:"#FEF9C3",border:"1px solid #EAB308",borderRadius:5,padding:"3px 10px",fontSize:12,fontWeight:700,cursor:"pointer",color:"#854D0E"}}>
+                  CEE {pCEE}%
+                </button>
+              );
+            })()}
             {/* Saisie manuelle */}
             <div style={{display:"flex",alignItems:"center",gap:4,marginLeft:4}}>
               <input
@@ -997,30 +997,30 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
                           <td style={{...TD,textAlign:"center"}}>
                             <input type="checkbox" checked={l.inclus} onChange={e=>upd(l.id,"inclus",e.target.checked)} style={{cursor:"pointer",width:14,height:14}}/>
                           </td>
-                          <td style={{...TD,maxWidth:180}}>
+                          <td style={{...TD,minWidth:220,maxWidth:340}}>
                             <input value={l.designation} onChange={e=>upd(l.id,"designation",e.target.value)}
-                              style={{...INP,width:"100%",fontSize:11,padding:"2px 4px"}}/>
-                            <div style={{display:"flex",gap:4,marginTop:2}}>
+                              style={{...INP,width:"100%",fontSize:12,padding:"4px 6px"}}/>
+                            <div style={{display:"flex",gap:4,marginTop:3}}>
                               <select value={l.cat} onChange={e=>upd(l.id,"cat",e.target.value)}
-                                style={{...INP,fontSize:10,padding:"1px 4px"}}>
+                                style={{...INP,fontSize:11,padding:"2px 5px"}}>
                                 {["MATÉRIEL","MAIN D'ŒUVRE","DIVERS"].map(c=><option key={c}>{c}</option>)}
                               </select>
                               <input value={l.unite} onChange={e=>upd(l.id,"unite",e.target.value)}
-                                style={{...INP,width:36,fontSize:10,padding:"1px 4px"}}/>
+                                style={{...INP,width:42,fontSize:11,padding:"2px 5px"}}/>
                             </div>
                           </td>
                           <td style={{...TD,textAlign:"center"}}>
-                            <input type="number" value={l.qte} onChange={e=>upd(l.id,"qte",e.target.value)} style={{...INP,width:40,textAlign:"center"}}/>
+                            <input type="number" value={l.qte} onChange={e=>upd(l.id,"qte",e.target.value)} style={{...INP,width:54,textAlign:"center"}}/>
                           </td>
                           <td style={{...TD,textAlign:"right"}}>
-                            <input type="number" value={l.puAchat} onChange={e=>upd(l.id,"puAchat",e.target.value)} style={{...INP,width:62,textAlign:"right",color:C.textMid}}/>
+                            <input type="number" value={l.puAchat} onChange={e=>upd(l.id,"puAchat",e.target.value)} style={{...INP,width:78,textAlign:"right",color:C.textMid}}/>
                           </td>
                           <td style={{...TD,textAlign:"center"}}>
-                            <input type="number" value={l.margePct} onChange={e=>upd(l.id,"margePct",e.target.value)} style={{...INP,width:38,textAlign:"center",color:mc,fontWeight:700}}/>
-                            <span style={{color:mc,fontSize:11,fontWeight:700,marginLeft:1}}>%</span>
+                            <input type="number" value={l.margePct} onChange={e=>upd(l.id,"margePct",e.target.value)} style={{...INP,width:50,textAlign:"center",color:mc,fontWeight:700}}/>
+                            <span style={{color:mc,fontSize:12,fontWeight:700,marginLeft:1}}>%</span>
                           </td>
                           <td style={{...TD,textAlign:"right"}}>
-                            <input type="number" value={l.puVente} onChange={e=>upd(l.id,"puVente",e.target.value)} style={{...INP,width:62,textAlign:"right",fontWeight:700,color:C.accent}}/>
+                            <input type="number" value={l.puVente} onChange={e=>upd(l.id,"puVente",e.target.value)} style={{...INP,width:78,textAlign:"right",fontWeight:700,color:C.accent}}/>
                           </td>
                           <td style={{...TD,textAlign:"right",fontWeight:700,color:C.text,fontSize:12}}>{fmt(l.qte*l.puVente)} €</td>
                           <td style={{...TD,textAlign:"center"}}>
@@ -1032,8 +1032,8 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
                   ];
                 })}
 
-                {/* BAT-TH ligne */}
-                <tr>
+                {/* BAT-TH ligne — rétro-compatibilité anciens devis uniquement */}
+                {batQte > 0 && <tr>
                   <td colSpan={2} style={{background:"#EFF6FF",padding:"6px 10px",fontWeight:700,fontSize:11,color:"#1D4ED8",textTransform:"uppercase",borderTop:`2px solid ${C.border}`}}>
                     BAT-TH-142
                   </td>
@@ -1050,7 +1050,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
                     {fmt(batQte*batPuVente)} €
                   </td>
                   <td style={{background:"#EFF6FF",borderTop:`2px solid ${C.border}`}}/>
-                </tr>
+                </tr>}
 
                 {/* Prime CEE simulateur — référence lecture seule */}
                 <tr>
@@ -1416,13 +1416,32 @@ function MargesDevis({ prefill }) {
   // ── Créer un nouveau devis ────────────────────────────────────────────
   const creerDevis = async (infos, lignes) => {
     const { data: { user } } = await supabase.auth.getUser();
+    // Si des destrats sont renseignés, on les injecte comme ligne MATÉRIEL normale
+    let baseLignes = lignes ? [...lignes] : LIGNES_DEFAUT.map(l => ({...l}));
+    if ((infos.batQte || 0) > 0) {
+      const puAchat = 650;
+      baseLignes = [
+        {
+          id: baseLignes.length + 1,
+          cat: "MATÉRIEL",
+          designation: `DESTRATIFICATEUR TECH - ${infos.batDebit || '14000'}m3/h`,
+          qte: infos.batQte,
+          unite: "U",
+          puAchat,
+          margePct: 0,
+          puVente: puAchat,
+          inclus: true,
+        },
+        ...baseLignes,
+      ];
+    }
     const row = {
       user_id: user.id,
       ...toRow({
         ...infos,
-        lignes: lignes || LIGNES_DEFAUT.map(l => ({...l})),
-        batQte: infos.batQte || 0,
-        batPuVente: infos.batPuVente || 0,
+        lignes: baseLignes,
+        batQte: 0,       // désormais dans lignes, pas dans la ligne spéciale
+        batPuVente: 0,
         prime: infos.prime || 0,
       }),
     };

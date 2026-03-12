@@ -1,0 +1,16 @@
+# Dépendances
+node_modules/
+
+# Build
+dist/
+
+# Variables d'environnement (clés API, secrets)
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+
+# Vite
+*.local
