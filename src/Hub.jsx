@@ -427,7 +427,7 @@ const DTH = {padding:"8px 8px",fontSize:12,fontWeight:700,textAlign:"center"};
 const DTC = {padding:"5px 6px",borderBottom:"1px solid #F1F5F9",verticalAlign:"middle"};
 
 // ── Écran liste des devis ──────────────────────────────────────────────────
-function ListeDevis({ devis, onCreate, onOpen }) {
+function ListeDevis({ devis, onCreate, onOpen, onDelete, confirmDeleteId, onCancelDelete }) {
   return (
     <div style={{padding:"24px",height:"100%",overflowY:"auto"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
@@ -459,10 +459,23 @@ function ListeDevis({ devis, onCreate, onOpen }) {
                 style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"18px",transition:"all .15s",position:"relative"}}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 4px 16px rgba(37,99,235,.1)"}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=""}}>
-                {/* Bouton supprimer */}
-                <button onClick={e=>{e.stopPropagation();onDelete(d.id);}}
-                  style={{position:"absolute",top:10,right:10,background:"transparent",border:"none",color:C.textSoft,cursor:"pointer",fontSize:15,padding:"2px 6px",borderRadius:5,lineHeight:1}}
-                  title="Supprimer ce devis">✕</button>
+                {/* Bouton supprimer / confirmer */}
+                {confirmDeleteId === d.id ? (
+                  <div style={{position:"absolute",top:8,right:8,display:"flex",gap:4,zIndex:10}} onClick={e=>e.stopPropagation()}>
+                    <button onClick={()=>onDelete(d.id)}
+                      style={{background:"#DC2626",color:"#fff",border:"none",borderRadius:5,padding:"3px 8px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                      Supprimer
+                    </button>
+                    <button onClick={onCancelDelete}
+                      style={{background:"#475569",color:"#fff",border:"none",borderRadius:5,padding:"3px 8px",fontSize:11,cursor:"pointer"}}>
+                      Annuler
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={e=>{e.stopPropagation();onDelete(d.id);}}
+                    style={{position:"absolute",top:10,right:10,background:"transparent",border:"none",color:C.textSoft,cursor:"pointer",fontSize:15,padding:"2px 6px",borderRadius:5,lineHeight:1}}
+                    title="Supprimer ce devis">✕</button>
+                )}
                 <div onClick={() => onOpen(d.id)} style={{cursor:"pointer"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                     <div>
@@ -1377,10 +1390,13 @@ function MargesDevis() {
   };
 
   // ── Supprimer un devis ────────────────────────────────────────────────
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
   const handleDelete = async (id) => {
-    if (!window.confirm("Supprimer ce devis définitivement ?")) return;
+    if (confirmDeleteId !== id) return setConfirmDeleteId(id);
     await supabase.from("devis_hub").delete().eq("id", id);
     setDevisList(prev => prev.filter(d => d.id !== id));
+    setConfirmDeleteId(null);
   };
 
   const devisEnCours = devisList.find(d => d.id === devisId);
@@ -1407,6 +1423,8 @@ function MargesDevis() {
         onCreate={() => setStep("infos")}
         onOpen={(id) => { setDevisId(id); setVue("editeur"); }}
         onDelete={handleDelete}
+        confirmDeleteId={confirmDeleteId}
+        onCancelDelete={() => setConfirmDeleteId(null)}
       />
 
       {/* Étape 1 — Infos client */}
