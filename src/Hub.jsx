@@ -802,14 +802,55 @@ function EditeurDevis({ devisInit, onBack, onSave }) {
 
   const delLigne = id => setLignes(ls => ls.filter(l => l.id !== id));
 
-  const exportPDF = () => {
-    const s = document.createElement("style");
-    s.innerHTML = `@media print{body>*{display:none!important}#dp{display:block!important;position:fixed;top:0;left:0;width:100%}@page{size:A4;margin:0}}`;
-    document.head.appendChild(s);
-    printRef.current.id = "dp";
-    window.print();
-    document.head.removeChild(s);
-    printRef.current.id = "";
+  const [exporting, setExporting] = useState(false);
+
+  const loadScript = src => new Promise((res, rej) => {
+    if (document.querySelector(`script[src="${src}"]`)) return res();
+    const s = document.createElement("script"); s.src = src;
+    s.onload = res; s.onerror = rej; document.head.appendChild(s);
+  });
+
+  const exportPDF = async () => {
+    setExporting(true);
+    try {
+      await Promise.all([
+        loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"),
+        loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"),
+      ]);
+      const { jsPDF } = window.jspdf;
+      const el = printRef.current;
+      if (!el) return;
+
+      // Force visible temporairement si nécessaire
+      const pages = el.querySelectorAll(":scope > div");
+      const pdf = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
+      const A4W = 210, A4H = 297;
+
+      for (let i = 0; i < pages.length; i++) {
+        const canvas = await window.html2canvas(pages[i], {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          width: pages[i].scrollWidth,
+          height: pages[i].scrollHeight,
+        });
+        const imgData = canvas.toDataURL("image/jpeg", 0.92);
+        const ratio = canvas.height / canvas.width;
+        const imgH = A4W * ratio;
+
+        if (i > 0) pdf.addPage();
+        // Si la page est plus haute que A4, on la compresse
+        if (imgH <= A4H) {
+          pdf.addImage(imgData, "JPEG", 0, 0, A4W, imgH);
+        } else {
+          pdf.addImage(imgData, "JPEG", 0, 0, A4W, A4H);
+        }
+      }
+      pdf.save(`Devis_${devis.nomClient}_${devis.refDevis}.pdf`);
+    } catch(e) {
+      alert("Erreur export PDF : " + e.message);
+    }
+    setExporting(false);
   };
 
   const TH  = {padding:"9px 8px",fontSize:12,fontWeight:700,textAlign:"right",color:C.navText,whiteSpace:"nowrap"};
@@ -838,9 +879,9 @@ function EditeurDevis({ devisInit, onBack, onSave }) {
               {l}
             </button>
           ))}
-          <button onClick={exportPDF}
-            style={{background:"#16A34A",color:"#fff",border:"none",borderRadius:7,padding:"6px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-            ⬇ PDF
+          <button onClick={exportPDF} disabled={exporting}
+            style={{background:exporting?"#94A3B8":"#16A34A",color:"#fff",border:"none",borderRadius:7,padding:"6px 16px",fontSize:13,fontWeight:700,cursor:exporting?"not-allowed":"pointer"}}>
+            {exporting ? "⏳ Export..." : "⬇ PDF"}
           </button>
         </div>
       </div>
