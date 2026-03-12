@@ -555,68 +555,113 @@ function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
   const [preview, setPreview] = useState(null); // lignes extraites pour preview
   const fileRef = useRef();
 
-  const toBase64 = f => new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result.split(",")[1]);
-    r.onerror = rej;
-    r.readAsDataURL(f);
+  // Charge pdf.js dynamiquement depuis CDN
+  const loadPdfJs = () => new Promise((res, rej) => {
+    if (window.pdfjsLib) return res(window.pdfjsLib);
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload = () => {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      res(window.pdfjsLib);
+    };
+    s.onerror = rej;
+    document.head.appendChild(s);
   });
+
+  // Détecte la catégorie à partir de mots-clés dans la désignation
+  const detectCat = txt => {
+    const t = txt.toUpperCase();
+    if (/POSE|INSTALL|CÂBLAGE|CABLAGE|MONTAGE|CRÉATION|CREATION|MAIN.D.OEUVRE|MO\b/.test(t)) return "MAIN D'ŒUVRE";
+    if (/DÉPLACEMENT|DEPLACEMENT|NACELLE|LIVRAISON|TRANSPORT|LOCATION|FRAIS|FORFAIT DÉPL/.test(t)) return "DIVERS";
+    return "MATÉRIEL";
+  };
+
+  // Parse le texte brut du PDF pour extraire les lignes de devis
+  const parseLignes = (texte) => {
+    const lignes = [];
+    const lines = texte.split("\n").map(l => l.trim()).filter(Boolean);
+
+    // Regex pour détecter un prix (ex: 1 234,56 ou 1234.56 ou 62,00)
+    const prixRe = /(\d[\d\s]*[\.,]\d{2})\s*€?/g;
+    // Regex pour détecter une quantité en début de motif (ex: "30 U" "8 U" "1 Jours")
+    const qteRe = /^(\d+(?:[.,]\d+)?)\s*(U|Jours?|Forfait|ml|m²|h|unités?|pcs?)\b/i;
+    // Mots à ignorer (totaux, TVA, etc.)
+    const ignorer = /^(total|tva|ttc|ht|sous.total|acompte|reste|règlement|paiement|désignation|qté|p\.u|montant|référence|devis|client|siret|adresse|date|page|conditions)/i;
+
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      if (ignorer.test(line) || line.length < 8) { i++; continue; }
+
+      // Cherche des prix dans la ligne
+      const prix = [...line.matchAll(prixRe)].map(m => parseFloat(m[1].replace(/\s/g,"").replace(",",".")));
+
+      if (prix.length >= 2) {
+        // Ligne avec au moins 2 prix → probablement qté × PU = total
+        // On prend le plus petit comme PU et le plus grand comme total
+        const sorted = [...prix].sort((a,b)=>a-b);
+        const puAchat = sorted[0];
+        const total   = sorted[sorted.length-1];
+
+        // Cherche la désignation (lignes précédentes sans prix)
+        let desig = line.replace(prixRe,"").replace(/\d+\s*(U|Jours?|Forfait)\b/gi,"").trim();
+        if (desig.length < 5 && i > 0) desig = lines[i-1].replace(prixRe,"").trim();
+        if (desig.length < 5) { i++; continue; }
+
+        // Déduit la quantité
+        let qte = 1;
+        if (puAchat > 0 && total > puAchat) qte = Math.round(total / puAchat) || 1;
+        const qteMatch = line.match(/\b(\d+)\s*(U|Jours?|Forfait|ml|m²)\b/i);
+        if (qteMatch) qte = parseInt(qteMatch[1]);
+
+        const unite = qteMatch?.[2] || "U";
+        const cat   = detectCat(desig);
+        const marge = cat === "MAIN D'ŒUVRE" ? 25 : cat === "DIVERS" ? 10 : 30;
+
+        lignes.push({
+          id: lignes.length + 1,
+          cat, designation: desig.substring(0, 200),
+          qte, unite,
+          puAchat: +puAchat.toFixed(2),
+          margePct: marge,
+          puVente: +(puAchat * (1 + marge/100)).toFixed(2),
+          inclus: true,
+        });
+      }
+      i++;
+    }
+    return lignes;
+  };
 
   const extraire = async () => {
     if (!file) return;
     setLoading(true);
     setError("");
     try {
-      const b64 = await toBase64(file);
-      const resp = await fetch("/api/claude", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "anthropic-beta": "pdfs-2024-09-25",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 4000,
-          messages: [{
-            role: "user",
-            content: [
-              { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } },
-              { type: "text", text: `Tu es un expert en devis de travaux CEE pour des déstratificateurs d'air BAT-TH-142.
-
-Analyse ce devis prestataire et extrais TOUTES les lignes de travaux.
-
-Réponds UNIQUEMENT avec un JSON valide, sans backticks, sans texte avant ou après :
-{"lignes":[{"cat":"MATÉRIEL","designation":"description","qte":1,"unite":"U","puAchat":0}]}
-
-Règles strictes :
-- cat = "MATÉRIEL" pour équipements, câbles, armoires, rails, kits
-- cat = "MAIN D'ŒUVRE" pour pose, installation, câblage, création, montage
-- cat = "DIVERS" pour déplacement, nacelle, livraison, frais divers
-- puAchat = prix unitaire HT (si tu as le total HT et la qté, divise)
-- Ignore les lignes de TVA, totaux, sous-totaux, en-têtes, conditions
-- Si aucune ligne : {"lignes":[]}` }
-            ]
-          }]
-        })
-      });
-      const data = await resp.json();
-      const txt = data.content?.find(b => b.type === "text")?.text || "";
-      const clean = txt.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
-      const lignes = (parsed.lignes || []).map((l, i) => ({
-        id: i + 1,
-        cat: l.cat || "MATÉRIEL",
-        designation: l.designation || "",
-        qte: Number(l.qte) || 1,
-        unite: l.unite || "U",
-        puAchat: Number(l.puAchat) || 0,
-        margePct: l.cat === "MAIN D'ŒUVRE" ? 25 : l.cat === "DIVERS" ? 10 : 30,
-        puVente: 0,
-        inclus: true,
-      })).map(l => ({ ...l, puVente: +(l.puAchat * (1 + l.margePct / 100)).toFixed(2) }));
-      setPreview(lignes);
+      const pdfjsLib = await loadPdfJs();
+      const ab = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+      let texteTotal = "";
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        // Reconstitue le texte en respectant les positions Y (même ligne = même Y arrondi)
+        const items = content.items.map(it => ({ x: it.transform[4], y: Math.round(it.transform[5]), t: it.str }));
+        const byY = {};
+        items.forEach(it => { byY[it.y] = byY[it.y] || []; byY[it.y].push(it); });
+        Object.values(byY).sort((a,b) => b[0].y - a[0].y).forEach(row => {
+          texteTotal += row.sort((a,b)=>a.x-b.x).map(it=>it.t).join(" ") + "\n";
+        });
+      }
+      const lignes = parseLignes(texteTotal);
+      if (lignes.length === 0) {
+        setError("Aucune ligne détectée automatiquement. Vérifie que le PDF contient bien un tableau de prix, ou utilise la saisie manuelle.");
+      } else {
+        setPreview(lignes);
+      }
     } catch (e) {
-      setError("Erreur extraction : " + e.message);
+      setError("Erreur lecture PDF : " + e.message);
     }
     setLoading(false);
   };
