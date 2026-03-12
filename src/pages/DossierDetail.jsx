@@ -105,6 +105,7 @@ export default function DossierDetail() {
   const [simulation, setSimulation] = useState(null)
   const [loading, setLoading] = useState(true)
   const [savingStatut, setSavingStatut] = useState(false)
+  const [savingAssigne, setSavingAssigne] = useState(false)
 
   const [editProspect, setEditProspect] = useState(false)
   const [pForm, setPForm] = useState({})
@@ -163,6 +164,13 @@ export default function DossierDetail() {
     const { data } = await updateDossier(id, { statut })
     if (data) setDossier(data)
     setSavingStatut(false)
+  }
+
+  const changeAssignation = async (newUserId) => {
+    setSavingAssigne(true)
+    const { data } = await updateDossier(id, { assigne_a: newUserId })
+    if (data) setDossier(data)
+    setSavingAssigne(false)
   }
 
   const saveProspect = async () => {
@@ -272,7 +280,30 @@ export default function DossierDetail() {
               <span style={{ color: C.border }}>·</span>
               <span style={{ fontSize: 12, color: C.textMid }}>{dossier.fiche_cee}</span>
               <span style={{ color: C.border }}>·</span>
-              <span style={{ fontSize: 12, color: C.textMid }}>Assigné à {assignedName}</span>
+              {/* Assignation — admin : dropdown, commercial : M'attribuer ou lecture */}
+              {profile?.role === 'admin' ? (
+                <select
+                  value={dossier.assigne_a || ''}
+                  onChange={e => changeAssignation(e.target.value)}
+                  disabled={savingAssigne}
+                  style={{ fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit', opacity: savingAssigne ? .6 : 1 }}>
+                  <option value="">— Non assigné —</option>
+                  {profiles.filter(p => ['admin', 'commercial'].includes(p.role)).map(p => (
+                    <option key={p.id} value={p.id}>
+                      {(`${p.prenom || ''} ${p.nom || ''}`.trim()) || p.email}
+                    </option>
+                  ))}
+                </select>
+              ) : dossier.assigne_a === user?.id ? (
+                <span style={{ fontSize: 12, color: C.textMid }}>Assigné à vous</span>
+              ) : (
+                <button
+                  onClick={() => changeAssignation(user?.id)}
+                  disabled={savingAssigne}
+                  style={{ fontSize: 11, fontWeight: 700, color: C.accent, background: '#EFF6FF', border: `1px solid ${C.accent}44`, borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: 'inherit', opacity: savingAssigne ? .6 : 1 }}>
+                  {savingAssigne ? '…' : `M'attribuer (actuellement : ${assignedName})`}
+                </button>
+              )}
               <span style={{ color: C.border }}>·</span>
               <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, fontWeight: 700, background: statutInfo.bg, color: statutInfo.color }}>{statutInfo.label}</span>
             </div>
