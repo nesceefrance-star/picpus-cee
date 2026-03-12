@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo, forwardRef, useCallback, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { supabase } from "./lib/supabase";
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
@@ -1308,7 +1309,7 @@ const normalizeDevis = d => ({
   updatedAt: new Date(d.updated_at).getTime(),
 });
 
-function MargesDevis() {
+function MargesDevis({ prefill }) {
   // Affiche immédiatement le cache localStorage pendant le chargement Supabase
   const [devisList, setDevisList] = useState(() => {
     try { const c = localStorage.getItem(CACHE_KEY); return c ? JSON.parse(c) : []; } catch { return []; }
@@ -1319,6 +1320,14 @@ function MargesDevis() {
   const [step, setStep]           = useState(null);
   const [infosEnCours, setInfosEnCours] = useState(null);
   const [reuploadId, setReuploadId] = useState(null);
+
+  // Si on arrive depuis DossierDetail avec un prefill, sauter ModalNouveauDevis
+  useEffect(() => {
+    if (prefill) {
+      setInfosEnCours(prefill);
+      setStep("upload");
+    }
+  }, []);
 
   // ── Chargement depuis Supabase (avec cache pour affichage instantané) ──
   const fetchDevis = async (silent = false) => {
@@ -1366,7 +1375,9 @@ function MargesDevis() {
       ...toRow({
         ...infos,
         lignes: lignes || LIGNES_DEFAUT.map(l => ({...l})),
-        batQte: 0, batPuVente: 0, prime: 0,
+        batQte: infos.batQte || 0,
+        batPuVente: infos.batPuVente || 0,
+        prime: infos.prime || 0,
       }),
     };
     const { data, error } = await supabase.from("devis_hub").insert(row).select().single();
@@ -1483,14 +1494,22 @@ const MODULES = [
   {id:"crm",         icon:"👥",titre:"CRM Prospects",    sousTitre:"Pipeline commercial",       desc:"Suivi des prospects et clients, relances Gmail automatiques, intégration Google Agenda.",tags:["Gmail","Agenda","Pipeline"],couleur:"#0369A1",actif:false},
 ];
 
-const VUES = {verificateur:<VerificateurCEE/>,checklist:<ChecklistCEE/>,marges:<MargesDevis/>};
+const renderModule = (page, prefill) => {
+  if (page === "verificateur") return <VerificateurCEE />;
+  if (page === "checklist")   return <ChecklistCEE />;
+  if (page === "marges")      return <MargesDevis prefill={prefill} />;
+  return null;
+};
 
 export default function PICPUSHub() {
-  const [page, setPage] = useState(null);
+  const location = useLocation();
+  const { module: initModule, prefill: initPrefill } = location.state || {};
+  const [page, setPage] = useState(initModule || null);
+  const [prefill] = useState(initPrefill || null);
   const current = page && MODULES.find(m=>m.id===page);
 
   // Vue module
-  if (page && VUES[page]) return (
+  if (page && renderModule(page, prefill)) return (
     <div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"system-ui,'Segoe UI',Arial,sans-serif",background:C.bg}}>
       {/* Barre nav */}
       <div style={{background:C.nav,padding:"0 16px",height:48,display:"flex",alignItems:"center",gap:12,flexShrink:0,borderBottom:"3px solid "+C.accent}}>
@@ -1514,7 +1533,7 @@ export default function PICPUSHub() {
       </div>
       {/* Contenu module — overflow géré dans chaque module */}
       <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-        {VUES[page]}
+        {renderModule(page, prefill)}
       </div>
     </div>
   );

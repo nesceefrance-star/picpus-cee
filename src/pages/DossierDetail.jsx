@@ -3,6 +3,60 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import useStore from '../store/useStore'
 
+// ── BAT-TH-142 ADEME coefficients ─────────────────────────────────────────
+const COEFFICIENTS_142 = {
+  sport_transport: {
+    convectif: {
+      H1: { '5-7': 900, '7-10': 2700, '10-15': 5100, '15-20': 7200, '20+': 8000 },
+      H2: { '5-7': 1000, '7-10': 3100, '10-15': 5700, '15-20': 7800, '20+': 8600 },
+      H3: { '5-7': 1300, '7-10': 4000, '10-15': 7000, '15-20': 9100, '20+': 9900 },
+    },
+    radiatif: {
+      H1: { '5-7': 320, '7-10': 950, '10-15': 1800, '15-20': 2500, '20+': 2800 },
+      H2: { '5-7': 350, '7-10': 1090, '10-15': 2000, '15-20': 2700, '20+': 3000 },
+      H3: { '5-7': 460, '7-10': 1400, '10-15': 2500, '15-20': 3200, '20+': 3500 },
+    },
+  },
+  commerce_loisirs: {
+    convectif: {
+      H1: { '5-7': 600, '7-10': 2000, '10-15': 4000, '15-20': 5800, '20+': 6700 },
+      H2: { '5-7': 700, '7-10': 2200, '10-15': 4400, '15-20': 6300, '20+': 7100 },
+      H3: { '5-7': 900, '7-10': 2800, '10-15': 5200, '15-20': 7200, '20+': 8000 },
+    },
+    radiatif: {
+      H1: { '5-7': 210, '7-10': 700, '10-15': 1400, '15-20': 2000, '20+': 2300 },
+      H2: { '5-7': 240, '7-10': 790, '10-15': 1600, '15-20': 2200, '20+': 2500 },
+      H3: { '5-7': 320, '7-10': 1000, '10-15': 1900, '15-20': 2500, '20+': 2800 },
+    },
+  },
+}
+
+const getHauteurBracket = (h) => {
+  if (h >= 5  && h < 7)  return '5-7'
+  if (h >= 7  && h < 10) return '7-10'
+  if (h >= 10 && h < 15) return '10-15'
+  if (h >= 15 && h < 20) return '15-20'
+  if (h >= 20)           return '20+'
+  return null
+}
+
+const calculerCumac142 = ({ typeLocal, zone, hauteur, pConvectif, pRadiatif }) => {
+  const bracket = getHauteurBracket(hauteur)
+  if (!bracket) return { kwhCumac: 0 }
+  const coeffConv = COEFFICIENTS_142[typeLocal]?.convectif?.[zone]?.[bracket] || 0
+  const coeffRad  = COEFFICIENTS_142[typeLocal]?.radiatif?.[zone]?.[bracket] || 0
+  const kwhCumac  = Math.round(coeffConv * pConvectif + coeffRad * pRadiatif)
+  return { kwhCumac, coeffConv, coeffRad, bracket }
+}
+
+const eqPuissance = (eq) => {
+  // Supports both old format (puissance_kw) and new format (quantite × puissance_unitaire_kw)
+  if (eq.puissance_unitaire_kw != null && eq.quantite != null) {
+    return (parseFloat(eq.quantite) || 0) * (parseFloat(eq.puissance_unitaire_kw) || 0)
+  }
+  return parseFloat(eq.puissance_kw) || 0
+}
+
 const C = {
   bg: '#F1F5F9', surface: '#FFFFFF', border: '#E2E8F0',
   text: '#0F172A', textMid: '#475569', textSoft: '#94A3B8',
@@ -18,21 +72,6 @@ const STATUTS = [
   { id: 'facture',    label: 'Facturé',      color: '#64748B', bg: '#F1F5F9' },
 ]
 
-const getZoneClimatique = (cp) => {
-  const n = parseInt(cp?.substring(0, 2) || '0')
-  if ([97,98,13,83,84,30,34,11,66].includes(n)) return 'H3'
-  if ([17,16,33,40,64,65,32,31,9,12,46,47,82,81,48,44,85,49,53,72,37,41,28,45,36,23,87,19,15,43,63,3,18,58,71,21,89,10].includes(n)) return 'H2'
-  return 'H1'
-}
-
-const calculerNbDestrat = (h, s, debit = 14000) =>
-  Math.ceil((h * s * 0.7) / debit)
-
-const calculerMWhCumac142 = ({ nb, puissance, zone, hauteur }) => {
-  const fz = { H1: 2.5, H2: 2.1, H3: 1.6 }[zone] || 2.1
-  const fh = hauteur >= 10 ? 1.15 : hauteur >= 8 ? 1.08 : 1.0
-  return Math.round(nb * puissance * fz * fh * 15 * 0.8 * 10) / 10
-}
 
 function Field({ label, value, onChange, type = 'text', placeholder, suffix }) {
   return (
@@ -98,18 +137,22 @@ export default function DossierDetail() {
       if (sim) {
         const p = sim.parametres || {}
         setSForm({
-          fiche_cee: sim.fiche_cee || 'BAT-TH-142',
-          surface_m2: sim.surface_m2 ?? '',
+          type_local: p.type_local || 'sport_transport',
           hauteur_m: sim.hauteur_m ?? '',
           zone_climatique: sim.zone_climatique || '',
-          nb_destrat_manuel: p.nb_destrat_manuel || '',
-          debit_unitaire: p.debit_unitaire || '14000',
+          equipements_convectifs: p.equipements_convectifs || [],
+          equipements_radiatifs: p.equipements_radiatifs || [],
+          nb_destrat: p.nb_destrat ?? '',
           cout_unitaire_destrat: p.cout_unitaire_destrat || '2750',
-          puissance_destrat_kw: '0.214',
           prix_mwh: sim.prix_mwh ?? '7.5',
         })
       } else {
-        setSForm({ fiche_cee: d.fiche_cee || 'BAT-TH-142', surface_m2: '', hauteur_m: '', zone_climatique: '', nb_destrat_manuel: '', debit_unitaire: '14000', cout_unitaire_destrat: '2750', puissance_destrat_kw: '0.214', prix_mwh: '7.5' })
+        setSForm({
+          type_local: 'sport_transport',
+          hauteur_m: '', zone_climatique: '',
+          equipements_convectifs: [], equipements_radiatifs: [],
+          nb_destrat: '', cout_unitaire_destrat: '2750', prix_mwh: '7.5',
+        })
       }
     }
     setLoading(false)
@@ -130,20 +173,19 @@ export default function DossierDetail() {
   }
 
   const calculerSimuLocal = () => {
-    const h = parseFloat(sForm.hauteur_m) || 0
-    const s = parseFloat(sForm.surface_m2) || 0
-    const debit = parseInt(sForm.debit_unitaire) || 14000
-    const zone = sForm.zone_climatique || 'H2'
+    const h    = parseFloat(sForm.hauteur_m) || 0
     const prix = parseFloat(sForm.prix_mwh) || 7.5
-    const puissance = parseFloat(sForm.puissance_destrat_kw) || 0.214
+    const nb   = parseInt(sForm.nb_destrat) || 0
     const cout = parseFloat(sForm.cout_unitaire_destrat) || 2750
-    const nbCalc = h > 0 && s > 0 ? calculerNbDestrat(h, s, debit) : 0
-    const nb = parseInt(sForm.nb_destrat_manuel) || nbCalc
-    const mwh = calculerMWhCumac142({ nb, puissance, zone, hauteur: h })
-    const prime = Math.round(mwh * prix * 100) / 100
+    const pConv = (sForm.equipements_convectifs || []).reduce((s, e) => s + eqPuissance(e), 0)
+    const pRad  = (sForm.equipements_radiatifs || []).reduce((s, e) => s + eqPuissance(e), 0)
+
+    const { kwhCumac } = calculerCumac142({ typeLocal: sForm.type_local, zone: sForm.zone_climatique || 'H2', hauteur: h, pConvectif: pConv, pRadiatif: pRad })
+    const prime    = Math.round(kwhCumac * (prix / 1000) * 100) / 100
+    const mwh      = Math.round(kwhCumac / 1000 * 10) / 10
     const coutTotal = nb * cout
-    const marge = Math.round((prime - coutTotal) * 100) / 100
-    setSimuResult({ mwh, prime, coutTotal, marge, rentable: marge > 0, nb, nbCalc })
+    const marge    = Math.round((prime - coutTotal) * 100) / 100
+    setSimuResult({ kwhCumac, mwh, prime, coutTotal, marge, rentable: marge > 0, nb, pConv, pRad })
   }
 
   const saveSimulation = async () => {
@@ -151,16 +193,27 @@ export default function DossierDetail() {
     setSavingSimu(true)
     const payload = {
       dossier_id: id,
-      fiche_cee: sForm.fiche_cee,
-      surface_m2: parseFloat(sForm.surface_m2) || null,
+      fiche_cee: 'BAT-TH-142',
       hauteur_m: parseFloat(sForm.hauteur_m) || null,
       zone_climatique: sForm.zone_climatique,
       nb_equipements: simuResult.nb,
+      puissance_kw: simuResult.pConv + simuResult.pRad,
       mwh_cumac: simuResult.mwh,
       prime_estimee: simuResult.prime,
       prix_mwh: parseFloat(sForm.prix_mwh),
       rentable: simuResult.rentable,
-      parametres: { ...sForm, nb_destrat_calcule: simuResult.nbCalc, cout_total: simuResult.coutTotal, marge: simuResult.marge },
+      parametres: {
+        type_local: sForm.type_local,
+        equipements_convectifs: sForm.equipements_convectifs,
+        equipements_radiatifs: sForm.equipements_radiatifs,
+        p_convectif: simuResult.pConv,
+        p_radiatif: simuResult.pRad,
+        kwh_cumac: simuResult.kwhCumac,
+        nb_destrat: simuResult.nb,
+        cout_unitaire_destrat: sForm.cout_unitaire_destrat,
+        cout_total: simuResult.coutTotal,
+        marge: simuResult.marge,
+      },
     }
     await createSimulation(payload)
     const { data: updatedDossier } = await updateDossier(id, { prime_estimee: simuResult.prime, montant_devis: simuResult.coutTotal })
@@ -297,41 +350,128 @@ export default function DossierDetail() {
             {!editSimu && sim && (
               <div>
                 <InfoRow label="Fiche CEE" value={sim.fiche_cee} />
-                <InfoRow label="Surface" value={sim.surface_m2 != null ? `${sim.surface_m2} m²` : null} />
+                <InfoRow label="Type local" value={simParams.type_local === 'sport_transport' ? 'Sport / Transport' : simParams.type_local === 'commerce_loisirs' ? 'Commerce / Loisirs' : null} />
                 <InfoRow label="Hauteur" value={sim.hauteur_m != null ? `${sim.hauteur_m} m` : null} />
                 <InfoRow label="Zone" value={sim.zone_climatique} />
+                <InfoRow label="P convectif" value={simParams.p_convectif != null ? `${simParams.p_convectif} kW` : null} />
+                <InfoRow label="P radiatif" value={simParams.p_radiatif != null ? `${simParams.p_radiatif} kW` : null} />
                 <InfoRow label="Nb destrats" value={sim.nb_equipements} />
+                <InfoRow label="kWh cumac" value={simParams.kwh_cumac != null ? `${Number(simParams.kwh_cumac).toLocaleString('fr')} kWh` : null} />
                 <InfoRow label="MWh cumac" value={sim.mwh_cumac != null ? `${sim.mwh_cumac} MWh` : null} />
                 <div style={{ height: 1, background: C.border, margin: '10px 0' }} />
                 <InfoRow label="Prime CEE" value={sim.prime_estimee != null ? `${Number(sim.prime_estimee).toLocaleString('fr')} €` : null} color="#7C3AED" />
                 <InfoRow label="Coût prestation" value={simParams.cout_total != null ? `${Number(simParams.cout_total).toLocaleString('fr')} €` : null} color="#D97706" />
                 <InfoRow label="Marge nette" value={simParams.marge != null ? `${Number(simParams.marge).toLocaleString('fr')} €` : null} color={simParams.marge >= 0 ? '#16A34A' : '#DC2626'} />
                 <InfoRow label="Prix MWh" value={sim.prix_mwh != null ? `${sim.prix_mwh} €/MWh` : null} />
+                {/* Bouton création devis Hub */}
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                  <button
+                    onClick={() => navigate('/hub', {
+                      state: {
+                        module: 'marges',
+                        prefill: {
+                          nomClient: dossier.prospects?.raison_sociale || '',
+                          siret: dossier.prospects?.siret || '',
+                          adresseSite: [dossier.prospects?.adresse, dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(', '),
+                          nomContact: dossier.prospects?.contact_nom || '',
+                          fonctionContact: '',
+                          refDevis: dossier.ref || `PICPUS-${Date.now().toString().slice(-6)}`,
+                          dateDevis: new Date().toLocaleDateString('fr-FR'),
+                          prime: sim.prime_estimee || 0,
+                          batQte: sim.nb_equipements || 0,
+                          batPuVente: simParams.cout_unitaire_destrat ? parseFloat(simParams.cout_unitaire_destrat) : 0,
+                        },
+                      },
+                    })}
+                    style={{ width: '100%', padding: '10px', background: '#2563EB', border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    📄 Créer un devis dans Hub Marges × Devis
+                  </button>
+                </div>
               </div>
             )}
 
             {/* Édition */}
             {editSimu && (
               <div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
-                  <Field label="Surface" value={String(sForm.surface_m2 ?? '')} onChange={v => setS('surface_m2', v)} type="number" placeholder="5000" suffix="m²" />
-                  <Field label="Hauteur" value={String(sForm.hauteur_m ?? '')} onChange={v => setS('hauteur_m', v)} type="number" placeholder="12" suffix="m" />
-                  <Field label="Débit unitaire" value={String(sForm.debit_unitaire ?? '')} onChange={v => setS('debit_unitaire', v)} type="number" placeholder="14000" suffix="m³/h" />
-                  <Field label="Nb destrats (manuel)" value={String(sForm.nb_destrat_manuel ?? '')} onChange={v => setS('nb_destrat_manuel', v)} type="number" placeholder="auto" />
-                  <Field label="Coût unitaire destrat" value={String(sForm.cout_unitaire_destrat ?? '')} onChange={v => setS('cout_unitaire_destrat', v)} type="number" suffix="€" />
-                  <Field label="Prix MWh" value={String(sForm.prix_mwh ?? '')} onChange={v => setS('prix_mwh', v)} type="number" suffix="€/MWh" />
-                </div>
+                {/* Type de local */}
                 <div style={{ marginBottom: 14 }}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .4 }}>Zone climatique</label>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .4 }}>Type de local</label>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    {['H1', 'H2', 'H3'].map(z => (
-                      <button key={z} type="button" onClick={() => setS('zone_climatique', z)}
-                        style={{ flex: 1, padding: '8px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, background: sForm.zone_climatique === z ? '#EFF6FF' : C.bg, border: `1px solid ${sForm.zone_climatique === z ? C.accent : C.border}`, color: sForm.zone_climatique === z ? C.accent : C.textMid }}>
-                        {z}
+                    {[
+                      { id: 'sport_transport', label: '🏟️ Sport / Transport' },
+                      { id: 'commerce_loisirs', label: '🏬 Commerce / Loisirs' },
+                    ].map(t => (
+                      <button key={t.id} type="button" onClick={() => setS('type_local', t.id)}
+                        style={{ flex: 1, padding: '8px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600, background: sForm.type_local === t.id ? '#EFF6FF' : C.bg, border: `1px solid ${sForm.type_local === t.id ? C.accent : C.border}`, color: sForm.type_local === t.id ? C.accent : C.textMid }}>
+                        {t.label}
                       </button>
                     ))}
                   </div>
                 </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+                  <Field label="Hauteur" value={String(sForm.hauteur_m ?? '')} onChange={v => setS('hauteur_m', v)} type="number" placeholder="10" suffix="m" />
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .4 }}>Zone climatique</label>
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+                      {['H1', 'H2', 'H3'].map(z => (
+                        <button key={z} type="button" onClick={() => setS('zone_climatique', z)}
+                          style={{ flex: 1, padding: '8px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, background: sForm.zone_climatique === z ? '#EFF6FF' : C.bg, border: `1px solid ${sForm.zone_climatique === z ? C.accent : C.border}`, color: sForm.zone_climatique === z ? C.accent : C.textMid }}>
+                          {z}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Équipements convectifs */}
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .4 }}>🌀 Chauffage convectif</div>
+                {(sForm.equipements_convectifs || []).map((eq, i) => {
+                  const upd = (patch) => setS('equipements_convectifs', sForm.equipements_convectifs.map((x, j) => j === i ? { ...x, ...patch } : x))
+                  return (
+                    <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                      <input value={eq.label ?? ''} onChange={e => upd({ label: e.target.value })}
+                        style={{ flex: 2, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+                      <input type="number" value={eq.quantite ?? ''} onChange={e => upd({ quantite: e.target.value })}
+                        placeholder="Qté" style={{ width: 60, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 8px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+                      <span style={{ fontSize: 11, color: C.textSoft }}>×</span>
+                      <input type="number" value={eq.puissance_unitaire_kw ?? eq.puissance_kw ?? ''} onChange={e => upd({ puissance_unitaire_kw: e.target.value, puissance_kw: undefined })}
+                        placeholder="kW" style={{ width: 72, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 8px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+                      <button onClick={() => setS('equipements_convectifs', sForm.equipements_convectifs.filter((_, j) => j !== i))} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: '#EF4444', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>✕</button>
+                    </div>
+                  )
+                })}
+                <button onClick={() => setS('equipements_convectifs', [...(sForm.equipements_convectifs || []), { label: 'Équipement', quantite: '', puissance_unitaire_kw: '' }])}
+                  style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 14 }}>+ Ajouter convectif</button>
+
+                {/* Équipements radiatifs */}
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .4 }}>☀️ Chauffage radiatif</div>
+                {(sForm.equipements_radiatifs || []).map((eq, i) => {
+                  const upd = (patch) => setS('equipements_radiatifs', sForm.equipements_radiatifs.map((x, j) => j === i ? { ...x, ...patch } : x))
+                  return (
+                    <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                      <input value={eq.label ?? ''} onChange={e => upd({ label: e.target.value })}
+                        style={{ flex: 2, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+                      <input type="number" value={eq.quantite ?? ''} onChange={e => upd({ quantite: e.target.value })}
+                        placeholder="Qté" style={{ width: 60, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 8px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+                      <span style={{ fontSize: 11, color: C.textSoft }}>×</span>
+                      <input type="number" value={eq.puissance_unitaire_kw ?? eq.puissance_kw ?? ''} onChange={e => upd({ puissance_unitaire_kw: e.target.value, puissance_kw: undefined })}
+                        placeholder="kW" style={{ width: 72, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 8px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+                      <button onClick={() => setS('equipements_radiatifs', sForm.equipements_radiatifs.filter((_, j) => j !== i))} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: '#EF4444', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>✕</button>
+                    </div>
+                  )
+                })}
+                <button onClick={() => setS('equipements_radiatifs', [...(sForm.equipements_radiatifs || []), { label: 'Équipement radiatif', quantite: '', puissance_unitaire_kw: '' }])}
+                  style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 14 }}>+ Ajouter radiatif</button>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+                  <Field label="Nb déstratificateurs" value={String(sForm.nb_destrat ?? '')} onChange={v => setS('nb_destrat', v)} type="number" placeholder="Ex: 4" />
+                  <Field label="Coût unitaire destrat" value={String(sForm.cout_unitaire_destrat ?? '')} onChange={v => setS('cout_unitaire_destrat', v)} type="number" suffix="€" />
+                  <div style={{ gridColumn: '1/-1' }}>
+                    <Field label="Prix MWh" value={String(sForm.prix_mwh ?? '')} onChange={v => setS('prix_mwh', v)} type="number" suffix="€/MWh" />
+                  </div>
+                </div>
+
                 <button onClick={calculerSimuLocal}
                   style={{ width: '100%', padding: '10px', background: C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginBottom: simuResult ? 12 : 0 }}>
                   Recalculer ⟳
@@ -339,6 +479,7 @@ export default function DossierDetail() {
                 {simuResult && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
                     {[
+                      { label: 'kWh cumac', value: `${simuResult.kwhCumac?.toLocaleString('fr')} kWh`, color: '#94A3B8' },
                       { label: '⚡ MWh cumac', value: `${simuResult.mwh} MWh`, color: C.accent },
                       { label: '💶 Prime CEE', value: `${simuResult.prime.toLocaleString('fr')} €`, color: '#7C3AED' },
                       { label: '🔧 Coût prestation', value: `${simuResult.coutTotal.toLocaleString('fr')} €`, color: '#D97706' },
