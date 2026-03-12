@@ -279,12 +279,15 @@ function NouveauDossierModal({ onClose, onCreate }) {
 // ── Dashboard principal ───────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { dossiers, fetchDossiers, setCurrentDossier, user, profile, signOut, profiles, fetchProfiles } = useStore()
+  const { dossiers, fetchDossiers, setCurrentDossier, deleteDossier, deleteDossiers, user, profile, signOut, profiles, fetchProfiles } = useStore()
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch]           = useState('')
   const [filtreStatut, setFiltreStatut]       = useState('all')
   const [filtreCommercial, setFiltreCommercial] = useState('all')
   const [loading, setLoading]         = useState(true)
+  const [selected, setSelected]       = useState(new Set())
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const [deletingIds, setDeletingIds] = useState(new Set())
 
   useEffect(() => {
     fetchProfiles()
@@ -313,6 +316,42 @@ export default function Dashboard() {
   const openDossier = (dossier) => {
     setCurrentDossier(dossier)
     navigate(`/dossier/${dossier.id}`)
+  }
+
+  const toggleSelect = (id, e) => {
+    e.stopPropagation()
+    setSelected(s => {
+      const next = new Set(s)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+    setConfirmDeleteId(null)
+  }
+
+  const toggleSelectAll = () => {
+    if (selected.size === filtered.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(filtered.map(d => d.id)))
+    }
+  }
+
+  const handleDeleteOne = async (id, e) => {
+    e.stopPropagation()
+    if (confirmDeleteId !== id) { setConfirmDeleteId(id); return }
+    setDeletingIds(s => new Set(s).add(id))
+    await deleteDossier(id)
+    setConfirmDeleteId(null)
+    setDeletingIds(s => { const n = new Set(s); n.delete(id); return n })
+    setSelected(s => { const n = new Set(s); n.delete(id); return n })
+  }
+
+  const handleDeleteSelected = async () => {
+    const ids = [...selected]
+    setDeletingIds(new Set(ids))
+    await deleteDossiers(ids)
+    setSelected(new Set())
+    setDeletingIds(new Set())
   }
 
   const isAdmin = profile?.role === 'admin'
@@ -408,6 +447,27 @@ export default function Dashboard() {
           )}
         </div>
 
+        {/* Toolbar sélection groupée */}
+        {selected.size > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10,
+            background: '#FEF2F2', border: '1px solid #FCA5A5',
+            borderRadius: 9, padding: '10px 16px',
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#DC2626' }}>
+              {selected.size} dossier{selected.size > 1 ? 's' : ''} sélectionné{selected.size > 1 ? 's' : ''}
+            </span>
+            <button onClick={handleDeleteSelected}
+              style={{ background: '#DC2626', border: 'none', color: '#fff', borderRadius: 7, padding: '6px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+              🗑 Supprimer la sélection
+            </button>
+            <button onClick={() => setSelected(new Set())}
+              style={{ background: 'transparent', border: '1px solid #FCA5A5', color: '#DC2626', borderRadius: 7, padding: '6px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Annuler
+            </button>
+          </div>
+        )}
+
         {/* Liste dossiers */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px 0', color: C.textMid }}>Chargement…</div>
@@ -422,41 +482,77 @@ export default function Dashboard() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* En-tête */}
             <div style={{
-              display: 'grid', gridTemplateColumns: '140px 1fr 160px 120px 120px 80px',
-              gap: 12, padding: '8px 16px',
+              display: 'grid', gridTemplateColumns: '36px 130px 1fr 150px 110px 110px 70px 44px',
+              gap: 10, padding: '8px 14px',
               fontSize: 11, fontWeight: 700, color: C.textSoft,
-              textTransform: 'uppercase', letterSpacing: .4,
+              textTransform: 'uppercase', letterSpacing: .4, alignItems: 'center',
             }}>
+              <input type="checkbox"
+                checked={selected.size === filtered.length && filtered.length > 0}
+                onChange={toggleSelectAll}
+                style={{ width: 16, height: 16, cursor: 'pointer', accentColor: C.accent }}
+              />
               <span>Référence</span><span>Prospect / Site</span>
               <span>Fiche CEE</span><span>Statut</span>
-              <span>Assigné</span><span>Date</span>
+              <span>Assigné</span><span>Date</span><span></span>
             </div>
-            {filtered.map(d => (
-              <div key={d.id} onClick={() => openDossier(d)}
-                style={{
-                  display: 'grid', gridTemplateColumns: '140px 1fr 160px 120px 120px 80px',
-                  gap: 12, padding: '14px 16px',
-                  background: C.surface, border: `1px solid ${C.border}`,
-                  borderRadius: 10, cursor: 'pointer', transition: 'border-color .15s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = C.accent}
-                onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', fontFamily: 'monospace' }}>{d.ref}</span>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{d.prospects?.raison_sociale || '—'}</div>
-                  <div style={{ fontSize: 12, color: C.textMid, marginTop: 2 }}>{d.prospects?.adresse || '—'}</div>
+
+            {filtered.map(d => {
+              const isSelected = selected.has(d.id)
+              const isDeleting = deletingIds.has(d.id)
+              const isConfirm  = confirmDeleteId === d.id
+              return (
+                <div key={d.id}
+                  onClick={() => !isDeleting && openDossier(d)}
+                  style={{
+                    display: 'grid', gridTemplateColumns: '36px 130px 1fr 150px 110px 110px 70px 44px',
+                    gap: 10, padding: '13px 14px', alignItems: 'center',
+                    background: isSelected ? '#EFF6FF' : C.surface,
+                    border: `1px solid ${isSelected ? C.accent : C.border}`,
+                    borderRadius: 10, cursor: isDeleting ? 'default' : 'pointer',
+                    opacity: isDeleting ? .5 : 1, transition: 'border-color .1s, background .1s',
+                  }}
+                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = C.accent }}
+                  onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = C.border }}>
+
+                  {/* Checkbox */}
+                  <input type="checkbox" checked={isSelected}
+                    onClick={e => toggleSelect(d.id, e)}
+                    onChange={() => {}}
+                    style={{ width: 16, height: 16, cursor: 'pointer', accentColor: C.accent }}
+                  />
+
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', fontFamily: 'monospace' }}>{d.ref}</span>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{d.prospects?.raison_sociale || '—'}</div>
+                    <div style={{ fontSize: 12, color: C.textMid, marginTop: 2 }}>{d.prospects?.adresse || '—'}</div>
+                  </div>
+                  <span style={{ fontSize: 12, color: C.textMid }}>{d.fiche_cee}</span>
+                  <StatutBadge statut={d.statut} />
+                  <span style={{ fontSize: 12, color: C.textMid }}>{profileName(d.assigne_a)}</span>
+                  <span style={{ fontSize: 11, color: C.textSoft }}>{new Date(d.created_at).toLocaleDateString('fr-FR')}</span>
+
+                  {/* Bouton supprimer */}
+                  <button
+                    onClick={e => handleDeleteOne(d.id, e)}
+                    title={isConfirm ? 'Cliquer pour confirmer' : 'Supprimer'}
+                    style={{
+                      background: isConfirm ? '#DC2626' : 'transparent',
+                      border: `1px solid ${isConfirm ? '#DC2626' : C.border}`,
+                      color: isConfirm ? '#fff' : '#94A3B8',
+                      borderRadius: 6, padding: '5px 7px', fontSize: 13,
+                      cursor: 'pointer', fontFamily: 'inherit',
+                      transition: 'all .1s',
+                    }}
+                    onMouseEnter={e => { if (!isConfirm) { e.currentTarget.style.borderColor = '#DC2626'; e.currentTarget.style.color = '#DC2626' } }}
+                    onMouseLeave={e => { if (!isConfirm) { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = '#94A3B8' } }}>
+                    {isConfirm ? '?' : '🗑'}
+                  </button>
                 </div>
-                <span style={{ fontSize: 12, color: C.textMid, alignSelf: 'center' }}>{d.fiche_cee}</span>
-                <span style={{ alignSelf: 'center' }}><StatutBadge statut={d.statut} /></span>
-                <span style={{ fontSize: 12, color: C.textMid, alignSelf: 'center' }}>
-                  {profileName(d.assigne_a)}
-                </span>
-                <span style={{ fontSize: 11, color: C.textSoft, alignSelf: 'center' }}>
-                  {new Date(d.created_at).toLocaleDateString('fr-FR')}
-                </span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

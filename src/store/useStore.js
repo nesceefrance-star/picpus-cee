@@ -98,6 +98,18 @@ const useStore = create((set, get) => ({
     return { data, error }
   },
 
+  deleteDossier: async (id) => {
+    const { error } = await supabase.from('dossiers').delete().eq('id', id)
+    if (!error) set(s => ({ dossiers: s.dossiers.filter(d => d.id !== id) }))
+    return { error }
+  },
+
+  deleteDossiers: async (ids) => {
+    const { error } = await supabase.from('dossiers').delete().in('id', ids)
+    if (!error) set(s => ({ dossiers: s.dossiers.filter(d => !ids.includes(d.id)) }))
+    return { error }
+  },
+
   // ─── PROSPECTS ───────────────────────────────────────────
   prospects: [],
 
