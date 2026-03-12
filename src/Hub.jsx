@@ -568,9 +568,12 @@ function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
     setError("");
     try {
       const b64 = await toBase64(file);
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      const resp = await fetch("/api/claude", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "anthropic-beta": "pdfs-2024-09-25",
+        },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 4000,
@@ -578,31 +581,20 @@ function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
             role: "user",
             content: [
               { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } },
-              { type: "text", text: `Tu es un expert en devis de travaux CEE (Certificats d'Économies d'Énergie) pour des déstratificateurs d'air BAT-TH-142.
+              { type: "text", text: `Tu es un expert en devis de travaux CEE pour des déstratificateurs d'air BAT-TH-142.
 
 Analyse ce devis prestataire et extrais TOUTES les lignes de travaux.
 
-Réponds UNIQUEMENT avec un JSON valide, sans aucun texte avant ou après :
-{
-  "lignes": [
-    {
-      "cat": "MATÉRIEL" | "MAIN D'ŒUVRE" | "DIVERS",
-      "designation": "description complète de la ligne",
-      "qte": nombre,
-      "unite": "U" | "Jours" | "Forfait" | "ml" | "m²",
-      "puAchat": prix unitaire HT en nombre
-    }
-  ]
-}
+Réponds UNIQUEMENT avec un JSON valide, sans backticks, sans texte avant ou après :
+{"lignes":[{"cat":"MATÉRIEL","designation":"description","qte":1,"unite":"U","puAchat":0}]}
 
-Règles :
-- cat = "MATÉRIEL" pour équipements, câbles, armoires, supports
-- cat = "MAIN D'ŒUVRE" pour pose, installation, câblage, création
-- cat = "DIVERS" pour déplacement, location nacelle, livraison, frais
-- puAchat = prix HORS TAXES unitaire du prestataire
-- Si une ligne a un total HT et une quantité, calcule le prix unitaire
-- Ignore TVA, totaux, sous-totaux, pages de conditions
-- Si aucune ligne trouvée, retourne {"lignes": []}` }
+Règles strictes :
+- cat = "MATÉRIEL" pour équipements, câbles, armoires, rails, kits
+- cat = "MAIN D'ŒUVRE" pour pose, installation, câblage, création, montage
+- cat = "DIVERS" pour déplacement, nacelle, livraison, frais divers
+- puAchat = prix unitaire HT (si tu as le total HT et la qté, divise)
+- Ignore les lignes de TVA, totaux, sous-totaux, en-têtes, conditions
+- Si aucune ligne : {"lignes":[]}` }
             ]
           }]
         })
