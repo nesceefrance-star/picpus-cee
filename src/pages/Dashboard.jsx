@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useStore from '../store/useStore'
 
@@ -8,13 +8,25 @@ const STATUTS = [
   { id: 'devis',       label: 'Devis envoyé',  color: '#D97706', bg: '#FEF3C7' },
   { id: 'ah',          label: 'AH en cours',   color: '#DC2626', bg: '#FEE2E2' },
   { id: 'conforme',    label: 'Conforme',      color: '#16A34A', bg: '#DCFCE7' },
-  { id: 'facture',     label: 'Facturé',       color: '#64748B', bg: '#F1F5F9' },
+  { id: 'facture',     label: 'Factuté',       color: '#64748B', bg: '#F1F5F9' },
 ]
 
 const C = {
   bg: '#F1F5F9', surface: '#FFFFFF', border: '#E2E8F0',
   text: '#0F172A', textMid: '#475569', textSoft: '#94A3B8',
   accent: '#2563EB', nav: '#1E293B',
+}
+
+const INP = {
+  width: '100%', boxSizing: 'border-box',
+  background: C.bg, border: `1px solid ${C.border}`,
+  borderRadius: 7, padding: '9px 12px',
+  color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit',
+}
+const LBL = {
+  display: 'block', fontSize: 11, fontWeight: 600,
+  color: C.textMid, marginBottom: 5,
+  textTransform: 'uppercase', letterSpacing: .4,
 }
 
 function StatutBadge({ statut }) {
@@ -31,6 +43,127 @@ function StatutBadge({ statut }) {
   )
 }
 
+// ── Autocomplete Pappers (SIREN → raison sociale) ─────────────────────────
+function SirenField({ value, onChange, onCompanyFound }) {
+  const [suggestions, setSuggestions] = useState([])
+  const [open, setOpen] = useState(false)
+  const timer = useRef(null)
+
+  const search = useCallback(async (q) => {
+    if (q.length < 3) { setSuggestions([]); return }
+    try {
+      const r = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(q)}&per_page=5`)
+      const d = await r.json()
+      setSuggestions((d.results || []).map(e => ({
+        siren: e.siren,
+        nom: e.nom_complet || e.nom_raison_sociale || '',
+        adresse: e.siege?.adresse_complete || '',
+      })))
+      setOpen(true)
+    } catch { setSuggestions([]) }
+  }, [])
+
+  const handleChange = (v) => {
+    onChange(v)
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => search(v), 350)
+  }
+
+  const pick = (s) => {
+    onChange(s.siren)
+    onCompanyFound(s.nom, s.adresse)
+    setSuggestions([])
+    setOpen(false)
+  }
+
+  return (
+    <div style={{ position: 'relative', marginBottom: 14 }}>
+      <label style={LBL}>SIREN — Recherche entreprise</label>
+      <input
+        type="text" value={value}
+        onChange={e => handleChange(e.target.value)}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        placeholder="SIREN ou nom d'entreprise"
+        style={INP}
+        autoComplete="off"
+      />
+      {open && suggestions.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+          background: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', overflow: 'hidden',
+        }}>
+          {suggestions.map(s => (
+            <div key={s.siren} onMouseDown={() => pick(s)} style={{
+              padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.border}`,
+              fontSize: 13,
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = C.bg}
+            onMouseLeave={e => e.currentTarget.style.background = C.surface}>
+              <div style={{ fontWeight: 600, color: C.text }}>{s.nom}</div>
+              <div style={{ fontSize: 11, color: C.textMid }}>{s.siren} {s.adresse ? '· ' + s.adresse : ''}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Autocomplete adresse (API Adresse gouv.fr) ────────────────────────────
+function AdresseField({ value, onChange }) {
+  const [suggestions, setSuggestions] = useState([])
+  const [open, setOpen] = useState(false)
+  const timer = useRef(null)
+
+  const search = useCallback(async (q) => {
+    if (q.length < 4) { setSuggestions([]); return }
+    try {
+      const r = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`)
+      const d = await r.json()
+      setSuggestions((d.features || []).map(f => f.properties.label))
+      setOpen(true)
+    } catch { setSuggestions([]) }
+  }, [])
+
+  const handleChange = (v) => {
+    onChange(v)
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => search(v), 300)
+  }
+
+  return (
+    <div style={{ position: 'relative', marginBottom: 14 }}>
+      <label style={LBL}>Adresse du site</label>
+      <input
+        type="text" value={value}
+        onChange={e => handleChange(e.target.value)}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        placeholder="771 Rue de la Plaine, 59553 Lauwin-Planque"
+        style={INP}
+        autoComplete="off"
+      />
+      {open && suggestions.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+          background: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', overflow: 'hidden',
+        }}>
+          {suggestions.map((s, i) => (
+            <div key={i} onMouseDown={() => { onChange(s); setSuggestions([]); setOpen(false) }}
+              style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.border}`, fontSize: 13, color: C.text }}
+              onMouseEnter={e => e.currentTarget.style.background = C.bg}
+              onMouseLeave={e => e.currentTarget.style.background = C.surface}>
+              {s}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Modal nouveau dossier ─────────────────────────────────────────────────
 function NouveauDossierModal({ onClose, onCreate }) {
   const [form, setForm] = useState({
     nom_prospect: '', siren: '', adresse_site: '',
@@ -39,10 +172,11 @@ function NouveauDossierModal({ onClose, onCreate }) {
   const [loading, setLoading] = useState(false)
   const { createProspect, createDossier, user } = useStore()
 
-  const submit = async (e) => {
-    e.preventDefault()
+  const set = (k) => (v) => setForm(f => ({ ...f, [k]: v }))
+
+  const submit = async () => {
+    if (!form.nom_prospect) return
     setLoading(true)
-    // Créer prospect
     const { data: prospect } = await createProspect({
       raison_sociale: form.nom_prospect,
       siren: form.siren,
@@ -50,7 +184,6 @@ function NouveauDossierModal({ onClose, onCreate }) {
       contact_nom: form.contact_nom,
       contact_email: form.contact_email,
     })
-    // Créer dossier
     const { data: dossier } = await createDossier({
       prospect_id: prospect?.id,
       fiche_cee: form.fiche_cee,
@@ -63,90 +196,89 @@ function NouveauDossierModal({ onClose, onCreate }) {
     onClose()
   }
 
-  const Field = ({ label, name, type = 'text', placeholder }) => (
-    <div style={{ marginBottom: 14 }}>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>
-        {label}
-      </label>
-      <input
-        type={type}
-        value={form[name]}
-        onChange={e => setForm(f => ({ ...f, [name]: e.target.value }))}
-        placeholder={placeholder}
-        style={{
-          width: '100%', boxSizing: 'border-box',
-          background: C.bg, border: `1px solid ${C.border}`,
-          borderRadius: 7, padding: '9px 12px',
-          color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit',
-        }}
-      />
-    </div>
-  )
-
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)',
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
     }} onClick={onClose}>
       <div style={{
         background: C.surface, border: `1px solid ${C.border}`,
-        borderRadius: 14, padding: '28px 32px', width: 500,
-        boxShadow: '0 25px 50px rgba(0,0,0,.5)',
+        borderRadius: 14, padding: '28px 32px', width: 520,
+        boxShadow: '0 25px 50px rgba(0,0,0,.2)', maxHeight: '90vh', overflowY: 'auto',
       }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 20 }}>
           ➕ Nouveau dossier
         </div>
-        <form onSubmit={submit}>
-          <Field label="Raison sociale" name="nom_prospect" placeholder="KIABI LOGISTIQUE" />
-          <Field label="SIREN" name="siren" placeholder="347 727 950" />
-          <Field label="Adresse du site" name="adresse_site" placeholder="771 Rue de la Plaine, 59553 Lauwin-Planque" />
+
+        {/* Raison sociale */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={LBL}>Raison sociale</label>
+          <input value={form.nom_prospect} onChange={e => set('nom_prospect')(e.target.value)}
+            placeholder="KIABI LOGISTIQUE" style={INP} autoComplete="organization"/>
+        </div>
+
+        {/* SIREN avec autocomplete API gouv */}
+        <SirenField
+          value={form.siren}
+          onChange={set('siren')}
+          onCompanyFound={(nom, adr) => setForm(f => ({
+            ...f,
+            nom_prospect: nom || f.nom_prospect,
+            adresse_site: adr || f.adresse_site,
+          }))}
+        />
+
+        {/* Adresse avec autocomplete */}
+        <AdresseField value={form.adresse_site} onChange={set('adresse_site')} />
+
+        {/* Fiche CEE */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={LBL}>Fiche CEE</label>
+          <select value={form.fiche_cee} onChange={e => set('fiche_cee')(e.target.value)}
+            style={{ ...INP, appearance: 'auto' }}>
+            <option value="BAT-TH-142">BAT-TH-142 — Déstratification d'air</option>
+            <option value="BAT-TH-116">BAT-TH-116 — Système GTB</option>
+            <option value="IND-BA-110">IND-BA-110 — Déstratification industrie</option>
+          </select>
+        </div>
+
+        {/* Contact */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>
-              Fiche CEE
-            </label>
-            <select
-              value={form.fiche_cee}
-              onChange={e => setForm(f => ({ ...f, fiche_cee: e.target.value }))}
-              style={{
-                width: '100%', background: C.bg, border: `1px solid ${C.border}`,
-                borderRadius: 7, padding: '9px 12px', color: C.text,
-                fontSize: 13, outline: 'none', fontFamily: 'inherit',
-              }}
-            >
-              <option value="BAT-TH-142">BAT-TH-142 — Déstratification d'air</option>
-              <option value="BAT-TH-116">BAT-TH-116 — Système GTB</option>
-              <option value="IND-BA-110">IND-BA-110 — Déstratification industrie</option>
-            </select>
+            <label style={LBL}>Contact</label>
+            <input value={form.contact_nom} onChange={e => set('contact_nom')(e.target.value)}
+              placeholder="Fabien Van De Ginste" style={INP}/>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="Contact" name="contact_nom" placeholder="Fabien Van De Ginste" />
-            <Field label="Email contact" name="contact_email" type="email" placeholder="f.vandeginste@kiabi.fr" />
+          <div style={{ marginBottom: 14 }}>
+            <label style={LBL}>Email contact</label>
+            <input type="email" value={form.contact_email} onChange={e => set('contact_email')(e.target.value)}
+              placeholder="f.vandeginste@kiabi.fr" style={INP}/>
           </div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-            <button type="button" onClick={onClose} style={{
-              flex: 1, padding: '11px', background: 'transparent',
-              border: `1px solid ${C.border}`, color: C.textMid,
-              borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-              Annuler
-            </button>
-            <button type="submit" disabled={loading} style={{
-              flex: 2, padding: '11px', background: C.accent,
-              border: 'none', color: '#fff', borderRadius: 8,
-              fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-              {loading ? 'Création…' : 'Créer le dossier'}
-            </button>
-          </div>
-        </form>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: '11px', background: 'transparent',
+            border: `1px solid ${C.border}`, color: C.textMid,
+            borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+          }}>Annuler</button>
+          <button onClick={submit} disabled={loading} style={{
+            flex: 2, padding: '11px', background: C.accent,
+            border: 'none', color: '#fff', borderRadius: 8,
+            fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+          }}>
+            {loading ? 'Création…' : 'Créer le dossier'}
+          </button>
+        </div>
       </div>
     </div>
   )
 }
 
+// ── Dashboard principal ───────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { dossiers, fetchDossiers, setCurrentDossier, user, signOut } = useStore()
+  const { dossiers, fetchDossiers, setCurrentDossier, user, profile, signOut } = useStore()
   const [showModal, setShowModal] = useState(false)
   const [search, setSearch]       = useState('')
   const [filtreStatut, setFiltreStatut] = useState('all')
@@ -174,44 +306,47 @@ export default function Dashboard() {
     navigate(`/dossier/${dossier.id}`)
   }
 
+  const isAdmin = profile?.role === 'admin'
+
   return (
     <div style={{ minHeight: '100vh', background: C.bg, fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" }}>
       {/* Nav */}
       <div style={{
-        background: C.surface, borderBottom: `1px solid ${C.border}`,
+        background: C.nav, borderBottom: `1px solid #334155`,
         padding: '0 24px', height: 56,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 20, fontWeight: 900, color: '#60A5FA', letterSpacing: 2 }}>PICPUS</span>
-          <span style={{ color: C.textSoft, fontSize: 13 }}>/ CRM CEE</span>
+          <span style={{ color: '#64748B', fontSize: 13 }}>/ CRM CEE</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          {[
-            { label: '🏠 Dashboard', path: '/' },
-            { label: '🔧 Outils', path: '/hub' },
-          ].map(item => (
-            <button key={item.path} onClick={() => navigate(item.path)} style={{
-              background: 'transparent', border: 'none', color: C.textMid,
-              fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: '4px 8px',
-            }}>
-              {item.label}
-            </button>
-          ))}
-          <div style={{ width: 1, height: 20, background: C.border }}/>
-          <span style={{ fontSize: 13, color: C.textMid }}>{user?.email}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={() => navigate('/')} style={{
+            background: 'transparent', border: 'none', color: '#94A3B8',
+            fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: '5px 10px', borderRadius: 6,
+          }}>🏠 Dashboard</button>
+          <button onClick={() => navigate('/hub')} style={{
+            background: 'transparent', border: 'none', color: '#94A3B8',
+            fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: '5px 10px', borderRadius: 6,
+          }}>🔧 Outils Hub</button>
+          {isAdmin && (
+            <button onClick={() => navigate('/admin/users')} style={{
+              background: '#1D4ED822', border: '1px solid #2563EB66', color: '#60A5FA',
+              fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              padding: '5px 12px', borderRadius: 6,
+            }}>👥 Utilisateurs</button>
+          )}
+          <div style={{ width: 1, height: 20, background: '#334155', margin: '0 4px' }}/>
+          <span style={{ fontSize: 12, color: '#64748B' }}>{user?.email}</span>
           <button onClick={signOut} style={{
-            background: 'transparent', border: `1px solid ${C.border}`,
-            color: C.textMid, borderRadius: 7, padding: '5px 12px',
+            background: 'transparent', border: `1px solid #334155`,
+            color: '#94A3B8', borderRadius: 7, padding: '5px 12px',
             fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-          }}>
-            Déconnexion
-          </button>
+          }}>Déco</button>
         </div>
       </div>
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 24px' }}>
-        {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, margin: 0, marginBottom: 4 }}>
@@ -233,16 +368,13 @@ export default function Dashboard() {
         {/* KPIs statuts */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10, marginBottom: 24 }}>
           {STATUTS.map(s => (
-            <div
-              key={s.id}
+            <div key={s.id}
               onClick={() => setFiltreStatut(filtreStatut === s.id ? 'all' : s.id)}
               style={{
                 background: filtreStatut === s.id ? s.bg : C.surface,
                 border: `1px solid ${filtreStatut === s.id ? s.color : C.border}`,
-                borderRadius: 10, padding: '12px 14px', cursor: 'pointer',
-                transition: 'all .15s',
-              }}
-            >
+                borderRadius: 10, padding: '12px 14px', cursor: 'pointer', transition: 'all .15s',
+              }}>
               <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{counts[s.id] || 0}</div>
               <div style={{ fontSize: 11, color: C.textMid, marginTop: 2 }}>{s.label}</div>
             </div>
@@ -251,17 +383,9 @@ export default function Dashboard() {
 
         {/* Recherche */}
         <div style={{ marginBottom: 16 }}>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+          <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Rechercher un dossier, prospect…"
-            style={{
-              width: '100%', boxSizing: 'border-box',
-              background: C.surface, border: `1px solid ${C.border}`,
-              borderRadius: 9, padding: '11px 16px',
-              color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit',
-            }}
-          />
+            style={{ ...INP, fontSize: 14, padding: '11px 16px', borderRadius: 9 }}/>
         </div>
 
         {/* Liste dossiers */}
@@ -273,55 +397,35 @@ export default function Dashboard() {
             borderRadius: 12, padding: '60px 24px', textAlign: 'center',
           }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>📂</div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 6 }}>
-              Aucun dossier
-            </div>
-            <div style={{ fontSize: 13, color: C.textMid }}>
-              Créez votre premier dossier pour démarrer
-            </div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 6 }}>Aucun dossier</div>
+            <div style={{ fontSize: 13, color: C.textMid }}>Créez votre premier dossier pour démarrer</div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {/* Header tableau */}
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: '140px 1fr 160px 120px 120px 80px',
+              display: 'grid', gridTemplateColumns: '140px 1fr 160px 120px 120px 80px',
               gap: 12, padding: '8px 16px',
               fontSize: 11, fontWeight: 700, color: C.textSoft,
               textTransform: 'uppercase', letterSpacing: .4,
             }}>
-              <span>Référence</span>
-              <span>Prospect / Site</span>
-              <span>Fiche CEE</span>
-              <span>Statut</span>
-              <span>Assigné</span>
-              <span>Date</span>
+              <span>Référence</span><span>Prospect / Site</span>
+              <span>Fiche CEE</span><span>Statut</span>
+              <span>Assigné</span><span>Date</span>
             </div>
             {filtered.map(d => (
-              <div
-                key={d.id}
-                onClick={() => openDossier(d)}
+              <div key={d.id} onClick={() => openDossier(d)}
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: '140px 1fr 160px 120px 120px 80px',
+                  display: 'grid', gridTemplateColumns: '140px 1fr 160px 120px 120px 80px',
                   gap: 12, padding: '14px 16px',
                   background: C.surface, border: `1px solid ${C.border}`,
-                  borderRadius: 10, cursor: 'pointer',
-                  transition: 'border-color .15s',
+                  borderRadius: 10, cursor: 'pointer', transition: 'border-color .15s',
                 }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = '#475569'}
-                onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
-              >
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#60A5FA', fontFamily: 'monospace' }}>
-                  {d.ref}
-                </span>
+                onMouseEnter={e => e.currentTarget.style.borderColor = C.accent}
+                onMouseLeave={e => e.currentTarget.style.borderColor = C.border}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', fontFamily: 'monospace' }}>{d.ref}</span>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
-                    {d.prospects?.raison_sociale || '—'}
-                  </div>
-                  <div style={{ fontSize: 12, color: C.textMid, marginTop: 2 }}>
-                    {d.prospects?.adresse || '—'}
-                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{d.prospects?.raison_sociale || '—'}</div>
+                  <div style={{ fontSize: 12, color: C.textMid, marginTop: 2 }}>{d.prospects?.adresse || '—'}</div>
                 </div>
                 <span style={{ fontSize: 12, color: C.textMid, alignSelf: 'center' }}>{d.fiche_cee}</span>
                 <span style={{ alignSelf: 'center' }}><StatutBadge statut={d.statut} /></span>
