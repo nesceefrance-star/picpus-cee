@@ -415,6 +415,11 @@ const LIGNES_DEFAUT = [
   {id:3,cat:"DIVERS",      designation:"DÉPLACEMENT — essence, péages, hébergement, repas",                         qte:1, unite:"U",    puAchat:500.00, margePct:0},
 ].map(l=>({...l,puVente:+(l.puAchat*(1+l.margePct/100)).toFixed(2),inclus:true}));
 
+const CAT_S = {
+  "MATÉRIEL":    {bg:"#EFF6FF",text:"#1D4ED8",border:"#BFDBFE"},
+  "MAIN D'ŒUVRE":{bg:"#F0FDF4",text:"#15803D",border:"#BBF7D0"},
+  "DIVERS":      {bg:"#FFFBEB",text:"#B45309",border:"#FDE68A"},
+};
 const MC2 = p => p>=20?"#16A34A":p>0?"#D97706":"#DC2626";
 
 const DTH = {padding:"8px 8px",fontSize:12,fontWeight:700,textAlign:"center"};
@@ -486,7 +491,7 @@ function ListeDevis({ devis, onCreate, onOpen }) {
   );
 }
 
-// ── Modal création nouveau devis ───────────────────────────────────────────
+// ── Étape 1 — Infos client ────────────────────────────────────────────────
 function ModalNouveauDevis({ onConfirm, onCancel }) {
   const [nomClient, setNomClient]   = useState("");
   const [siret, setSiret]           = useState("");
@@ -501,9 +506,19 @@ function ModalNouveauDevis({ onConfirm, onCancel }) {
     onConfirm({ nomClient, siret, adresseSite, refDevis, dateDevis, nomContact, fonctionContact });
   };
 
+  const INP = {width:"100%",boxSizing:"border-box",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit"};
+
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={onCancel}>
-      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"28px 32px",width:500,boxShadow:"0 25px 60px rgba(0,0,0,.4)"}} onClick={e=>e.stopPropagation()}>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"28px 32px",width:520,boxShadow:"0 25px 60px rgba(0,0,0,.4)"}} onClick={e=>e.stopPropagation()}>
+        {/* Steps */}
+        <div style={{display:"flex",gap:0,marginBottom:24,borderRadius:8,overflow:"hidden",border:`1px solid ${C.border}`}}>
+          {["1 · Infos client","2 · Devis prestataire","3 · Marges & export"].map((s,i)=>(
+            <div key={i} style={{flex:1,padding:"8px 6px",textAlign:"center",fontSize:11,fontWeight:i===0?700:500,background:i===0?C.accent:C.bg,color:i===0?"#fff":C.textSoft,borderRight:i<2?`1px solid ${C.border}`:"none"}}>
+              {s}
+            </div>
+          ))}
+        </div>
         <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:20}}>📄 Nouveau devis</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:20}}>
           {[
@@ -517,17 +532,188 @@ function ModalNouveauDevis({ onConfirm, onCancel }) {
           ].map(f=>(
             <div key={f.l} style={{gridColumn:f.full?"1/-1":"auto"}}>
               <label style={{display:"block",fontSize:11,fontWeight:600,color:C.textMid,marginBottom:4,textTransform:"uppercase",letterSpacing:.4}}>{f.l}</label>
-              <input value={f.v} onChange={e=>f.set(e.target.value)} placeholder={f.ph}
-                style={{width:"100%",boxSizing:"border-box",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
+              <input value={f.v} onChange={e=>f.set(e.target.value)} placeholder={f.ph} style={INP}/>
             </div>
           ))}
         </div>
         <div style={{display:"flex",gap:10}}>
           <button onClick={onCancel} style={{flex:1,padding:"11px",background:"transparent",border:`1px solid ${C.border}`,color:C.textMid,borderRadius:8,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
           <button onClick={go} disabled={!nomClient.trim()} style={{flex:2,padding:"11px",background:C.accent,border:"none",color:"#fff",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",opacity:!nomClient.trim()?.5:1}}>
-            Créer le devis →
+            Suivant → Upload devis presta
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Étape 2 — Upload devis prestataire + extraction IA ────────────────────
+function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
+  const [file, setFile]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+  const [preview, setPreview] = useState(null); // lignes extraites pour preview
+  const fileRef = useRef();
+
+  const toBase64 = f => new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(",")[1]);
+    r.onerror = rej;
+    r.readAsDataURL(f);
+  });
+
+  const extraire = async () => {
+    if (!file) return;
+    setLoading(true);
+    setError("");
+    try {
+      const b64 = await toBase64(file);
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 4000,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } },
+              { type: "text", text: `Tu es un expert en devis de travaux CEE (Certificats d'Économies d'Énergie) pour des déstratificateurs d'air BAT-TH-142.
+
+Analyse ce devis prestataire et extrais TOUTES les lignes de travaux.
+
+Réponds UNIQUEMENT avec un JSON valide, sans aucun texte avant ou après :
+{
+  "lignes": [
+    {
+      "cat": "MATÉRIEL" | "MAIN D'ŒUVRE" | "DIVERS",
+      "designation": "description complète de la ligne",
+      "qte": nombre,
+      "unite": "U" | "Jours" | "Forfait" | "ml" | "m²",
+      "puAchat": prix unitaire HT en nombre
+    }
+  ]
+}
+
+Règles :
+- cat = "MATÉRIEL" pour équipements, câbles, armoires, supports
+- cat = "MAIN D'ŒUVRE" pour pose, installation, câblage, création
+- cat = "DIVERS" pour déplacement, location nacelle, livraison, frais
+- puAchat = prix HORS TAXES unitaire du prestataire
+- Si une ligne a un total HT et une quantité, calcule le prix unitaire
+- Ignore TVA, totaux, sous-totaux, pages de conditions
+- Si aucune ligne trouvée, retourne {"lignes": []}` }
+            ]
+          }]
+        })
+      });
+      const data = await resp.json();
+      const txt = data.content?.find(b => b.type === "text")?.text || "";
+      const clean = txt.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(clean);
+      const lignes = (parsed.lignes || []).map((l, i) => ({
+        id: i + 1,
+        cat: l.cat || "MATÉRIEL",
+        designation: l.designation || "",
+        qte: Number(l.qte) || 1,
+        unite: l.unite || "U",
+        puAchat: Number(l.puAchat) || 0,
+        margePct: l.cat === "MAIN D'ŒUVRE" ? 25 : l.cat === "DIVERS" ? 10 : 30,
+        puVente: 0,
+        inclus: true,
+      })).map(l => ({ ...l, puVente: +(l.puAchat * (1 + l.margePct / 100)).toFixed(2) }));
+      setPreview(lignes);
+    } catch (e) {
+      setError("Erreur extraction : " + e.message);
+    }
+    setLoading(false);
+  };
+
+  const totalAchat = (preview || []).reduce((s, l) => s + l.qte * l.puAchat, 0);
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}}>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"28px 32px",width:600,maxHeight:"85vh",overflow:"auto",boxShadow:"0 25px 60px rgba(0,0,0,.4)"}}>
+        {/* Steps */}
+        <div style={{display:"flex",gap:0,marginBottom:24,borderRadius:8,overflow:"hidden",border:`1px solid ${C.border}`}}>
+          {["1 · Infos client","2 · Devis prestataire","3 · Marges & export"].map((s,i)=>(
+            <div key={i} style={{flex:1,padding:"8px 6px",textAlign:"center",fontSize:11,fontWeight:i===1?700:500,background:i===1?C.accent:i===0?"#E2E8F0":C.bg,color:i===1?"#fff":i===0?C.textSoft:C.textSoft,borderRight:i<2?`1px solid ${C.border}`:"none"}}>
+              {i===0?"✓ "+s:s}
+            </div>
+          ))}
+        </div>
+
+        <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>📎 Devis prestataire</div>
+        <div style={{fontSize:13,color:C.textMid,marginBottom:20}}>Client : <strong>{infosClient.nomClient}</strong> — {infosClient.refDevis}</div>
+
+        {/* Zone upload */}
+        {!preview && (
+          <>
+            <div
+              onClick={() => fileRef.current?.click()}
+              onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if(f?.type==="application/pdf") setFile(f); }}
+              onDragOver={e => e.preventDefault()}
+              style={{border:`2px dashed ${file?C.accent:C.border}`,borderRadius:10,padding:"32px 20px",textAlign:"center",cursor:"pointer",background:file?C.accentL:C.bg,marginBottom:16,transition:"all .2s"}}>
+              <div style={{fontSize:36,marginBottom:8}}>{file?"📄":"⬆️"}</div>
+              <div style={{fontSize:14,fontWeight:700,color:file?C.accent:C.text}}>{file ? file.name : "Glissez le PDF ou cliquez pour sélectionner"}</div>
+              <div style={{fontSize:12,color:C.textSoft,marginTop:4}}>{file ? `${(file.size/1024).toFixed(0)} Ko` : "Devis PDF du prestataire (DC LINK, sous-traitant...)"}</div>
+              <input ref={fileRef} type="file" accept="application/pdf" style={{display:"none"}} onChange={e => setFile(e.target.files[0])}/>
+            </div>
+            {error && <div style={{background:"#FEE2E2",border:"1px solid #FCA5A5",borderRadius:7,padding:"10px 14px",color:"#DC2626",fontSize:12,marginBottom:14}}>{error}</div>}
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={onBack} style={{flex:1,padding:"11px",background:"transparent",border:`1px solid ${C.border}`,color:C.textMid,borderRadius:8,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Retour</button>
+              <button onClick={onSkip} style={{flex:1,padding:"11px",background:C.bg,border:`1px solid ${C.border}`,color:C.textMid,borderRadius:8,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Passer (saisie manuelle)</button>
+              <button onClick={extraire} disabled={!file||loading} style={{flex:2,padding:"11px",background:file&&!loading?C.accent:"#94A3B8",border:"none",color:"#fff",borderRadius:8,fontSize:13,fontWeight:700,cursor:file&&!loading?"pointer":"not-allowed",fontFamily:"inherit"}}>
+                {loading ? "⏳ Extraction IA en cours..." : "🤖 Extraire les lignes"}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Preview lignes extraites */}
+        {preview && (
+          <>
+            <div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:8,padding:"10px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:700,color:"#15803D"}}>✅ {preview.length} lignes extraites</div>
+                <div style={{fontSize:12,color:"#16A34A"}}>Coût achat total : {fmtE(totalAchat)}</div>
+              </div>
+              <button onClick={() => setPreview(null)} style={{fontSize:11,color:C.textMid,background:"transparent",border:`1px solid ${C.border}`,borderRadius:5,padding:"4px 8px",cursor:"pointer",fontFamily:"inherit"}}>Ré-uploader</button>
+            </div>
+            <div style={{maxHeight:280,overflowY:"auto",marginBottom:16,border:`1px solid ${C.border}`,borderRadius:8}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead><tr style={{background:C.nav,color:C.navText}}>
+                  <th style={{padding:"7px 10px",textAlign:"left"}}>Désignation</th>
+                  <th style={{padding:"7px 8px",textAlign:"center"}}>Qté</th>
+                  <th style={{padding:"7px 8px",textAlign:"right"}}>P.U. achat</th>
+                  <th style={{padding:"7px 8px",textAlign:"right"}}>Total</th>
+                </tr></thead>
+                <tbody>
+                  {preview.map((l,i) => (
+                    <tr key={i} style={{background:i%2===0?C.surface:C.bg,borderBottom:`1px solid ${C.border}`}}>
+                      <td style={{padding:"6px 10px"}}>
+                        <div style={{fontSize:11,color:C.text}}>{l.designation}</div>
+                        <span style={{fontSize:10,padding:"1px 5px",borderRadius:3,background:CAT_S[l.cat]?.bg,color:CAT_S[l.cat]?.text}}>{l.cat}</span>
+                      </td>
+                      <td style={{padding:"6px 8px",textAlign:"center",color:C.textMid}}>{l.qte} {l.unite}</td>
+                      <td style={{padding:"6px 8px",textAlign:"right",color:C.textMid}}>{fmtE(l.puAchat)}</td>
+                      <td style={{padding:"6px 8px",textAlign:"right",fontWeight:600,color:C.text}}>{fmtE(l.qte*l.puAchat)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{fontSize:12,color:C.textMid,marginBottom:14,background:C.accentL,padding:"8px 12px",borderRadius:7,border:`1px solid #BFDBFE`}}>
+              💡 Les marges seront appliquées automatiquement (30% matériel, 25% MO, 10% divers). Tu pourras tout ajuster dans l'éditeur.
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={() => setPreview(null)} style={{flex:1,padding:"11px",background:"transparent",border:`1px solid ${C.border}`,color:C.textMid,borderRadius:8,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>← Retour</button>
+              <button onClick={() => onLignesExtracted(preview)} style={{flex:2,padding:"11px",background:C.accent,border:"none",color:"#fff",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                Ouvrir l'éditeur →
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1000,26 +1186,24 @@ function MargesDevis() {
   const STORAGE_KEY = "picpus_devis_v1";
 
   const [devisList, setDevisList] = useState(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch { return []; }
+    try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : []; } catch { return []; }
   });
-  const [vue, setVue]         = useState("liste"); // "liste" | "editeur"
-  const [devisId, setDevisId] = useState(null);
-  const [showNew, setShowNew] = useState(false);
+  const [vue, setVue]             = useState("liste"); // "liste" | "editeur"
+  const [devisId, setDevisId]     = useState(null);
+  const [step, setStep]           = useState(null);    // null | "infos" | "upload"
+  const [infosEnCours, setInfosEnCours] = useState(null);
 
-  // Sauvegarder dans localStorage à chaque changement
   const saveList = list => {
     setDevisList(list);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch {}
   };
 
-  const handleCreate = (infos) => {
+  // Créer le devis avec des lignes (extraites ou par défaut)
+  const creerDevis = (infos, lignes) => {
     const newDevis = {
       id: Date.now(),
       ...infos,
-      lignes: LIGNES_DEFAUT.map(l => ({...l})),
+      lignes: lignes || LIGNES_DEFAUT.map(l => ({...l})),
       batQte: 0,
       batPuVente: 0,
       prime: 0,
@@ -1030,7 +1214,8 @@ function MargesDevis() {
     saveList(newList);
     setDevisId(newDevis.id);
     setVue("editeur");
-    setShowNew(false);
+    setStep(null);
+    setInfosEnCours(null);
   };
 
   const handleSave = (updatedDevis) => {
@@ -1040,23 +1225,34 @@ function MargesDevis() {
   const devisEnCours = devisList.find(d => d.id === devisId);
 
   if (vue === "editeur" && devisEnCours) {
-    return (
-      <EditeurDevis
-        devisInit={devisEnCours}
-        onBack={() => setVue("liste")}
-        onSave={handleSave}
-      />
-    );
+    return <EditeurDevis devisInit={devisEnCours} onBack={() => setVue("liste")} onSave={handleSave}/>;
   }
 
   return (
     <div style={{height:"100%",overflow:"hidden",display:"flex",flexDirection:"column"}}>
       <ListeDevis
         devis={devisList}
-        onCreate={() => setShowNew(true)}
+        onCreate={() => setStep("infos")}
         onOpen={(id) => { setDevisId(id); setVue("editeur"); }}
       />
-      {showNew && <ModalNouveauDevis onConfirm={handleCreate} onCancel={() => setShowNew(false)}/>}
+
+      {/* Étape 1 — Infos client */}
+      {step === "infos" && (
+        <ModalNouveauDevis
+          onConfirm={infos => { setInfosEnCours(infos); setStep("upload"); }}
+          onCancel={() => setStep(null)}
+        />
+      )}
+
+      {/* Étape 2 — Upload PDF prestataire */}
+      {step === "upload" && infosEnCours && (
+        <UploadPrestaDevis
+          infosClient={infosEnCours}
+          onLignesExtracted={lignes => creerDevis(infosEnCours, lignes)}
+          onSkip={() => creerDevis(infosEnCours, null)}
+          onBack={() => setStep("infos")}
+        />
+      )}
     </div>
   );
 }
