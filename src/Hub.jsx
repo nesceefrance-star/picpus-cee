@@ -931,7 +931,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
             ))}
           </div>
 
-          {/* Presets marge + BAT */}
+          {/* Presets marge + saisie libre */}
           <div style={{padding:"8px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",flexShrink:0}}>
             <span style={{fontSize:12,color:C.textMid,fontWeight:600,marginRight:4}}>Marge globale :</span>
             {[0,10,15,20,25,30,40,50].map(p => (
@@ -940,6 +940,17 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
                 {p}%
               </button>
             ))}
+            {/* Saisie manuelle */}
+            <div style={{display:"flex",alignItems:"center",gap:4,marginLeft:4}}>
+              <input
+                type="number" min="0" max="999" step="0.1"
+                placeholder="…"
+                onKeyDown={e => { if (e.key === "Enter") { const v = parseFloat(e.target.value); if (!isNaN(v)) { applyGlobal(v); e.target.blur(); } } }}
+                onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && e.target.value !== "") applyGlobal(v); }}
+                style={{width:60,border:`1px solid ${C.accent}`,borderRadius:5,padding:"3px 6px",fontSize:12,fontWeight:700,color:C.accent,outline:"none",fontFamily:"inherit",background:"#EFF6FF",textAlign:"center"}}
+              />
+              <span style={{fontSize:11,color:C.textMid}}>%</span>
+            </div>
             <button onClick={addLigne}
               style={{marginLeft:"auto",background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"4px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
               ＋ Ligne
@@ -1488,7 +1499,7 @@ function MargesDevis({ prefill }) {
 const MODULES = [
   {id:"verificateur",icon:"🔍",titre:"Vérificateur CEE",sousTitre:"Analyse IA de dossier",desc:"Uploadez l'AH et le devis, Claude détecte automatiquement toutes les incohérences et génère un rapport de conformité.",tags:["AH","Devis","IA","Rapport"],couleur:"#6366F1",actif:true},
   {id:"checklist",   icon:"✅",titre:"Checklist CEE",    sousTitre:"Vérification manuelle",   desc:"Contrôle point par point de l'AH : bénéficiaire, site, dates, technique, professionnel. Progression en temps réel.",tags:["Conformité","BAT-TH-142","Manuel"],couleur:"#16A34A",actif:true},
-  {id:"marges",      icon:"📊",titre:"Marges × Devis",   sousTitre:"Calcul + export PDF",      desc:"Calculez vos marges sur le devis prestataire et générez le devis client AF2E (3 pages) en temps réel.",tags:["Marge","Devis AF2E","3 pages","PDF"],couleur:"#2563EB",actif:true},
+  {id:"marges",      icon:"📊",titre:"Générateur de devis",sousTitre:"Marges + export PDF",      desc:"Calculez vos marges sur le devis prestataire et générez le devis client AF2E (3 pages) en temps réel.",tags:["Marge","Devis AF2E","3 pages","PDF"],couleur:"#2563EB",actif:true},
   {id:"dimensionnement",icon:"📐",titre:"Dimensionnement",sousTitre:"Calcul déstratificateurs",desc:"Calcul automatique du nombre de déstratificateurs selon BAT-TH-142 : surface, hauteur, puissance → PDF.",tags:["Calcul","BAT-TH-142","PDF"],couleur:"#7C3AED",actif:false},
   {id:"rentabilite", icon:"📈",titre:"Rentabilité",      sousTitre:"Coût / CEE / Marge",       desc:"Volume CEE généré, coût acquisition, prime PICPUS estimée, ROI et analyse de rentabilité complète.",tags:["CEE","MWh cumac","ROI"],couleur:"#DB2777",actif:false},
   {id:"crm",         icon:"👥",titre:"CRM Prospects",    sousTitre:"Pipeline commercial",       desc:"Suivi des prospects et clients, relances Gmail automatiques, intégration Google Agenda.",tags:["Gmail","Agenda","Pipeline"],couleur:"#0369A1",actif:false},
