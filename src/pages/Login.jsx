@@ -22,7 +22,7 @@ export default function Login() {
     setLoading(true)
     setError(null)
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
+      redirectTo: 'https://picpus-cee.vercel.app/reset-password',
     })
     if (error) setError(error.message)
     else setError('✅ Email de réinitialisation envoyé')

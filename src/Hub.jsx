@@ -1,4 +1,5 @@
-import { useState, useRef, useMemo, forwardRef, useCallback } from "react";
+import { useState, useRef, useMemo, forwardRef, useCallback, useEffect } from "react";
+import { supabase } from "./lib/supabase";
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 const fmt  = n => Number(n||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -454,33 +455,39 @@ function ListeDevis({ devis, onCreate, onOpen }) {
             const marge = totalHT - coutAchat;
             const margePct = totalHT > 0 ? (marge/totalHT*100) : 0;
             return (
-              <div key={d.id} onClick={() => onOpen(d.id)}
-                style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"18px",cursor:"pointer",transition:"all .15s"}}
+              <div key={d.id}
+                style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"18px",transition:"all .15s",position:"relative"}}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 4px 16px rgba(37,99,235,.1)"}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=""}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                  <div>
-                    <div style={{fontSize:15,fontWeight:800,color:C.text,marginBottom:3}}>{d.nomClient || "Sans nom"}</div>
-                    <div style={{fontSize:11,color:C.textSoft}}>{d.refDevis || "—"} · {d.dateDevis || "—"}</div>
-                  </div>
-                  <span style={{background:MC2(margePct)+"22",color:MC2(margePct),border:`1px solid ${MC2(margePct)}44`,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>
-                    {margePct.toFixed(1)}% marge
-                  </span>
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                  {[
-                    {l:"Total HT",v:fmtE(totalHT),c:C.accent},
-                    {l:"Marge brute",v:fmtE(marge),c:MC2(margePct)},
-                    {l:"Prime CEE",v:"−"+fmtE(d.prime||0),c:"#16A34A"},
-                  ].map(k=>(
-                    <div key={k.l} style={{background:C.bg,borderRadius:7,padding:"8px 10px"}}>
-                      <div style={{fontSize:10,color:C.textSoft,marginBottom:2,textTransform:"uppercase",letterSpacing:.4}}>{k.l}</div>
-                      <div style={{fontSize:13,fontWeight:700,color:k.c}}>{k.v}</div>
+                {/* Bouton supprimer */}
+                <button onClick={e=>{e.stopPropagation();onDelete(d.id);}}
+                  style={{position:"absolute",top:10,right:10,background:"transparent",border:"none",color:C.textSoft,cursor:"pointer",fontSize:15,padding:"2px 6px",borderRadius:5,lineHeight:1}}
+                  title="Supprimer ce devis">✕</button>
+                <div onClick={() => onOpen(d.id)} style={{cursor:"pointer"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                    <div>
+                      <div style={{fontSize:15,fontWeight:800,color:C.text,marginBottom:3}}>{d.nomClient || "Sans nom"}</div>
+                      <div style={{fontSize:11,color:C.textSoft}}>{d.refDevis || "—"} · {d.dateDevis || "—"}</div>
                     </div>
-                  ))}
-                </div>
-                <div style={{marginTop:10,fontSize:11,color:C.textSoft}}>
-                  {d.lignes.filter(l=>l.inclus).length} ligne{d.lignes.filter(l=>l.inclus).length>1?"s":""} · modifié {d.updatedAt ? new Date(d.updatedAt).toLocaleDateString("fr-FR") : "—"}
+                    <span style={{background:MC2(margePct)+"22",color:MC2(margePct),border:`1px solid ${MC2(margePct)}44`,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,marginRight:20}}>
+                      {margePct.toFixed(1)}% marge
+                    </span>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                    {[
+                      {l:"Total HT",v:fmtE(totalHT),c:C.accent},
+                      {l:"Marge brute",v:fmtE(marge),c:MC2(margePct)},
+                      {l:"Prime CEE",v:"−"+fmtE(d.prime||0),c:"#16A34A"},
+                    ].map(k=>(
+                      <div key={k.l} style={{background:C.bg,borderRadius:7,padding:"8px 10px"}}>
+                        <div style={{fontSize:10,color:C.textSoft,marginBottom:2,textTransform:"uppercase",letterSpacing:.4}}>{k.l}</div>
+                        <div style={{fontSize:13,fontWeight:700,color:k.c}}>{k.v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{marginTop:10,fontSize:11,color:C.textSoft}}>
+                    {d.lignes.filter(l=>l.inclus).length} ligne{d.lignes.filter(l=>l.inclus).length>1?"s":""} · modifié {d.updatedAt ? new Date(d.updatedAt).toLocaleDateString("fr-FR") : "—"}
+                  </div>
                 </div>
               </div>
             );
@@ -757,7 +764,7 @@ function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
 }
 
 // ── Éditeur d'un devis ─────────────────────────────────────────────────────
-function EditeurDevis({ devisInit, onBack, onSave }) {
+function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
   const [devis, setDevis] = useState(devisInit);
   const [tab, setTab]     = useState("marges");
   const [editInfo, setEditInfo] = useState(false);
@@ -871,6 +878,12 @@ function EditeurDevis({ devisInit, onBack, onSave }) {
           style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:C.textMid,marginLeft:4}}>
           ✏️ Infos
         </button>
+        {onReupload && (
+          <button onClick={onReupload}
+            style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:C.textMid,marginLeft:4}}>
+            📎 Re-uploader devis presta
+          </button>
+        )}
 
         <div style={{marginLeft:"auto",display:"flex",gap:8}}>
           {[["marges","📊 Marges"],["devis","📄 Aperçu"]].map(([v,l]) => (
@@ -1261,50 +1274,131 @@ const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVent
 
 // ── Composant principal MargesDevis ────────────────────────────────────────
 function MargesDevis() {
-  const STORAGE_KEY = "picpus_devis_v1";
-
-  const [devisList, setDevisList] = useState(() => {
-    try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : []; } catch { return []; }
-  });
-  const [vue, setVue]             = useState("liste"); // "liste" | "editeur"
+  const [devisList, setDevisList] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [vue, setVue]             = useState("liste");
   const [devisId, setDevisId]     = useState(null);
   const [step, setStep]           = useState(null);    // null | "infos" | "upload"
   const [infosEnCours, setInfosEnCours] = useState(null);
+  const [reuploadId, setReuploadId] = useState(null); // id du devis à re-uploader
 
-  const saveList = list => {
-    setDevisList(list);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch {}
+  // ── Chargement depuis Supabase ─────────────────────────────────────────
+  const fetchDevis = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("devis_hub")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (!error && data) {
+      // Normalise les clés snake_case → camelCase pour compatibilité avec le reste du code
+      setDevisList(data.map(d => ({
+        id: d.id,
+        nomClient: d.nom_client,
+        refDevis: d.ref_devis,
+        dateDevis: d.date_devis,
+        siret: d.siret,
+        adresseSite: d.adresse_site,
+        nomContact: d.nom_contact,
+        fonctionContact: d.fonction_contact,
+        sousTraitant: d.sous_traitant,
+        rgeNum: d.rge_num,
+        rgeValidite: d.rge_validite,
+        lignes: d.lignes || [],
+        batQte: d.bat_qte || 0,
+        batPuVente: d.bat_pu_vente || 0,
+        prime: d.prime || 0,
+        createdAt: new Date(d.created_at).getTime(),
+        updatedAt: new Date(d.updated_at).getTime(),
+      })));
+    }
+    setLoading(false);
   };
 
-  // Créer le devis avec des lignes (extraites ou par défaut)
-  const creerDevis = (infos, lignes) => {
-    const newDevis = {
-      id: Date.now(),
-      ...infos,
-      lignes: lignes || LIGNES_DEFAUT.map(l => ({...l})),
-      batQte: 0,
-      batPuVente: 0,
-      prime: 0,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+  useEffect(() => { fetchDevis(); }, []);
+
+  // ── Conversion camelCase → snake_case pour Supabase ───────────────────
+  const toRow = (d) => ({
+    nom_client: d.nomClient,
+    ref_devis: d.refDevis,
+    date_devis: d.dateDevis,
+    siret: d.siret,
+    adresse_site: d.adresseSite,
+    nom_contact: d.nomContact,
+    fonction_contact: d.fonctionContact,
+    sous_traitant: d.sousTraitant,
+    rge_num: d.rgeNum,
+    rge_validite: d.rgeValidite,
+    lignes: d.lignes,
+    bat_qte: d.batQte || 0,
+    bat_pu_vente: d.batPuVente || 0,
+    prime: d.prime || 0,
+    updated_at: new Date().toISOString(),
+  });
+
+  // ── Créer un nouveau devis ────────────────────────────────────────────
+  const creerDevis = async (infos, lignes) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    const row = {
+      user_id: user.id,
+      ...toRow({
+        ...infos,
+        lignes: lignes || LIGNES_DEFAUT.map(l => ({...l})),
+        batQte: 0, batPuVente: 0, prime: 0,
+      }),
     };
-    const newList = [newDevis, ...devisList];
-    saveList(newList);
-    setDevisId(newDevis.id);
-    setVue("editeur");
+    const { data, error } = await supabase.from("devis_hub").insert(row).select().single();
+    if (!error && data) {
+      await fetchDevis();
+      setDevisId(data.id);
+      setVue("editeur");
+    }
     setStep(null);
     setInfosEnCours(null);
   };
 
-  const handleSave = (updatedDevis) => {
-    saveList(devisList.map(d => d.id === updatedDevis.id ? updatedDevis : d));
+  // ── Re-uploader les lignes d'un devis existant ────────────────────────
+  const reuploadLignes = async (id, lignes) => {
+    await supabase.from("devis_hub")
+      .update({ lignes, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    await fetchDevis();
+    setDevisId(id);
+    setVue("editeur");
+    setReuploadId(null);
+    setStep(null);
+  };
+
+  // ── Sauvegarder un devis modifié ──────────────────────────────────────
+  const handleSave = async (updatedDevis) => {
+    await supabase.from("devis_hub")
+      .update(toRow(updatedDevis))
+      .eq("id", updatedDevis.id);
+    setDevisList(prev => prev.map(d => d.id === updatedDevis.id ? updatedDevis : d));
+  };
+
+  // ── Supprimer un devis ────────────────────────────────────────────────
+  const handleDelete = async (id) => {
+    if (!window.confirm("Supprimer ce devis définitivement ?")) return;
+    await supabase.from("devis_hub").delete().eq("id", id);
+    setDevisList(prev => prev.filter(d => d.id !== id));
   };
 
   const devisEnCours = devisList.find(d => d.id === devisId);
 
   if (vue === "editeur" && devisEnCours) {
-    return <EditeurDevis devisInit={devisEnCours} onBack={() => setVue("liste")} onSave={handleSave}/>;
+    return <EditeurDevis
+      devisInit={devisEnCours}
+      onBack={() => setVue("liste")}
+      onSave={handleSave}
+      onReupload={() => { setReuploadId(devisEnCours.id); setVue("liste"); setStep("reupload"); }}
+    />;
   }
+
+  if (loading) return (
+    <div style={{height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:C.textMid,fontSize:14}}>
+      ⏳ Chargement des devis…
+    </div>
+  );
 
   return (
     <div style={{height:"100%",overflow:"hidden",display:"flex",flexDirection:"column"}}>
@@ -1312,6 +1406,7 @@ function MargesDevis() {
         devis={devisList}
         onCreate={() => setStep("infos")}
         onOpen={(id) => { setDevisId(id); setVue("editeur"); }}
+        onDelete={handleDelete}
       />
 
       {/* Étape 1 — Infos client */}
@@ -1322,13 +1417,23 @@ function MargesDevis() {
         />
       )}
 
-      {/* Étape 2 — Upload PDF prestataire */}
+      {/* Étape 2 — Upload PDF prestataire (nouveau devis) */}
       {step === "upload" && infosEnCours && (
         <UploadPrestaDevis
           infosClient={infosEnCours}
           onLignesExtracted={lignes => creerDevis(infosEnCours, lignes)}
           onSkip={() => creerDevis(infosEnCours, null)}
           onBack={() => setStep("infos")}
+        />
+      )}
+
+      {/* Re-upload PDF sur un devis existant */}
+      {step === "reupload" && reuploadId && (
+        <UploadPrestaDevis
+          infosClient={devisList.find(d => d.id === reuploadId) || {}}
+          onLignesExtracted={lignes => reuploadLignes(reuploadId, lignes)}
+          onSkip={() => { setStep(null); setDevisId(reuploadId); setVue("editeur"); }}
+          onBack={() => { setStep(null); setDevisId(reuploadId); setVue("editeur"); }}
         />
       )}
     </div>

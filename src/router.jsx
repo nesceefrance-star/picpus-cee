@@ -5,6 +5,7 @@ import useStore from './store/useStore'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import AdminUsers from './pages/AdminUsers'
+import ResetPassword from './pages/ResetPassword'
 import PICPUSHub from './Hub'
 
 function AuthGuard({ children }) {
@@ -58,6 +59,7 @@ export default function AppRouter() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/" element={<AuthGuard><Dashboard /></AuthGuard>} />
         <Route path="/hub" element={<AuthGuard><PICPUSHub /></AuthGuard>} />
         <Route path="/dossier/:id" element={<AuthGuard><Dashboard /></AuthGuard>} />
