@@ -43,9 +43,9 @@ const T = {
 // MODULE 1 — VÉRIFICATEUR CEE IA
 // ════════════════════════════════════════════════════════════════════════════
 const FICHES_V = {
-  "BAT-TH-142":"BAT-TH-142 — Déstratification d'air (tertiaire)",
-  "BAT-TH-116":"BAT-TH-116 — Système GTB (tertiaire)",
-  "IND-BA-110":"IND-BA-110 — Déstratification d'air (industrie)",
+  "BAT-TH-142":"BAT-TH-142 — Déstratification tertiaire",
+  "IND-BA-110":"IND-BA-110 — Déstratification industrie",
+  "BAT-TH-163":"BAT-TH-163 — PAC air/eau tertiaire",
 };
 
 const NIV = {

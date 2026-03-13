@@ -237,9 +237,9 @@ function NouveauDossierModal({ onClose, onCreate }) {
           <label style={LBL}>Fiche CEE</label>
           <select value={form.fiche_cee} onChange={e => set('fiche_cee')(e.target.value)}
             style={{ ...INP, appearance: 'auto' }}>
-            <option value="BAT-TH-142">BAT-TH-142 — Déstratification d'air</option>
-            <option value="BAT-TH-116">BAT-TH-116 — Système GTB</option>
+            <option value="BAT-TH-142">BAT-TH-142 — Déstratification tertiaire</option>
             <option value="IND-BA-110">IND-BA-110 — Déstratification industrie</option>
+            <option value="BAT-TH-163">BAT-TH-163 — PAC air/eau tertiaire</option>
           </select>
         </div>
 

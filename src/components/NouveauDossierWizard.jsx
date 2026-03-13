@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import useStore from '../store/useStore'
 
 // ── Fiches CEE disponibles ────────────────────────────────────────────────────
+// ── Fiches CEE disponibles — ajouter ici les nouvelles fiches au fil du temps ─
 const FICHES = [
-  { id: 'BAT-TH-142', label: 'BAT-TH-142', desc: 'Déstratification d\'air chaud', icon: '🌀' },
-  { id: 'BAT-TH-116', label: 'BAT-TH-116', desc: 'Système de GTB', icon: '🏗️' },
+  { id: 'BAT-TH-142', label: 'BAT-TH-142', desc: 'Déstratification tertiaire', icon: '🌀' },
   { id: 'IND-BA-110', label: 'IND-BA-110', desc: 'Déstratification industrie', icon: '🏭' },
+  { id: 'BAT-TH-163', label: 'BAT-TH-163', desc: 'PAC air/eau tertiaire', icon: '♨️' },
 ]
 
 // ── Tables officielles BAT-TH-142 vA54.3 (kWh cumac par kW de chauffage) ─────
@@ -46,6 +47,31 @@ const calculerCumac110 = ({ zone, pConvectif, pRadiatif }) => {
   const coeffRad  = COEFFICIENTS_IND_110.radiatif[zone]  || 0
   const kwhCumac  = Math.round(coeffConv * pConvectif + coeffRad * pRadiatif)
   return { kwhCumac, coeffConv, coeffRad }
+}
+
+// ── BAT-TH-163 PAC air/eau tertiaire ─────────────────────────────────────────
+const COEFFICIENTS_163 = {
+  pac_small: { // PAC ≤ 400 kW — bracket par Etas
+    'etas_111_126': { H1: 1100, H2: 900,  H3: 600 },
+    'etas_126_175': { H1: 1200, H2: 1000, H3: 700 },
+    'etas_175_plus': { H1: 1300, H2: 1000, H3: 700 },
+  },
+  pac_large: { // PAC > 400 kW — bracket par COP
+    'cop_3_4_4_5': { H1: 1100, H2: 900,  H3: 600 },
+    'cop_4_5_plus': { H1: 1200, H2: 1000, H3: 700 },
+  },
+}
+const FACTEURS_SECTEUR_163 = {
+  bureaux: 1.2, sante: 1.1, commerces: 0.9,
+  enseignement: 0.8, hotellerie_restauration: 0.7, autres: 0.7,
+}
+const calculerCumac163 = ({ zone, puissancePac, etasBracket, copBracket, surface, secteur }) => {
+  const forfait = puissancePac === 'small'
+    ? (COEFFICIENTS_163.pac_small[etasBracket]?.[zone] || 0)
+    : (COEFFICIENTS_163.pac_large[copBracket]?.[zone] || 0)
+  const facteurSecteur = FACTEURS_SECTEUR_163[secteur] || 0.7
+  const kwhCumac = Math.round(forfait * surface * facteurSecteur)
+  return { kwhCumac, forfait, facteurSecteur }
 }
 
 const getHauteurBracket = (h) => {
@@ -277,6 +303,12 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
     nb_destrat_calcule: 0,
     nb_destrat_manuel: '',
     cout_unitaire_destrat: '2750',
+    // BAT-TH-163 fields
+    puissance_pac: 'small',
+    etas_bracket: 'etas_111_126',
+    cop_bracket: 'cop_3_4_4_5',
+    secteur_163: 'bureaux',
+    cout_installation_163: '',
   })
   const setT = (k, v) => setTech(t => ({ ...t, [k]: v }))
 
@@ -292,6 +324,12 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
         { label: 'Aérothermes', quantite: '', puissance_unitaire_kw: '' },
       ],
       eqs_rad: [],
+      // reset 163 fields
+      puissance_pac: 'small',
+      etas_bracket: 'etas_111_126',
+      cop_bracket: 'cop_3_4_4_5',
+      secteur_163: 'bureaux',
+      cout_installation_163: '',
     }))
   }
 
@@ -334,20 +372,34 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
     const cout    = parseFloat(tech.cout_unitaire_destrat) || 2750
     let kwhCumac = 0
     let details  = {}
+    let coutTotal = 0
 
     if (tech.fiche_cee === 'IND-BA-110') {
       const res = calculerCumac110({ zone: tech.zone_climatique || 'H2', pConvectif, pRadiatif })
       kwhCumac = res.kwhCumac
       details = res
-    } else if (tech.fiche_cee === 'BAT-TH-142') {
+      coutTotal = nbDestratEffectif * cout
+    } else if (tech.fiche_cee === 'BAT-TH-163') {
+      const res = calculerCumac163({
+        zone: tech.zone_climatique || 'H2',
+        puissancePac: tech.puissance_pac,
+        etasBracket: tech.etas_bracket,
+        copBracket: tech.cop_bracket,
+        surface: parseFloat(tech.surface_m2) || 0,
+        secteur: tech.secteur_163,
+      })
+      kwhCumac = res.kwhCumac
+      details = res
+      coutTotal = parseFloat(tech.cout_installation_163) || 0
+    } else {
       const res = calculerCumac142({ typeLocal: tech.type_local, zone: tech.zone_climatique || 'H2', hauteur, pConvectif, pRadiatif })
       kwhCumac = res.kwhCumac
       details = res
+      coutTotal = nbDestratEffectif * cout
     }
 
-    const prime     = Math.round(kwhCumac * (prix / 1000) * 100) / 100
-    const coutTotal = nbDestratEffectif * cout
-    const marge     = Math.round((prime - coutTotal) * 100) / 100
+    const prime = Math.round(kwhCumac * (prix / 1000) * 100) / 100
+    const marge = Math.round((prime - coutTotal) * 100) / 100
     setSimulation({ kwhCumac, mwhCumac: Math.round(kwhCumac / 100) / 10, prixMwh: prix, prime, coutTotal, marge, rentable: marge > 0, nbDestrat: nbDestratEffectif, pConvectif, pRadiatif, ...details })
     setStep(4)
   }
@@ -355,7 +407,9 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
   const canCalculer = tech.zone_climatique && (
     tech.fiche_cee === 'IND-BA-110'
       ? true
-      : (tech.hauteur_m && parseFloat(tech.hauteur_m) >= 5)
+      : tech.fiche_cee === 'BAT-TH-163'
+        ? (tech.surface_m2 && parseFloat(tech.surface_m2) > 0)
+        : (tech.hauteur_m && parseFloat(tech.hauteur_m) >= 5)
   )
 
   const submit = async () => {
@@ -384,7 +438,20 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
       if (e2) throw new Error(e2.message || e2.details || JSON.stringify(e2))
       if (!dossier) throw new Error('Dossier non créé (vérifiez les permissions Supabase)')
 
-      const parametres = is110 ? {
+      const is163 = tech.fiche_cee === 'BAT-TH-163'
+      const parametres = is163 ? {
+        puissance_pac: tech.puissance_pac,
+        etas_bracket: tech.etas_bracket,
+        cop_bracket: tech.cop_bracket,
+        secteur: tech.secteur_163,
+        surface_m2: parseFloat(tech.surface_m2) || null,
+        forfait: simulation?.forfait,
+        facteur_secteur: simulation?.facteurSecteur,
+        kwh_cumac: simulation?.kwhCumac,
+        cout_installation: tech.cout_installation_163,
+        cout_total: simulation?.coutTotal,
+        marge: simulation?.marge,
+      } : is110 ? {
         eqs_conv: tech.eqs_conv, eqs_rad: tech.eqs_rad,
         p_convectif: pConvectif, p_radiatif: pRadiatif,
         surface_m2: parseFloat(tech.surface_m2) || null,
@@ -414,8 +481,8 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
         fiche_cee: tech.fiche_cee,
         hauteur_m: parseFloat(tech.hauteur_m) || null,
         zone_climatique: tech.zone_climatique,
-        nb_equipements: nbDestratEffectif,
-        puissance_kw: pTotal,
+        nb_equipements: is163 ? 1 : nbDestratEffectif,
+        puissance_kw: is163 ? null : pTotal,
         mwh_cumac: simulation?.mwhCumac,
         prime_estimee: simulation?.prime,
         prix_mwh: simulation?.prixMwh,
@@ -574,6 +641,108 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                 <Field label="Hauteur sous plafond" value={tech.hauteur_m} onChange={v => setT('hauteur_m', v)} type="number" placeholder="12" suffix="m" required={tech.fiche_cee !== 'IND-BA-110'} />
               </div>
 
+              {/* ── Section spécifique BAT-TH-163 ── */}
+              {tech.fiche_cee === 'BAT-TH-163' && (
+                <div style={{ background: '#0a1a2e', border: '1px solid #1e3a5f', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#60A5FA', marginBottom: 14 }}>♨️ PAC air/eau tertiaire</div>
+
+                  {/* Type PAC */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>Puissance PAC *</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[
+                        { id: 'small', label: '≤ 400 kW', desc: 'Bracket par Etas' },
+                        { id: 'large', label: '> 400 kW', desc: 'Bracket par COP' },
+                      ].map(t => (
+                        <button key={t.id} type="button" onClick={() => setT('puissance_pac', t.id)}
+                          style={{ flex: 1, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
+                            background: tech.puissance_pac === t.id ? '#172033' : C.bg,
+                            border: `1px solid ${tech.puissance_pac === t.id ? C.accent : C.border}` }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: tech.puissance_pac === t.id ? '#60A5FA' : C.text }}>{t.label}</div>
+                          <div style={{ fontSize: 10, color: C.textSoft, marginTop: 2 }}>{t.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Bracket Etas (≤400 kW) */}
+                  {tech.puissance_pac === 'small' && (
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>Bracket Etas *</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {[
+                          { id: 'etas_111_126', label: '111% ≤ Etas < 126%' },
+                          { id: 'etas_126_175', label: '126% ≤ Etas < 175%' },
+                          { id: 'etas_175_plus', label: 'Etas ≥ 175%' },
+                        ].map(b => (
+                          <button key={b.id} type="button" onClick={() => setT('etas_bracket', b.id)}
+                            style={{ flex: 1, padding: '8px 6px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 700,
+                              background: tech.etas_bracket === b.id ? '#1e3a5f' : C.bg,
+                              border: `1px solid ${tech.etas_bracket === b.id ? C.accent : C.border}`,
+                              color: tech.etas_bracket === b.id ? '#60A5FA' : C.textMid }}>
+                            {b.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bracket COP (>400 kW) */}
+                  {tech.puissance_pac === 'large' && (
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>Bracket COP *</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {[
+                          { id: 'cop_3_4_4_5', label: '3,4 ≤ COP < 4,5' },
+                          { id: 'cop_4_5_plus', label: 'COP ≥ 4,5' },
+                        ].map(b => (
+                          <button key={b.id} type="button" onClick={() => setT('cop_bracket', b.id)}
+                            style={{ flex: 1, padding: '8px 6px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 700,
+                              background: tech.cop_bracket === b.id ? '#1e3a5f' : C.bg,
+                              border: `1px solid ${tech.cop_bracket === b.id ? C.accent : C.border}`,
+                              color: tech.cop_bracket === b.id ? '#60A5FA' : C.textMid }}>
+                            {b.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Secteur d'activité */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>Secteur d'activité *</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                      {[
+                        { id: 'bureaux', label: 'Bureaux', facteur: '×1,2' },
+                        { id: 'sante', label: 'Santé', facteur: '×1,1' },
+                        { id: 'commerces', label: 'Commerces', facteur: '×0,9' },
+                        { id: 'enseignement', label: 'Enseignement', facteur: '×0,8' },
+                        { id: 'hotellerie_restauration', label: 'Hôtellerie / Restauration', facteur: '×0,7' },
+                        { id: 'autres', label: 'Autres', facteur: '×0,7' },
+                      ].map(s => (
+                        <button key={s.id} type="button" onClick={() => setT('secteur_163', s.id)}
+                          style={{ padding: '8px 6px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
+                            background: tech.secteur_163 === s.id ? '#172033' : C.bg,
+                            border: `1px solid ${tech.secteur_163 === s.id ? C.accent : C.border}` }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: tech.secteur_163 === s.id ? '#60A5FA' : C.text }}>{s.label}</div>
+                          <div style={{ fontSize: 10, color: tech.secteur_163 === s.id ? '#93c5fd' : C.textSoft }}>{s.facteur}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Coût installation */}
+                  <div style={{ position: 'relative' }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>Coût installation</label>
+                    <input type="number" value={tech.cout_installation_163} onChange={e => setT('cout_installation_163', e.target.value)} placeholder="ex : 45000"
+                      style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 28px 9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+                    <span style={{ position: 'absolute', right: 10, bottom: 10, fontSize: 12, color: C.textMid }}>€</span>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Section déstratificateurs (BAT-TH-142 + IND-BA-110) ── */}
+              {tech.fiche_cee !== 'BAT-TH-163' && (<>
               {/* Équipements convectifs */}
               <div style={{ background: '#0a1a2e', border: '1px solid #1e3a5f', borderRadius: 10, padding: '14px 16px', marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -695,6 +864,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                   </div>
                 )}
               </div>
+              </>)}
 
               <div style={{ display: 'flex', gap: 10 }}>
                 <button onClick={() => setStep(2)} style={{ flex: 1, padding: '11px', background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← Retour</button>
@@ -723,20 +893,49 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
               <div style={{ background: '#0a1120', border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: C.textMid, lineHeight: 1.7 }}>
                 <strong style={{ color: '#60A5FA' }}>{tech.fiche_cee}</strong>
                 {' · '}Zone <strong style={{ color: C.text }}>{tech.zone_climatique}</strong>
-                {tech.hauteur_m && <>{' · '}h = <strong style={{ color: C.text }}>{tech.hauteur_m} m</strong></>}
+                {tech.hauteur_m && tech.fiche_cee !== 'BAT-TH-163' && <>{' · '}h = <strong style={{ color: C.text }}>{tech.hauteur_m} m</strong></>}
                 {tech.surface_m2 && <>{' · '}{tech.surface_m2} m²</>}
                 {tech.fiche_cee === 'BAT-TH-142' && <>{' · '}{tech.type_local === 'sport_transport' ? 'Sport/Transport' : 'Commerce/Spectacles'}</>}
-                {pConvectif > 0 && <> · <span style={{ color: '#60A5FA' }}>P_conv = {pConvectif} kW</span></>}
-                {pRadiatif > 0  && <> · <span style={{ color: '#fb923c' }}>P_rad = {pRadiatif} kW</span></>}
-                {simulation.coeffConv > 0 && <> · coeff = <strong style={{ color: C.text }}>{simulation.coeffConv}</strong> kWh/kW{simulation.bracket ? ` (${simulation.bracket})` : ''}</>}
+                {tech.fiche_cee === 'BAT-TH-163' && <>
+                  {' · '}{tech.puissance_pac === 'small' ? '≤400 kW' : '>400 kW'}
+                  {' · '}<span style={{ color: '#60A5FA' }}>
+                    {tech.puissance_pac === 'small' ? tech.etas_bracket.replace(/_/g, ' ') : tech.cop_bracket.replace(/_/g, ' ')}
+                  </span>
+                  {' · '}{tech.secteur_163} (×{FACTEURS_SECTEUR_163[tech.secteur_163]})
+                  {' · '}forfait = <strong style={{ color: C.text }}>{simulation.forfait} kWh/m²</strong>
+                </>}
+                {tech.fiche_cee !== 'BAT-TH-163' && pConvectif > 0 && <> · <span style={{ color: '#60A5FA' }}>P_conv = {pConvectif} kW</span></>}
+                {tech.fiche_cee !== 'BAT-TH-163' && pRadiatif > 0  && <> · <span style={{ color: '#fb923c' }}>P_rad = {pRadiatif} kW</span></>}
+                {tech.fiche_cee !== 'BAT-TH-163' && simulation.coeffConv > 0 && <> · coeff = <strong style={{ color: C.text }}>{simulation.coeffConv}</strong> kWh/kW{simulation.bracket ? ` (${simulation.bracket})` : ''}</>}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
                 {[
-                  { label: 'kWh cumac', value: `${simulation.kwhCumac?.toLocaleString('fr')} kWh`, color: '#94A3B8', icon: '📊', sub: `${simulation.coeffConv||0} × ${pConvectif} kW${pRadiatif > 0 ? ` + ${simulation.coeffRad||0} × ${pRadiatif} kW` : ''}` },
-                  { label: 'Prime CEE brute', value: `${simulation.prime?.toLocaleString('fr')} €`, color: '#a78bfa', icon: '💶', sub: `${simulation.kwhCumac?.toLocaleString('fr')} kWh × ${simulation.prixMwh}/1000` },
-                  { label: 'Coût prestation', value: `${simulation.coutTotal?.toLocaleString('fr')} €`, color: '#fb923c', icon: '🔧', sub: `${simulation.nbDestrat} destrats × ${parseFloat(tech.cout_unitaire_destrat).toLocaleString('fr')} €` },
-                  { label: 'Marge nette', value: `${simulation.marge?.toLocaleString('fr')} €`, color: simulation.marge > 0 ? '#4ade80' : '#ef4444', icon: simulation.marge > 0 ? '✅' : '❌', sub: 'Prime − Coût prestation' },
+                  {
+                    label: 'kWh cumac', icon: '📊', color: '#94A3B8',
+                    value: `${simulation.kwhCumac?.toLocaleString('fr')} kWh`,
+                    sub: tech.fiche_cee === 'BAT-TH-163'
+                      ? `${simulation.forfait} × ${tech.surface_m2} m² × ${simulation.facteurSecteur}`
+                      : `${simulation.coeffConv||0} × ${pConvectif} kW${pRadiatif > 0 ? ` + ${simulation.coeffRad||0} × ${pRadiatif} kW` : ''}`,
+                  },
+                  {
+                    label: 'Prime CEE brute', icon: '💶', color: '#a78bfa',
+                    value: `${simulation.prime?.toLocaleString('fr')} €`,
+                    sub: `${simulation.kwhCumac?.toLocaleString('fr')} kWh × ${simulation.prixMwh}/1000`,
+                  },
+                  {
+                    label: 'Coût prestation', icon: '🔧', color: '#fb923c',
+                    value: `${simulation.coutTotal?.toLocaleString('fr')} €`,
+                    sub: tech.fiche_cee === 'BAT-TH-163'
+                      ? 'Coût installation PAC'
+                      : `${simulation.nbDestrat} destrats × ${parseFloat(tech.cout_unitaire_destrat).toLocaleString('fr')} €`,
+                  },
+                  {
+                    label: 'Marge nette', icon: simulation.marge > 0 ? '✅' : '❌',
+                    color: simulation.marge > 0 ? '#4ade80' : '#ef4444',
+                    value: `${simulation.marge?.toLocaleString('fr')} €`,
+                    sub: 'Prime − Coût prestation',
+                  },
                 ].map(item => (
                   <div key={item.label} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
                     <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 4 }}>{item.icon} {item.label}</div>
