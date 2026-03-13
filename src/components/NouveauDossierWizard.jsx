@@ -36,6 +36,18 @@ const COEFFICIENTS_142 = {
   },
 }
 
+// ── IND-BA-110 ADEME coefficients (kWh cumac / kW) ────────────────────────
+const COEFFICIENTS_IND_110 = {
+  convectif: { H1: 7200, H2: 8000, H3: 8500 },
+  radiatif:  { H1: 2500, H2: 2800, H3: 3000 },
+}
+const calculerCumac110 = ({ zone, pConvectif, pRadiatif }) => {
+  const coeffConv = COEFFICIENTS_IND_110.convectif[zone] || 0
+  const coeffRad  = COEFFICIENTS_IND_110.radiatif[zone]  || 0
+  const kwhCumac  = Math.round(coeffConv * pConvectif + coeffRad * pRadiatif)
+  return { kwhCumac, coeffConv, coeffRad }
+}
+
 const getHauteurBracket = (h) => {
   if (h >= 20) return '20+'
   if (h >= 15) return '15-20'
@@ -242,28 +254,25 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
 
   useEffect(() => { fetchProfiles() }, [])
 
-  // Étape 1 — Client
+  // Étape 2 — Client
   const [client, setClient] = useState({
     raison_sociale: '', siret: '', adresse: '', code_postal: '', ville: '',
     contact_nom: '', contact_email: '', contact_tel: '',
   })
   const setC = (k, v) => setClient(c => ({ ...c, [k]: v }))
 
-  // Étape 2 — Données techniques
+  // Étapes 1 + 3 — Données techniques
   const [tech, setTech] = useState({
     fiche_cee: 'BAT-TH-142',
     type_local: 'sport_transport',
     adresse_site_label: '', adresse_site: '', code_postal_site: '', ville_site: '',
     zone_climatique: '',
     surface_m2: '', hauteur_m: '',
-    // Équipements convectifs : quantité × puissance unitaire
-    equipements_convectifs: [
+    eqs_conv: [
       { label: 'Chaudières',  quantite: '', puissance_unitaire_kw: '' },
       { label: 'Aérothermes', quantite: '', puissance_unitaire_kw: '' },
     ],
-    // Équipements radiatifs (optionnel)
-    equipements_radiatifs: [],
-    // Déstratificateurs
+    eqs_rad: [],
     debit_unitaire: '14000',
     nb_destrat_calcule: 0,
     nb_destrat_manuel: '',
@@ -271,15 +280,29 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
   })
   const setT = (k, v) => setTech(t => ({ ...t, [k]: v }))
 
+  // Reset propre lors du changement de fiche
+  const switchFiche = (ficheId) => {
+    setSimulation(null)
+    setTech(t => ({
+      ...t,
+      fiche_cee: ficheId,
+      type_local: 'sport_transport',
+      eqs_conv: [
+        { label: 'Chaudières',  quantite: '', puissance_unitaire_kw: '' },
+        { label: 'Aérothermes', quantite: '', puissance_unitaire_kw: '' },
+      ],
+      eqs_rad: [],
+    }))
+  }
+
   const [prixMwh, setPrixMwh] = useState('7.5')
   const [simulation, setSimulation] = useState(null)
   const [assigneA, setAssigneA] = useState(user?.id || '')
 
   const commerciaux = profiles.filter(p => ['admin', 'commercial'].includes(p.role))
 
-  // Puissances totales
-  const pConvectif = puissanceTotale(tech.equipements_convectifs)
-  const pRadiatif  = puissanceTotale(tech.equipements_radiatifs)
+  const pConvectif = puissanceTotale(tech.eqs_conv)
+  const pRadiatif  = puissanceTotale(tech.eqs_rad)
   const pTotal     = pConvectif + pRadiatif
 
   const detecterZone = (cp) => {
@@ -287,7 +310,6 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
     setTech(t => ({ ...t, zone_climatique: zone, code_postal_site: cp }))
   }
 
-  // Recalcul nb destrats auto
   useEffect(() => {
     const h = parseFloat(tech.hauteur_m) || 0
     const s = parseFloat(tech.surface_m2) || 0
@@ -298,54 +320,47 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
 
   const nbDestratEffectif = parseInt(tech.nb_destrat_manuel) || tech.nb_destrat_calcule || 0
 
-  const updateEquipConv = (i, eq) =>
-    setTech(t => ({ ...t, equipements_convectifs: t.equipements_convectifs.map((e, j) => j === i ? eq : e) }))
-  const removeEquipConv = (i) =>
-    setTech(t => ({ ...t, equipements_convectifs: t.equipements_convectifs.filter((_, j) => j !== i) }))
-  const addEquipConv = () =>
-    setTech(t => ({ ...t, equipements_convectifs: [...t.equipements_convectifs, { label: `Équipement ${t.equipements_convectifs.length + 1}`, quantite: '', puissance_unitaire_kw: '' }] }))
+  const updateEquipConv = (i, eq) => setTech(t => ({ ...t, eqs_conv: t.eqs_conv.map((e, j) => j === i ? eq : e) }))
+  const removeEquipConv = (i) => setTech(t => ({ ...t, eqs_conv: t.eqs_conv.filter((_, j) => j !== i) }))
+  const addEquipConv = () => setTech(t => ({ ...t, eqs_conv: [...t.eqs_conv, { label: 'Chaudière aérothermique', quantite: '', puissance_unitaire_kw: '' }] }))
 
-  const updateEquipRad = (i, eq) =>
-    setTech(t => ({ ...t, equipements_radiatifs: t.equipements_radiatifs.map((e, j) => j === i ? eq : e) }))
-  const removeEquipRad = (i) =>
-    setTech(t => ({ ...t, equipements_radiatifs: t.equipements_radiatifs.filter((_, j) => j !== i) }))
-  const addEquipRad = () =>
-    setTech(t => ({ ...t, equipements_radiatifs: [...t.equipements_radiatifs, { label: `Équipement ${t.equipements_radiatifs.length + 1}`, quantite: '', puissance_unitaire_kw: '' }] }))
+  const updateEquipRad = (i, eq) => setTech(t => ({ ...t, eqs_rad: t.eqs_rad.map((e, j) => j === i ? eq : e) }))
+  const removeEquipRad = (i) => setTech(t => ({ ...t, eqs_rad: t.eqs_rad.filter((_, j) => j !== i) }))
+  const addEquipRad = () => setTech(t => ({ ...t, eqs_rad: [...t.eqs_rad, { label: 'Équipement radiatif', quantite: '', puissance_unitaire_kw: '' }] }))
 
   const calculerSimulation = () => {
-    const prix   = parseFloat(prixMwh) || 7.5
+    const prix    = parseFloat(prixMwh) || 7.5
     const hauteur = parseFloat(tech.hauteur_m) || 0
-    const cout   = parseFloat(tech.cout_unitaire_destrat) || 2750
-
+    const cout    = parseFloat(tech.cout_unitaire_destrat) || 2750
     let kwhCumac = 0
     let details  = {}
 
-    if (tech.fiche_cee === 'BAT-TH-142') {
-      const res = calculerCumac142({
-        typeLocal: tech.type_local,
-        zone: tech.zone_climatique || 'H2',
-        hauteur,
-        pConvectif,
-        pRadiatif,
-      })
+    if (tech.fiche_cee === 'IND-BA-110') {
+      const res = calculerCumac110({ zone: tech.zone_climatique || 'H2', pConvectif, pRadiatif })
+      kwhCumac = res.kwhCumac
+      details = res
+    } else if (tech.fiche_cee === 'BAT-TH-142') {
+      const res = calculerCumac142({ typeLocal: tech.type_local, zone: tech.zone_climatique || 'H2', hauteur, pConvectif, pRadiatif })
       kwhCumac = res.kwhCumac
       details = res
     }
-    // BAT-TH-116 et IND-BA-110 : calcul à implémenter selon leurs fiches ADEME
-    // Pour l'instant on retourne 0 avec un message
 
     const prime     = Math.round(kwhCumac * (prix / 1000) * 100) / 100
     const coutTotal = nbDestratEffectif * cout
     const marge     = Math.round((prime - coutTotal) * 100) / 100
-
     setSimulation({ kwhCumac, mwhCumac: Math.round(kwhCumac / 100) / 10, prixMwh: prix, prime, coutTotal, marge, rentable: marge > 0, nbDestrat: nbDestratEffectif, pConvectif, pRadiatif, ...details })
-    setStep(3)
+    setStep(4)
   }
 
-  const canCalculer = tech.zone_climatique && tech.hauteur_m && parseFloat(tech.hauteur_m) >= 5
+  const canCalculer = tech.zone_climatique && (
+    tech.fiche_cee === 'IND-BA-110'
+      ? true
+      : (tech.hauteur_m && parseFloat(tech.hauteur_m) >= 5)
+  )
 
   const submit = async () => {
     setLoading(true); setError(null)
+    const is110 = tech.fiche_cee === 'IND-BA-110'
     try {
       const { data: prospect, error: e1 } = await createProspect({
         raison_sociale: client.raison_sociale, siret: client.siret,
@@ -369,7 +384,31 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
       if (e2) throw new Error(e2.message || e2.details || JSON.stringify(e2))
       if (!dossier) throw new Error('Dossier non créé (vérifiez les permissions Supabase)')
 
-      // Simulation : erreur non bloquante (le dossier est déjà créé)
+      const parametres = is110 ? {
+        eqs_conv: tech.eqs_conv, eqs_rad: tech.eqs_rad,
+        p_convectif: pConvectif, p_radiatif: pRadiatif,
+        surface_m2: parseFloat(tech.surface_m2) || null,
+        debit_unitaire: tech.debit_unitaire,
+        kwh_cumac: simulation?.kwhCumac,
+        nb_destrat_calcule: tech.nb_destrat_calcule,
+        nb_destrat_manuel: tech.nb_destrat_manuel,
+        cout_unitaire_destrat: tech.cout_unitaire_destrat,
+        cout_total: simulation?.coutTotal,
+        marge: simulation?.marge,
+      } : {
+        type_local: tech.type_local,
+        eqs_conv: tech.eqs_conv, eqs_rad: tech.eqs_rad,
+        p_convectif: pConvectif, p_radiatif: pRadiatif,
+        surface_m2: parseFloat(tech.surface_m2) || null,
+        kwh_cumac: simulation?.kwhCumac,
+        debit_unitaire: tech.debit_unitaire,
+        nb_destrat_calcule: tech.nb_destrat_calcule,
+        nb_destrat_manuel: tech.nb_destrat_manuel,
+        cout_unitaire_destrat: tech.cout_unitaire_destrat,
+        cout_total: simulation?.coutTotal,
+        marge: simulation?.marge,
+      }
+
       const { error: e3 } = await createSimulation({
         dossier_id: dossier.id,
         fiche_cee: tech.fiche_cee,
@@ -381,21 +420,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
         prime_estimee: simulation?.prime,
         prix_mwh: simulation?.prixMwh,
         rentable: simulation?.rentable,
-        parametres: {
-          type_local: tech.type_local,
-          surface_m2: parseFloat(tech.surface_m2) || null,
-          equipements_convectifs: tech.equipements_convectifs,
-          equipements_radiatifs: tech.equipements_radiatifs,
-          p_convectif: pConvectif,
-          p_radiatif: pRadiatif,
-          kwh_cumac: simulation?.kwhCumac,
-          debit_unitaire: tech.debit_unitaire,
-          nb_destrat_calcule: tech.nb_destrat_calcule,
-          nb_destrat_manuel: tech.nb_destrat_manuel,
-          cout_unitaire_destrat: tech.cout_unitaire_destrat,
-          cout_total: simulation?.coutTotal,
-          marge: simulation?.marge,
-        },
+        parametres,
       })
       if (e3) console.warn('Simulation non sauvegardée :', e3.message || e3)
 
@@ -409,7 +434,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
     }
   }
 
-  const stepLabels = ['Informations client', 'Données techniques', 'Simulation & Validation']
+  const stepLabels = ['Fiche CEE', 'Informations client', 'Informations du site', 'Simulation']
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
@@ -427,7 +452,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
               return (
                 <div key={n} style={{ flex: 1, textAlign: 'center', position: 'relative' }}>
                   {i > 0 && <div style={{ position: 'absolute', left: 0, top: 13, width: '50%', height: 2, background: done || active ? C.accent : C.border }} />}
-                  {i < 2 && <div style={{ position: 'absolute', right: 0, top: 13, width: '50%', height: 2, background: done ? C.accent : C.border }} />}
+                  {i < 3 && <div style={{ position: 'absolute', right: 0, top: 13, width: '50%', height: 2, background: done ? C.accent : C.border }} />}
                   <div style={{ width: 26, height: 26, borderRadius: '50%', margin: '0 auto 5px', background: active ? C.accent : done ? '#16A34A' : C.bg, border: `2px solid ${active ? C.accent : done ? '#16A34A' : C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: active || done ? '#fff' : C.textSoft, position: 'relative', zIndex: 1 }}>
                     {done ? '✓' : n}
                   </div>
@@ -440,8 +465,33 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
 
         <div style={{ padding: '20px 28px 28px' }}>
 
-          {/* ── Étape 1 : Client ── */}
+          {/* ── Étape 1 : Fiche CEE ── */}
           {step === 1 && (
+            <>
+              <div style={{ fontSize: 13, color: C.textMid, marginBottom: 16 }}>
+                Sélectionnez la fiche CEE applicable. Elle détermine le calcul CUMAC et le formulaire technique.
+              </div>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+                {FICHES.map(f => (
+                  <button key={f.id} type="button" onClick={() => switchFiche(f.id)}
+                    style={{ flex: 1, padding: '16px 8px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
+                      background: tech.fiche_cee === f.id ? '#172033' : C.bg,
+                      border: `2px solid ${tech.fiche_cee === f.id ? C.accent : C.border}` }}>
+                    <div style={{ fontSize: 22, marginBottom: 6 }}>{f.icon}</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: tech.fiche_cee === f.id ? '#60A5FA' : C.text }}>{f.label}</div>
+                    <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>{f.desc}</div>
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setStep(2)}
+                style={{ width: '100%', padding: '12px', background: C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Suivant →
+              </button>
+            </>
+          )}
+
+          {/* ── Étape 2 : Client ── */}
+          {step === 2 && (
             <>
               <RaisonSocialeAutocomplete value={client.raison_sociale} onChange={v => setC('raison_sociale', v)}
                 onSelect={d => setClient(c => ({ ...c, raison_sociale: d.raison_sociale, siret: d.siret || c.siret, adresse: d.adresse || c.adresse, code_postal: d.code_postal || c.code_postal, ville: d.ville || c.ville }))} />
@@ -454,29 +504,24 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                 <Field label="Email contact" value={client.contact_email} onChange={v => setC('contact_email', v)} type="email" placeholder="contact@societe.fr" />
                 <Field label="Téléphone" value={client.contact_tel} onChange={v => setC('contact_tel', v)} placeholder="06 XX XX XX XX" />
               </div>
-              <button disabled={!client.raison_sociale} onClick={() => setStep(2)}
-                style={{ width: '100%', padding: '12px', background: C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginTop: 8, opacity: !client.raison_sociale ? .5 : 1 }}>
-                Suivant →
-              </button>
+              <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                <button onClick={() => setStep(1)} style={{ flex: 1, padding: '11px', background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← Retour</button>
+                <button disabled={!client.raison_sociale} onClick={() => setStep(3)}
+                  style={{ flex: 2, padding: '11px', background: C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: !client.raison_sociale ? .5 : 1 }}>
+                  Suivant →
+                </button>
+              </div>
             </>
           )}
 
-          {/* ── Étape 2 : Données techniques ── */}
-          {step === 2 && (
+          {/* ── Étape 3 : Données techniques ── */}
+          {step === 3 && (
             <>
-              {/* Fiche CEE */}
-              <div style={{ marginBottom: 18 }}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>Fiche CEE *</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {FICHES.map(f => (
-                    <button key={f.id} type="button" onClick={() => setT('fiche_cee', f.id)}
-                      style={{ flex: 1, padding: '10px 8px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', background: tech.fiche_cee === f.id ? '#172033' : C.bg, border: `1px solid ${tech.fiche_cee === f.id ? C.accent : C.border}` }}>
-                      <div style={{ fontSize: 16, marginBottom: 3 }}>{f.icon}</div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: tech.fiche_cee === f.id ? '#60A5FA' : C.text }}>{f.label}</div>
-                      <div style={{ fontSize: 10, color: C.textSoft, marginTop: 2 }}>{f.desc}</div>
-                    </button>
-                  ))}
-                </div>
+              {/* Badge fiche active avec lien retour */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#172033', border: `1px solid ${C.accent}`, borderRadius: 6, padding: '4px 10px', marginBottom: 16 }}>
+                <span style={{ fontSize: 14 }}>{FICHES.find(f => f.id === tech.fiche_cee)?.icon}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#60A5FA' }}>{tech.fiche_cee}</span>
+                <button type="button" onClick={() => setStep(1)} style={{ background: 'transparent', border: 'none', color: C.textSoft, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', marginLeft: 4 }}>changer</button>
               </div>
 
               {/* Type de local (BAT-TH-142 uniquement) */}
@@ -489,7 +534,9 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                       { id: 'commerce_loisirs', label: '🏬 Commerce / Spectacles', desc: 'Grande surface, salle de spectacle, église…' },
                     ].map(t => (
                       <button key={t.id} type="button" onClick={() => setT('type_local', t.id)}
-                        style={{ flex: 1, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', background: tech.type_local === t.id ? '#172033' : C.bg, border: `1px solid ${tech.type_local === t.id ? C.accent : C.border}` }}>
+                        style={{ flex: 1, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                          background: tech.type_local === t.id ? '#172033' : C.bg,
+                          border: `1px solid ${tech.type_local === t.id ? C.accent : C.border}` }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: tech.type_local === t.id ? '#60A5FA' : C.text }}>{t.label}</div>
                         <div style={{ fontSize: 10, color: C.textSoft, marginTop: 2 }}>{t.desc}</div>
                       </button>
@@ -513,7 +560,10 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                   <div style={{ display: 'flex', gap: 6 }}>
                     {['H1', 'H2', 'H3'].map(z => (
                       <button key={z} type="button" onClick={() => setT('zone_climatique', z)}
-                        style={{ flex: 1, padding: '9px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, background: tech.zone_climatique === z ? '#1e3a5f' : C.bg, border: `1px solid ${tech.zone_climatique === z ? C.accent : C.border}`, color: tech.zone_climatique === z ? '#60A5FA' : C.textMid }}>
+                        style={{ flex: 1, padding: '9px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700,
+                          background: tech.zone_climatique === z ? '#1e3a5f' : C.bg,
+                          border: `1px solid ${tech.zone_climatique === z ? C.accent : C.border}`,
+                          color: tech.zone_climatique === z ? '#60A5FA' : C.textMid }}>
                         {z}
                       </button>
                     ))}
@@ -521,7 +571,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                   {tech.zone_climatique && <div style={{ fontSize: 10, color: '#60A5FA', marginTop: 4 }}>✓ Zone {tech.zone_climatique} détectée</div>}
                 </div>
                 <Field label="Surface du site" value={tech.surface_m2} onChange={v => setT('surface_m2', v)} type="number" placeholder="5000" suffix="m²" />
-                <Field label="Hauteur sous plafond" value={tech.hauteur_m} onChange={v => setT('hauteur_m', v)} type="number" placeholder="12" suffix="m" required />
+                <Field label="Hauteur sous plafond" value={tech.hauteur_m} onChange={v => setT('hauteur_m', v)} type="number" placeholder="12" suffix="m" required={tech.fiche_cee !== 'IND-BA-110'} />
               </div>
 
               {/* Équipements convectifs */}
@@ -534,7 +584,6 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                   <button type="button" onClick={addEquipConv}
                     style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>+ Ajouter</button>
                 </div>
-                {/* En-têtes colonnes */}
                 <div style={{ display: 'flex', gap: 6, marginBottom: 4, paddingLeft: 2 }}>
                   <span style={{ flex: 2, fontSize: 10, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .3 }}>Équipement</span>
                   <span style={{ width: 64, fontSize: 10, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .3, textAlign: 'center' }}>Qté</span>
@@ -542,11 +591,11 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                   <span style={{ width: 72, fontSize: 10, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .3, textAlign: 'right' }}>Total</span>
                   <span style={{ width: 26 }} />
                 </div>
-                {tech.equipements_convectifs.map((eq, i) => (
+                {tech.eqs_conv.map((eq, i) => (
                   <LigneEquipement key={i} eq={eq}
                     onChange={eq => updateEquipConv(i, eq)}
                     onRemove={() => removeEquipConv(i)}
-                    canRemove={tech.equipements_convectifs.length > 1} />
+                    canRemove={tech.eqs_conv.length > 1} />
                 ))}
                 {pConvectif > 0 && (
                   <div style={{ fontSize: 11, color: '#60A5FA', marginTop: 4, textAlign: 'right' }}>
@@ -565,10 +614,10 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                   <button type="button" onClick={addEquipRad}
                     style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>+ Ajouter</button>
                 </div>
-                {tech.equipements_radiatifs.length === 0 && (
+                {tech.eqs_rad.length === 0 && (
                   <div style={{ fontSize: 12, color: C.textSoft, fontStyle: 'italic' }}>Aucun équipement radiatif</div>
                 )}
-                {tech.equipements_radiatifs.length > 0 && (
+                {tech.eqs_rad.length > 0 && (
                   <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
                     <span style={{ flex: 2, fontSize: 10, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .3 }}>Équipement</span>
                     <span style={{ width: 64, fontSize: 10, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .3, textAlign: 'center' }}>Qté</span>
@@ -577,7 +626,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                     <span style={{ width: 26 }} />
                   </div>
                 )}
-                {tech.equipements_radiatifs.map((eq, i) => (
+                {tech.eqs_rad.map((eq, i) => (
                   <LigneEquipement key={i} eq={eq}
                     onChange={eq => updateEquipRad(i, eq)}
                     onRemove={() => removeEquipRad(i)}
@@ -599,7 +648,10 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                     <div style={{ display: 'flex', gap: 6 }}>
                       {['14000', '8500'].map(d => (
                         <button key={d} type="button" onClick={() => setT('debit_unitaire', d)}
-                          style={{ flex: 1, padding: '8px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, background: tech.debit_unitaire === d ? '#1e3a5f' : C.bg, border: `1px solid ${tech.debit_unitaire === d ? C.accent : C.border}`, color: tech.debit_unitaire === d ? '#60A5FA' : C.textMid }}>
+                          style={{ flex: 1, padding: '8px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700,
+                            background: tech.debit_unitaire === d ? '#1e3a5f' : C.bg,
+                            border: `1px solid ${tech.debit_unitaire === d ? C.accent : C.border}`,
+                            color: tech.debit_unitaire === d ? '#60A5FA' : C.textMid }}>
                           {parseInt(d).toLocaleString('fr')} m³/h
                         </button>
                       ))}
@@ -645,7 +697,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
               </div>
 
               <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => setStep(1)} style={{ flex: 1, padding: '11px', background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← Retour</button>
+                <button onClick={() => setStep(2)} style={{ flex: 1, padding: '11px', background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← Retour</button>
                 <button disabled={!canCalculer} onClick={calculerSimulation}
                   style={{ flex: 2, padding: '11px', background: C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: !canCalculer ? .5 : 1 }}>
                   Calculer la simulation →
@@ -654,8 +706,8 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
             </>
           )}
 
-          {/* ── Étape 3 : Simulation ── */}
-          {step === 3 && simulation && (
+          {/* ── Étape 4 : Simulation ── */}
+          {step === 4 && simulation && (
             <>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, background: '#0a1a2e', border: '1px solid #1e3a5f', borderRadius: 8, padding: '12px 16px' }}>
                 <div style={{ fontSize: 12, color: C.textMid, flex: 1 }}>💰 Prix de valorisation MWh cumac</div>
@@ -669,13 +721,14 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
 
               {/* Résumé technique */}
               <div style={{ background: '#0a1120', border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: C.textMid, lineHeight: 1.7 }}>
-                Zone <strong style={{ color: C.text }}>{tech.zone_climatique}</strong>
-                {' · '} h = <strong style={{ color: C.text }}>{tech.hauteur_m} m</strong>
-                {' · '} {tech.surface_m2 ? <>{tech.surface_m2} m²{' · '}</> : ''}
-                {tech.type_local === 'sport_transport' ? 'Sport/Transport' : 'Commerce/Spectacles'}
+                <strong style={{ color: '#60A5FA' }}>{tech.fiche_cee}</strong>
+                {' · '}Zone <strong style={{ color: C.text }}>{tech.zone_climatique}</strong>
+                {tech.hauteur_m && <>{' · '}h = <strong style={{ color: C.text }}>{tech.hauteur_m} m</strong></>}
+                {tech.surface_m2 && <>{' · '}{tech.surface_m2} m²</>}
+                {tech.fiche_cee === 'BAT-TH-142' && <>{' · '}{tech.type_local === 'sport_transport' ? 'Sport/Transport' : 'Commerce/Spectacles'}</>}
                 {pConvectif > 0 && <> · <span style={{ color: '#60A5FA' }}>P_conv = {pConvectif} kW</span></>}
                 {pRadiatif > 0  && <> · <span style={{ color: '#fb923c' }}>P_rad = {pRadiatif} kW</span></>}
-                {simulation.coeffConv > 0 && <> · coeff = <strong style={{ color: C.text }}>{simulation.coeffConv}</strong> kWh/kW ({simulation.bracket})</>}
+                {simulation.coeffConv > 0 && <> · coeff = <strong style={{ color: C.text }}>{simulation.coeffConv}</strong> kWh/kW{simulation.bracket ? ` (${simulation.bracket})` : ''}</>}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
@@ -695,7 +748,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
 
               <div style={{ background: simulation.marge > 0 ? '#052e16' : '#1c0a00', border: `1px solid ${simulation.marge > 0 ? '#166534' : '#92400e'}`, borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12 }}>
                 <strong style={{ color: simulation.marge > 0 ? '#4ade80' : '#fb923c' }}>{simulation.marge > 0 ? '✅ Opération rentable' : '⚠️ Opération déficitaire'}</strong>
-                <span style={{ color: C.textMid, marginLeft: 8 }}>{client.raison_sociale} · Zone {tech.zone_climatique} · h={tech.hauteur_m}m</span>
+                <span style={{ color: C.textMid, marginLeft: 8 }}>{client.raison_sociale} · Zone {tech.zone_climatique}{tech.hauteur_m ? ` · h=${tech.hauteur_m}m` : ''}</span>
               </div>
 
               {commerciaux.length > 0 && (
@@ -711,7 +764,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
               {error && <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', color: '#fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 14 }}>{error}</div>}
 
               <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => setStep(2)} style={{ flex: 1, padding: '11px', background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← Retour</button>
+                <button onClick={() => setStep(3)} style={{ flex: 1, padding: '11px', background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← Retour</button>
                 <button onClick={submit} disabled={loading}
                   style={{ flex: 2, padding: '11px', background: simulation.marge > 0 ? '#16A34A' : C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                   {loading ? 'Création…' : simulation.marge > 0 ? '✅ Créer le dossier' : '📁 Créer quand même'}

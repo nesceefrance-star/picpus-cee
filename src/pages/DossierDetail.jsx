@@ -3,6 +3,19 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import useStore from '../store/useStore'
 
+// ── IND-BA-110 ADEME coefficients (kWh cumac / kW) ────────────────────────
+const COEFFICIENTS_IND_110 = {
+  convectif: { H1: 7200, H2: 8000, H3: 8500 },
+  radiatif:  { H1: 2500, H2: 2800, H3: 3000 },
+}
+
+const calculerCumac110 = ({ zone, pConvectif, pRadiatif }) => {
+  const coeffConv = COEFFICIENTS_IND_110.convectif[zone] || 0
+  const coeffRad  = COEFFICIENTS_IND_110.radiatif[zone]  || 0
+  const kwhCumac  = Math.round(coeffConv * pConvectif + coeffRad * pRadiatif)
+  return { kwhCumac, coeffConv, coeffRad }
+}
+
 // ── BAT-TH-142 ADEME coefficients ─────────────────────────────────────────
 const COEFFICIENTS_142 = {
   sport_transport: {
@@ -112,10 +125,34 @@ export default function DossierDetail() {
   const setP = (k, v) => setPForm(f => ({ ...f, [k]: v }))
 
   const [editSimu, setEditSimu] = useState(false)
+  const [simuStep, setSimuStep] = useState(1)
   const [sForm, setSForm] = useState({})
   const setS = (k, v) => setSForm(f => ({ ...f, [k]: v }))
   const [simuResult, setSimuResult] = useState(null)
   const [savingSimu, setSavingSimu] = useState(false)
+
+  // Reset complet du formulaire lors du changement de fiche
+  const switchFiche = (ficheId) => {
+    setSimuResult(null)
+    setSimuStep(1)
+    if (ficheId === 'IND-BA-110') {
+      setSForm({
+        fiche_cee: 'IND-BA-110',
+        zone_climatique: '',
+        eqs_conv: [],
+        eqs_rad: [],
+        surface_m2: '', hauteur_m: '', debit_unitaire: '14000',
+        nb_destrat: '', cout_unitaire_destrat: '2750', prix_mwh: '7.5',
+      })
+    } else {
+      setSForm({
+        fiche_cee: 'BAT-TH-142',
+        zone_climatique: '', type_local: 'sport_transport', hauteur_m: '',
+        eqs_conv: [], eqs_rad: [],
+        nb_destrat: '', cout_unitaire_destrat: '2750', prix_mwh: '7.5',
+      })
+    }
+  }
 
   useEffect(() => {
     fetchProfiles()
@@ -137,21 +174,35 @@ export default function DossierDetail() {
       setPForm(d.prospects || {})
       if (sim) {
         const p = sim.parametres || {}
-        setSForm({
-          type_local: p.type_local || 'sport_transport',
-          hauteur_m: sim.hauteur_m ?? '',
-          zone_climatique: sim.zone_climatique || '',
-          equipements_convectifs: p.equipements_convectifs || [],
-          equipements_radiatifs: p.equipements_radiatifs || [],
-          nb_destrat: p.nb_destrat ?? '',
-          cout_unitaire_destrat: p.cout_unitaire_destrat || '2750',
-          prix_mwh: sim.prix_mwh ?? '7.5',
-        })
+        const fiche = sim.fiche_cee || 'BAT-TH-142'
+        if (fiche === 'IND-BA-110') {
+          setSForm({
+            fiche_cee: 'IND-BA-110',
+            zone_climatique: sim.zone_climatique || '',
+            eqs_conv: p.eqs_conv || [],
+            eqs_rad:  p.eqs_rad  || [],
+            surface_m2: p.surface_m2 ?? '', hauteur_m: sim.hauteur_m ?? '',
+            debit_unitaire: p.debit_unitaire || '14000',
+            nb_destrat: p.nb_destrat ?? '', cout_unitaire_destrat: p.cout_unitaire_destrat || '2750',
+            prix_mwh: sim.prix_mwh ?? '7.5',
+          })
+        } else {
+          setSForm({
+            fiche_cee: 'BAT-TH-142',
+            zone_climatique: sim.zone_climatique || '',
+            type_local: p.type_local || 'sport_transport',
+            hauteur_m: sim.hauteur_m ?? '',
+            eqs_conv: p.eqs_conv || [],
+            eqs_rad:  p.eqs_rad  || [],
+            nb_destrat: p.nb_destrat ?? '', cout_unitaire_destrat: p.cout_unitaire_destrat || '2750',
+            prix_mwh: sim.prix_mwh ?? '7.5',
+          })
+        }
       } else {
         setSForm({
-          type_local: 'sport_transport',
-          hauteur_m: '', zone_climatique: '',
-          equipements_convectifs: [], equipements_radiatifs: [],
+          fiche_cee: 'BAT-TH-142',
+          zone_climatique: '', type_local: 'sport_transport', hauteur_m: '',
+          eqs_conv: [], eqs_rad: [],
           nb_destrat: '', cout_unitaire_destrat: '2750', prix_mwh: '7.5',
         })
       }
@@ -181,27 +232,51 @@ export default function DossierDetail() {
   }
 
   const calculerSimuLocal = () => {
-    const h    = parseFloat(sForm.hauteur_m) || 0
     const prix = parseFloat(sForm.prix_mwh) || 7.5
-    const nb   = parseInt(sForm.nb_destrat) || 0
     const cout = parseFloat(sForm.cout_unitaire_destrat) || 2750
-    const pConv = (sForm.equipements_convectifs || []).reduce((s, e) => s + eqPuissance(e), 0)
-    const pRad  = (sForm.equipements_radiatifs || []).reduce((s, e) => s + eqPuissance(e), 0)
+    const zone = sForm.zone_climatique || 'H2'
 
-    const { kwhCumac } = calculerCumac142({ typeLocal: sForm.type_local, zone: sForm.zone_climatique || 'H2', hauteur: h, pConvectif: pConv, pRadiatif: pRad })
-    const prime    = Math.round(kwhCumac * (prix / 1000) * 100) / 100
-    const mwh      = Math.round(kwhCumac / 1000 * 10) / 10
-    const coutTotal = nb * cout
-    const marge    = Math.round((prime - coutTotal) * 100) / 100
-    setSimuResult({ kwhCumac, mwh, prime, coutTotal, marge, rentable: marge > 0, nb, pConv, pRad })
+    if (sForm.fiche_cee === 'IND-BA-110') {
+      // ── IND-BA-110 : cumac = coeff[zone] × pConv + coeff[zone] × pRad ──────
+      const pConv   = (sForm.eqs_conv || []).reduce((s, e) => s + eqPuissance(e), 0)
+      const pRad    = (sForm.eqs_rad  || []).reduce((s, e) => s + eqPuissance(e), 0)
+      const surface = parseFloat(sForm.surface_m2) || 0
+      const h       = parseFloat(sForm.hauteur_m) || 0
+      const debit   = parseFloat(sForm.debit_unitaire) || 14000
+      const nbAuto  = (surface > 0 && h > 0) ? Math.ceil((surface * h * 0.7) / debit) : 0
+      const nb      = parseInt(sForm.nb_destrat) || nbAuto
+
+      const { kwhCumac } = calculerCumac110({ zone, pConvectif: pConv, pRadiatif: pRad })
+      const prime     = Math.round(kwhCumac * (prix / 1000) * 100) / 100
+      const mwh       = Math.round(kwhCumac / 1000 * 10) / 10
+      const coutTotal = nb * cout
+      const marge     = Math.round((prime - coutTotal) * 100) / 100
+      setSimuResult({ fiche: 'IND-BA-110', kwhCumac, mwh, prime, coutTotal, marge, rentable: marge > 0, nb, nbAuto, pConv, pRad })
+
+    } else {
+      // ── BAT-TH-142 : cumac = coeff[typeLocal][zone][bracket] × pConv/pRad ──
+      const h     = parseFloat(sForm.hauteur_m) || 0
+      const nb    = parseInt(sForm.nb_destrat) || 0
+      const pConv = (sForm.eqs_conv || []).reduce((s, e) => s + eqPuissance(e), 0)
+      const pRad  = (sForm.eqs_rad  || []).reduce((s, e) => s + eqPuissance(e), 0)
+
+      const { kwhCumac } = calculerCumac142({ typeLocal: sForm.type_local, zone, hauteur: h, pConvectif: pConv, pRadiatif: pRad })
+      const prime     = Math.round(kwhCumac * (prix / 1000) * 100) / 100
+      const mwh       = Math.round(kwhCumac / 1000 * 10) / 10
+      const coutTotal = nb * cout
+      const marge     = Math.round((prime - coutTotal) * 100) / 100
+      setSimuResult({ fiche: 'BAT-TH-142', kwhCumac, mwh, prime, coutTotal, marge, rentable: marge > 0, nb, pConv, pRad })
+    }
   }
 
   const saveSimulation = async () => {
     if (!simuResult) return
     setSavingSimu(true)
+
+    const is110 = sForm.fiche_cee === 'IND-BA-110'
     const payload = {
       dossier_id: id,
-      fiche_cee: 'BAT-TH-142',
+      fiche_cee: sForm.fiche_cee || 'BAT-TH-142',
       hauteur_m: parseFloat(sForm.hauteur_m) || null,
       zone_climatique: sForm.zone_climatique,
       nb_equipements: simuResult.nb,
@@ -210,17 +285,20 @@ export default function DossierDetail() {
       prime_estimee: simuResult.prime,
       prix_mwh: parseFloat(sForm.prix_mwh),
       rentable: simuResult.rentable,
-      parametres: {
-        type_local: sForm.type_local,
-        equipements_convectifs: sForm.equipements_convectifs,
-        equipements_radiatifs: sForm.equipements_radiatifs,
-        p_convectif: simuResult.pConv,
-        p_radiatif: simuResult.pRad,
-        kwh_cumac: simuResult.kwhCumac,
-        nb_destrat: simuResult.nb,
+      parametres: is110 ? {
+        eqs_conv: sForm.eqs_conv, eqs_rad: sForm.eqs_rad,
+        p_convectif: simuResult.pConv, p_radiatif: simuResult.pRad,
+        surface_m2: sForm.surface_m2, debit_unitaire: sForm.debit_unitaire,
+        kwh_cumac: simuResult.kwhCumac, nb_destrat: simuResult.nb,
         cout_unitaire_destrat: sForm.cout_unitaire_destrat,
-        cout_total: simuResult.coutTotal,
-        marge: simuResult.marge,
+        cout_total: simuResult.coutTotal, marge: simuResult.marge,
+      } : {
+        type_local: sForm.type_local,
+        eqs_conv: sForm.eqs_conv, eqs_rad: sForm.eqs_rad,
+        p_convectif: simuResult.pConv, p_radiatif: simuResult.pRad,
+        kwh_cumac: simuResult.kwhCumac, nb_destrat: simuResult.nb,
+        cout_unitaire_destrat: sForm.cout_unitaire_destrat,
+        cout_total: simuResult.coutTotal, marge: simuResult.marge,
       },
     }
     await createSimulation(payload)
@@ -363,9 +441,9 @@ export default function DossierDetail() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>⚡ Simulation CEE</span>
               {!editSimu
-                ? <button onClick={() => setEditSimu(true)} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>{sim ? 'Modifier' : 'Créer'}</button>
+                ? <button onClick={() => { setSimuStep(1); setEditSimu(true) }} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>{sim ? 'Modifier' : 'Créer'}</button>
                 : <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={() => { setEditSimu(false); setSimuResult(null) }} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Annuler</button>
+                    <button onClick={() => { setEditSimu(false); setSimuResult(null); setSimuStep(1) }} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Annuler</button>
                     {simuResult && <button onClick={saveSimulation} disabled={savingSimu} style={{ background: '#16A34A', border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>{savingSimu ? 'Sauvegarde…' : 'Sauvegarder'}</button>}
                   </div>
               }
@@ -381,11 +459,20 @@ export default function DossierDetail() {
             {!editSimu && sim && (
               <div>
                 <InfoRow label="Fiche CEE" value={sim.fiche_cee} />
-                <InfoRow label="Type local" value={simParams.type_local === 'sport_transport' ? 'Sport / Transport' : simParams.type_local === 'commerce_loisirs' ? 'Commerce / Loisirs' : null} />
-                <InfoRow label="Hauteur" value={sim.hauteur_m != null ? `${sim.hauteur_m} m` : null} />
-                <InfoRow label="Zone" value={sim.zone_climatique} />
-                <InfoRow label="P convectif" value={simParams.p_convectif != null ? `${simParams.p_convectif} kW` : null} />
-                <InfoRow label="P radiatif" value={simParams.p_radiatif != null ? `${simParams.p_radiatif} kW` : null} />
+                {sim.fiche_cee === 'IND-BA-110' ? <>
+                  <InfoRow label="Zone" value={sim.zone_climatique} />
+                  <InfoRow label="P convectif" value={simParams.p_convectif != null ? `${simParams.p_convectif} kW` : null} />
+                  <InfoRow label="P radiatif"  value={simParams.p_radiatif  != null ? `${simParams.p_radiatif}  kW` : null} />
+                  <InfoRow label="Surface"     value={simParams.surface_m2  ? `${simParams.surface_m2} m²` : null} />
+                  <InfoRow label="Hauteur"     value={sim.hauteur_m != null  ? `${sim.hauteur_m} m` : null} />
+                  <InfoRow label="Débit"       value={simParams.debit_unitaire ? `${Number(simParams.debit_unitaire).toLocaleString('fr')} m³/h` : null} />
+                </> : <>
+                  <InfoRow label="Type local"  value={simParams.type_local === 'sport_transport' ? 'Sport / Transport' : simParams.type_local === 'commerce_loisirs' ? 'Commerce / Loisirs' : null} />
+                  <InfoRow label="Hauteur"     value={sim.hauteur_m != null ? `${sim.hauteur_m} m` : null} />
+                  <InfoRow label="Zone"        value={sim.zone_climatique} />
+                  <InfoRow label="P convectif" value={simParams.p_convectif != null ? `${simParams.p_convectif} kW` : null} />
+                  <InfoRow label="P radiatif"  value={simParams.p_radiatif  != null ? `${simParams.p_radiatif}  kW` : null} />
+                </>}
                 <InfoRow label="Nb destrats" value={sim.nb_equipements} />
                 <InfoRow label="kWh cumac" value={simParams.kwh_cumac != null ? `${Number(simParams.kwh_cumac).toLocaleString('fr')} kWh` : null} />
                 <InfoRow label="MWh cumac" value={sim.mwh_cumac != null ? `${sim.mwh_cumac} MWh` : null} />
@@ -412,6 +499,7 @@ export default function DossierDetail() {
                           batQte: sim.nb_equipements || 0,
                           batPuVente: simParams.cout_unitaire_destrat ? parseFloat(simParams.cout_unitaire_destrat) : 0,
                           batDebit: simParams.debit_unitaire || '14000',
+                          ficheCee: sim.fiche_cee || 'BAT-TH-142',
                         },
                       },
                     })}
@@ -422,108 +510,233 @@ export default function DossierDetail() {
               </div>
             )}
 
-            {/* Édition */}
+            {/* Édition — wizard 4 étapes */}
             {editSimu && (
               <div>
-                {/* Type de local */}
-                <div style={{ marginBottom: 14 }}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .4 }}>Type de local</label>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {[
-                      { id: 'sport_transport', label: '🏟️ Sport / Transport' },
-                      { id: 'commerce_loisirs', label: '🏬 Commerce / Loisirs' },
-                    ].map(t => (
-                      <button key={t.id} type="button" onClick={() => setS('type_local', t.id)}
-                        style={{ flex: 1, padding: '8px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600, background: sForm.type_local === t.id ? '#EFF6FF' : C.bg, border: `1px solid ${sForm.type_local === t.id ? C.accent : C.border}`, color: sForm.type_local === t.id ? C.accent : C.textMid }}>
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
+
+                {/* Barre de progression */}
+                <div style={{ display:'flex', gap:3, marginBottom:10 }}>
+                  {[1,2,3,4].map(s => (
+                    <div key={s} style={{ flex:1, height:3, borderRadius:2, background: simuStep >= s ? C.accent : C.border, transition:'background .2s' }} />
+                  ))}
+                </div>
+                <div style={{ fontSize:11, color:C.textSoft, marginBottom:14 }}>
+                  Étape {simuStep}/4 — {['Fiche CEE','Informations client','Informations du site','Résultats'][simuStep-1]}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
-                  <Field label="Hauteur" value={String(sForm.hauteur_m ?? '')} onChange={v => setS('hauteur_m', v)} type="number" placeholder="10" suffix="m" />
-                  <div>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .4 }}>Zone climatique</label>
-                    <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-                      {['H1', 'H2', 'H3'].map(z => (
-                        <button key={z} type="button" onClick={() => setS('zone_climatique', z)}
-                          style={{ flex: 1, padding: '8px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, background: sForm.zone_climatique === z ? '#EFF6FF' : C.bg, border: `1px solid ${sForm.zone_climatique === z ? C.accent : C.border}`, color: sForm.zone_climatique === z ? C.accent : C.textMid }}>
-                          {z}
+                {/* ── ÉTAPE 1 : Sélection fiche ── */}
+                {simuStep === 1 && (
+                  <>
+                    <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.textMid, marginBottom:8, textTransform:'uppercase', letterSpacing:.4 }}>① Choisir la fiche CEE</label>
+                    <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+                      {[
+                        { id: 'BAT-TH-142', label: '🏟️ BAT-TH-142', sub: 'Tertiaire' },
+                        { id: 'IND-BA-110', label: '🏭 IND-BA-110', sub: 'Industrie' },
+                      ].map(f => (
+                        <button key={f.id} type="button" onClick={() => switchFiche(f.id)}
+                          style={{ flex:1, padding:'14px 8px', borderRadius:10, cursor:'pointer', fontFamily:'inherit', textAlign:'center',
+                            background: sForm.fiche_cee === f.id ? C.accent : C.bg,
+                            border: `2px solid ${sForm.fiche_cee === f.id ? C.accent : C.border}`,
+                            color: sForm.fiche_cee === f.id ? '#fff' : C.textMid }}>
+                          <div style={{ fontSize:13, fontWeight:800 }}>{f.label}</div>
+                          <div style={{ fontSize:11, opacity:.8, marginTop:2 }}>{f.sub}</div>
                         </button>
                       ))}
                     </div>
-                  </div>
-                </div>
-
-                {/* Équipements convectifs */}
-                <div style={{ fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .4 }}>🌀 Chauffage convectif</div>
-                {(sForm.equipements_convectifs || []).map((eq, i) => {
-                  const upd = (patch) => setS('equipements_convectifs', sForm.equipements_convectifs.map((x, j) => j === i ? { ...x, ...patch } : x))
-                  return (
-                    <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                      <input value={eq.label ?? ''} onChange={e => upd({ label: e.target.value })}
-                        style={{ flex: 2, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
-                      <input type="number" value={eq.quantite ?? ''} onChange={e => upd({ quantite: e.target.value })}
-                        placeholder="Qté" style={{ width: 60, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 8px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
-                      <span style={{ fontSize: 11, color: C.textSoft }}>×</span>
-                      <input type="number" value={eq.puissance_unitaire_kw ?? eq.puissance_kw ?? ''} onChange={e => upd({ puissance_unitaire_kw: e.target.value, puissance_kw: undefined })}
-                        placeholder="kW" style={{ width: 72, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 8px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
-                      <button onClick={() => setS('equipements_convectifs', sForm.equipements_convectifs.filter((_, j) => j !== i))} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: '#EF4444', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>✕</button>
-                    </div>
-                  )
-                })}
-                <button onClick={() => setS('equipements_convectifs', [...(sForm.equipements_convectifs || []), { label: 'Équipement', quantite: '', puissance_unitaire_kw: '' }])}
-                  style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 14 }}>+ Ajouter convectif</button>
-
-                {/* Équipements radiatifs */}
-                <div style={{ fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .4 }}>☀️ Chauffage radiatif</div>
-                {(sForm.equipements_radiatifs || []).map((eq, i) => {
-                  const upd = (patch) => setS('equipements_radiatifs', sForm.equipements_radiatifs.map((x, j) => j === i ? { ...x, ...patch } : x))
-                  return (
-                    <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                      <input value={eq.label ?? ''} onChange={e => upd({ label: e.target.value })}
-                        style={{ flex: 2, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
-                      <input type="number" value={eq.quantite ?? ''} onChange={e => upd({ quantite: e.target.value })}
-                        placeholder="Qté" style={{ width: 60, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 8px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
-                      <span style={{ fontSize: 11, color: C.textSoft }}>×</span>
-                      <input type="number" value={eq.puissance_unitaire_kw ?? eq.puissance_kw ?? ''} onChange={e => upd({ puissance_unitaire_kw: e.target.value, puissance_kw: undefined })}
-                        placeholder="kW" style={{ width: 72, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 8px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
-                      <button onClick={() => setS('equipements_radiatifs', sForm.equipements_radiatifs.filter((_, j) => j !== i))} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: '#EF4444', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}>✕</button>
-                    </div>
-                  )
-                })}
-                <button onClick={() => setS('equipements_radiatifs', [...(sForm.equipements_radiatifs || []), { label: 'Équipement radiatif', quantite: '', puissance_unitaire_kw: '' }])}
-                  style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 14 }}>+ Ajouter radiatif</button>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
-                  <Field label="Nb déstratificateurs" value={String(sForm.nb_destrat ?? '')} onChange={v => setS('nb_destrat', v)} type="number" placeholder="Ex: 4" />
-                  <Field label="Coût unitaire destrat" value={String(sForm.cout_unitaire_destrat ?? '')} onChange={v => setS('cout_unitaire_destrat', v)} type="number" suffix="€" />
-                  <div style={{ gridColumn: '1/-1' }}>
-                    <Field label="Prix MWh" value={String(sForm.prix_mwh ?? '')} onChange={v => setS('prix_mwh', v)} type="number" suffix="€/MWh" />
-                  </div>
-                </div>
-
-                <button onClick={calculerSimuLocal}
-                  style={{ width: '100%', padding: '10px', background: C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginBottom: simuResult ? 12 : 0 }}>
-                  Recalculer ⟳
-                </button>
-                {simuResult && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
-                    {[
-                      { label: 'kWh cumac', value: `${simuResult.kwhCumac?.toLocaleString('fr')} kWh`, color: '#94A3B8' },
-                      { label: '⚡ MWh cumac', value: `${simuResult.mwh} MWh`, color: C.accent },
-                      { label: '💶 Prime CEE', value: `${simuResult.prime.toLocaleString('fr')} €`, color: '#7C3AED' },
-                      { label: '🔧 Coût prestation', value: `${simuResult.coutTotal.toLocaleString('fr')} €`, color: '#D97706' },
-                      { label: simuResult.rentable ? '✅ Marge nette' : '❌ Marge nette', value: `${simuResult.marge.toLocaleString('fr')} €`, color: simuResult.rentable ? '#16A34A' : '#DC2626' },
-                    ].map(item => (
-                      <div key={item.label} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px' }}>
-                        <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 3 }}>{item.label}</div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: item.color }}>{item.value}</div>
-                      </div>
-                    ))}
-                  </div>
+                    {sForm.fiche_cee && (
+                      <button onClick={() => setSimuStep(2)}
+                        style={{ width:'100%', padding:'10px', background:C.accent, border:'none', color:'#fff', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                        Suivant →
+                      </button>
+                    )}
+                  </>
                 )}
+
+                {/* ── ÉTAPE 2 : Informations client ── */}
+                {simuStep === 2 && (
+                  <>
+                    <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.textMid, marginBottom:8, textTransform:'uppercase', letterSpacing:.4 }}>② Informations client</label>
+
+                    {/* Zone climatique — commun aux deux fiches */}
+                    <div style={{ marginBottom:14 }}>
+                      <label style={{ display:'block', fontSize:11, fontWeight:600, color:C.textMid, marginBottom:4, textTransform:'uppercase', letterSpacing:.4 }}>Zone climatique</label>
+                      <div style={{ display:'flex', gap:6 }}>
+                        {['H1','H2','H3'].map(z => (
+                          <button key={z} type="button" onClick={() => setS('zone_climatique', z)}
+                            style={{ flex:1, padding:'10px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight:700,
+                              background: sForm.zone_climatique === z ? '#EFF6FF' : C.bg,
+                              border: `1px solid ${sForm.zone_climatique === z ? C.accent : C.border}`,
+                              color: sForm.zone_climatique === z ? C.accent : C.textMid }}>{z}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Type local — BAT-TH-142 uniquement */}
+                    {sForm.fiche_cee === 'BAT-TH-142' && (
+                      <div style={{ marginBottom:14 }}>
+                        <label style={{ display:'block', fontSize:11, fontWeight:600, color:C.textMid, marginBottom:4, textTransform:'uppercase', letterSpacing:.4 }}>Type de local</label>
+                        <div style={{ display:'flex', gap:6 }}>
+                          {[{ id:'sport_transport', label:'🏟️ Sport / Transport' }, { id:'commerce_loisirs', label:'🏬 Commerce / Loisirs' }].map(t => (
+                            <button key={t.id} type="button" onClick={() => setS('type_local', t.id)}
+                              style={{ flex:1, padding:'9px 6px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:600,
+                                background: sForm.type_local === t.id ? '#EFF6FF' : C.bg,
+                                border: `1px solid ${sForm.type_local === t.id ? C.accent : C.border}`,
+                                color: sForm.type_local === t.id ? C.accent : C.textMid }}>
+                              {t.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ display:'flex', gap:6, marginTop:4 }}>
+                      <button onClick={() => setSimuStep(1)}
+                        style={{ flex:1, padding:'9px', background:'transparent', border:`1px solid ${C.border}`, color:C.textMid, borderRadius:8, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>← Retour</button>
+                      <button onClick={() => setSimuStep(3)} disabled={!sForm.zone_climatique}
+                        style={{ flex:2, padding:'9px', background: sForm.zone_climatique ? C.accent : C.border, border:'none', color:'#fff', borderRadius:8, fontSize:13, fontWeight:700, cursor: sForm.zone_climatique ? 'pointer' : 'not-allowed', fontFamily:'inherit' }}>
+                        Suivant →
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {/* ── ÉTAPE 3 : Informations du site ── */}
+                {simuStep === 3 && (
+                  <>
+                    <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.textMid, marginBottom:8, textTransform:'uppercase', letterSpacing:.4 }}>③ Informations du site</label>
+
+                    {/* BAT-TH-142 : hauteur */}
+                    {sForm.fiche_cee === 'BAT-TH-142' && (
+                      <Field label="Hauteur sous plafond" value={String(sForm.hauteur_m ?? '')} onChange={v => setS('hauteur_m', v)} type="number" placeholder="Ex: 10" suffix="m" />
+                    )}
+
+                    {/* IND-BA-110 : surface + hauteur + débit */}
+                    {sForm.fiche_cee === 'IND-BA-110' && <>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
+                        <Field label="Surface" value={String(sForm.surface_m2??'')} onChange={v=>setS('surface_m2',v)} type="number" placeholder="Ex: 2000" suffix="m²"/>
+                        <Field label="Hauteur" value={String(sForm.hauteur_m??'')} onChange={v=>setS('hauteur_m',v)} type="number" placeholder="Ex: 8" suffix="m"/>
+                      </div>
+                      <div style={{ marginBottom:14 }}>
+                        <label style={{ display:'block', fontSize:11, fontWeight:600, color:C.textMid, marginBottom:6, textTransform:'uppercase', letterSpacing:.4 }}>Débit unitaire destrat</label>
+                        <div style={{ display:'flex', gap:6 }}>
+                          {[{id:'14000',label:'14 000 m³/h'},{id:'8500',label:'8 500 m³/h'}].map(d=>(
+                            <button key={d.id} type="button" onClick={()=>setS('debit_unitaire',d.id)}
+                              style={{flex:1,padding:'8px',borderRadius:7,cursor:'pointer',fontFamily:'inherit',fontSize:12,fontWeight:600,
+                                background:sForm.debit_unitaire===d.id?'#EFF6FF':C.bg,
+                                border:`1px solid ${sForm.debit_unitaire===d.id?C.accent:C.border}`,
+                                color:sForm.debit_unitaire===d.id?C.accent:C.textMid}}>
+                              {d.label}
+                            </button>
+                          ))}
+                        </div>
+                        {sForm.surface_m2 && sForm.hauteur_m && (
+                          <div style={{marginTop:6,fontSize:11,color:C.textMid}}>
+                            → Nb destrats estimé : <strong>{Math.ceil((parseFloat(sForm.surface_m2)*parseFloat(sForm.hauteur_m)*0.7)/parseFloat(sForm.debit_unitaire||14000))}</strong>
+                          </div>
+                        )}
+                      </div>
+                    </>}
+
+                    {/* Équipements convectifs */}
+                    <div style={{ fontSize:11, fontWeight:600, color:C.textMid, marginBottom:4, textTransform:'uppercase', letterSpacing:.4 }}>🌀 Chauffage convectif</div>
+                    {(sForm.eqs_conv || []).map((eq, i) => {
+                      const upd = p => setS('eqs_conv', sForm.eqs_conv.map((x,j) => j===i ? {...x,...p} : x))
+                      return (
+                        <div key={i} style={{ display:'flex', gap:6, marginBottom:6, alignItems:'center' }}>
+                          <input value={eq.label??''} onChange={e=>upd({label:e.target.value})} style={{flex:2,background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:'7px 10px',color:C.text,fontSize:12,outline:'none',fontFamily:'inherit'}}/>
+                          <input type="number" value={eq.quantite??''} onChange={e=>upd({quantite:e.target.value})} placeholder="Qté" style={{width:60,background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:'7px 8px',color:C.text,fontSize:12,outline:'none',fontFamily:'inherit'}}/>
+                          <span style={{fontSize:11,color:C.textSoft}}>×</span>
+                          <input type="number" value={eq.puissance_unitaire_kw??''} onChange={e=>upd({puissance_unitaire_kw:e.target.value})} placeholder="kW" style={{width:72,background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:'7px 8px',color:C.text,fontSize:12,outline:'none',fontFamily:'inherit'}}/>
+                          <button onClick={()=>setS('eqs_conv',sForm.eqs_conv.filter((_,j)=>j!==i))} style={{background:'transparent',border:`1px solid ${C.border}`,color:'#EF4444',borderRadius:6,padding:'4px 8px',fontSize:11,cursor:'pointer'}}>✕</button>
+                        </div>
+                      )
+                    })}
+                    <button onClick={()=>setS('eqs_conv',[...(sForm.eqs_conv||[]),{label:'Chaudière aérothermique',quantite:'',puissance_unitaire_kw:''}])}
+                      style={{background:'transparent',border:`1px solid ${C.border}`,color:C.textMid,borderRadius:6,padding:'4px 10px',fontSize:11,cursor:'pointer',fontFamily:'inherit',marginBottom:14}}>+ Ajouter convectif</button>
+
+                    {/* Équipements radiatifs */}
+                    <div style={{ fontSize:11, fontWeight:600, color:C.textMid, marginBottom:4, textTransform:'uppercase', letterSpacing:.4 }}>☀️ Chauffage radiatif</div>
+                    {(sForm.eqs_rad || []).map((eq, i) => {
+                      const upd = p => setS('eqs_rad', sForm.eqs_rad.map((x,j) => j===i ? {...x,...p} : x))
+                      return (
+                        <div key={i} style={{ display:'flex', gap:6, marginBottom:6, alignItems:'center' }}>
+                          <input value={eq.label??''} onChange={e=>upd({label:e.target.value})} style={{flex:2,background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:'7px 10px',color:C.text,fontSize:12,outline:'none',fontFamily:'inherit'}}/>
+                          <input type="number" value={eq.quantite??''} onChange={e=>upd({quantite:e.target.value})} placeholder="Qté" style={{width:60,background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:'7px 8px',color:C.text,fontSize:12,outline:'none',fontFamily:'inherit'}}/>
+                          <span style={{fontSize:11,color:C.textSoft}}>×</span>
+                          <input type="number" value={eq.puissance_unitaire_kw??''} onChange={e=>upd({puissance_unitaire_kw:e.target.value})} placeholder="kW" style={{width:72,background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:'7px 8px',color:C.text,fontSize:12,outline:'none',fontFamily:'inherit'}}/>
+                          <button onClick={()=>setS('eqs_rad',sForm.eqs_rad.filter((_,j)=>j!==i))} style={{background:'transparent',border:`1px solid ${C.border}`,color:'#EF4444',borderRadius:6,padding:'4px 8px',fontSize:11,cursor:'pointer'}}>✕</button>
+                        </div>
+                      )
+                    })}
+                    <button onClick={()=>setS('eqs_rad',[...(sForm.eqs_rad||[]),{label:'Équipement radiatif',quantite:'',puissance_unitaire_kw:''}])}
+                      style={{background:'transparent',border:`1px solid ${C.border}`,color:C.textMid,borderRadius:6,padding:'4px 10px',fontSize:11,cursor:'pointer',fontFamily:'inherit',marginBottom:14}}>+ Ajouter radiatif</button>
+
+                    {/* Destrat + prix */}
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
+                      <Field label="Nb déstratificateurs" value={String(sForm.nb_destrat??'')} onChange={v=>setS('nb_destrat',v)} type="number" placeholder="Ex: 4"/>
+                      <Field label="Coût unitaire destrat" value={String(sForm.cout_unitaire_destrat??'')} onChange={v=>setS('cout_unitaire_destrat',v)} type="number" suffix="€"/>
+                      <div style={{gridColumn:'1/-1'}}><Field label="Prix MWh" value={String(sForm.prix_mwh??'')} onChange={v=>setS('prix_mwh',v)} type="number" suffix="€/MWh"/></div>
+                    </div>
+
+                    <div style={{ display:'flex', gap:6, marginTop:4 }}>
+                      <button onClick={() => setSimuStep(2)}
+                        style={{ flex:1, padding:'9px', background:'transparent', border:`1px solid ${C.border}`, color:C.textMid, borderRadius:8, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>← Retour</button>
+                      <button onClick={() => { setSimuResult(null); setSimuStep(4) }}
+                        style={{ flex:2, padding:'9px', background:C.accent, border:'none', color:'#fff', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                        Suivant →
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {/* ── ÉTAPE 4 : Résultats ── */}
+                {simuStep === 4 && (
+                  <>
+                    <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.textMid, marginBottom:8, textTransform:'uppercase', letterSpacing:.4 }}>④ Résultats</label>
+
+                    {/* Récap fiche + zone */}
+                    <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px 14px', marginBottom:14, fontSize:12, color:C.textMid }}>
+                      <span style={{ fontWeight:700, color:C.text }}>{sForm.fiche_cee}</span>
+                      {' · '}Zone <strong>{sForm.zone_climatique || '—'}</strong>
+                      {sForm.fiche_cee === 'BAT-TH-142' && <> · <strong>{sForm.type_local === 'sport_transport' ? 'Sport/Transport' : 'Commerce/Loisirs'}</strong></>}
+                      {' · '}Hauteur <strong>{sForm.hauteur_m || '—'} m</strong>
+                      <br/>
+                      <span>Convectif : <strong>{(sForm.eqs_conv||[]).reduce((s,e)=>s+eqPuissance(e),0).toFixed(1)} kW</strong></span>
+                      {' · '}
+                      <span>Radiatif : <strong>{(sForm.eqs_rad||[]).reduce((s,e)=>s+eqPuissance(e),0).toFixed(1)} kW</strong></span>
+                    </div>
+
+                    <button onClick={calculerSimuLocal}
+                      style={{ width:'100%', padding:'10px', background:C.accent, border:'none', color:'#fff', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit', marginBottom: simuResult ? 12 : 0 }}>
+                      Calculer ⟳
+                    </button>
+
+                    {simuResult && (
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginTop:12 }}>
+                        {[
+                          { label: 'kWh cumac',    value: `${simuResult.kwhCumac?.toLocaleString('fr')} kWh`, color: '#94A3B8' },
+                          { label: '⚡ MWh cumac',  value: `${simuResult.mwh} MWh`,                           color: C.accent  },
+                          { label: '💶 Prime CEE',  value: `${simuResult.prime.toLocaleString('fr')} €`,       color: '#7C3AED' },
+                          { label: '🔧 Coût',       value: `${simuResult.coutTotal.toLocaleString('fr')} €`,   color: '#D97706' },
+                          { label: simuResult.rentable ? '✅ Marge nette' : '❌ Marge nette',
+                            value: `${simuResult.marge.toLocaleString('fr')} €`,
+                            color: simuResult.rentable ? '#16A34A' : '#DC2626' },
+                        ].map(item => (
+                          <div key={item.label} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px 12px' }}>
+                            <div style={{ fontSize:10, color:C.textSoft, marginBottom:3 }}>{item.label}</div>
+                            <div style={{ fontSize:16, fontWeight:800, color:item.color }}>{item.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div style={{ display:'flex', gap:6, marginTop:12 }}>
+                      <button onClick={() => setSimuStep(3)}
+                        style={{ flex:1, padding:'9px', background:'transparent', border:`1px solid ${C.border}`, color:C.textMid, borderRadius:8, fontSize:12, cursor:'pointer', fontFamily:'inherit' }}>← Retour</button>
+                    </div>
+                  </>
+                )}
+
               </div>
             )}
           </div>
