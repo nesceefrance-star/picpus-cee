@@ -8,6 +8,14 @@ import DossierDetail from './pages/DossierDetail'
 import AdminUsers from './pages/AdminUsers'
 import ResetPassword from './pages/ResetPassword'
 import PICPUSHub from './Hub'
+import AppLayout from './components/AppLayout'
+import { createTheme, ThemeProvider } from '@mui/material/styles'
+import CssBaseline from '@mui/material/CssBaseline'
+
+const muiTheme = createTheme({
+  palette: { mode: 'dark', primary: { main: '#3B82F6' }, background: { default: '#0F172A', paper: '#1E293B' } },
+  typography: { fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" },
+})
 
 function AuthGuard({ children }) {
   const { session, setSession, fetchProfile } = useStore()
@@ -56,18 +64,29 @@ function AuthGuard({ children }) {
   return children
 }
 
+function WithLayout({ children }) {
+  return (
+    <AuthGuard>
+      <AppLayout>{children}</AppLayout>
+    </AuthGuard>
+  )
+}
+
 export default function AppRouter() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/" element={<AuthGuard><Dashboard /></AuthGuard>} />
-        <Route path="/hub" element={<AuthGuard><PICPUSHub /></AuthGuard>} />
-        <Route path="/dossier/:id" element={<AuthGuard><DossierDetail /></AuthGuard>} />
-        <Route path="/admin/users" element={<AuthGuard><AdminUsers /></AuthGuard>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <ThemeProvider theme={muiTheme}>
+      <CssBaseline />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login"          element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/"               element={<WithLayout><Dashboard /></WithLayout>} />
+          <Route path="/hub"            element={<WithLayout><PICPUSHub /></WithLayout>} />
+          <Route path="/dossier/:id"    element={<WithLayout><DossierDetail /></WithLayout>} />
+          <Route path="/admin/users"    element={<WithLayout><AdminUsers /></WithLayout>} />
+          <Route path="*"               element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
   )
 }
