@@ -1,6 +1,8 @@
 import { useState, useRef, useMemo, forwardRef, useCallback, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { supabase } from "./lib/supabase";
+import { PDFViewer, pdf } from "@react-pdf/renderer";
+import { DevisPDFDoc } from "./components/DevisPDF";
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 const fmt  = n => Number(n||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -769,6 +771,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
   const [devis, setDevis] = useState(devisInit);
   const [tab, setTab]     = useState("marges");
   const [editInfo, setEditInfo] = useState(false);
+  const [editParams, setEditParams] = useState(false);
   const printRef = useRef();
 
   const lignes   = devis.lignes;
@@ -832,40 +835,26 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
   const exportPDF = async () => {
     setExporting(true);
     try {
-      await Promise.all([
-        loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"),
-        loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"),
-      ]);
-      const { jsPDF } = window.jspdf;
-      const el = printRef.current;
-      if (!el) return;
-
-      // Force visible temporairement si nécessaire
-      const pages = el.querySelectorAll(":scope > div");
-      const pdf = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
-      const A4W = 210, A4H = 297;
-
-      for (let i = 0; i < pages.length; i++) {
-        const canvas = await window.html2canvas(pages[i], {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: "#ffffff",
-          width: pages[i].scrollWidth,
-          height: pages[i].scrollHeight,
-        });
-        const imgData = canvas.toDataURL("image/jpeg", 0.92);
-        const ratio = canvas.height / canvas.width;
-        const imgH = A4W * ratio;
-
-        if (i > 0) pdf.addPage();
-        // Si la page est plus haute que A4, on la compresse
-        if (imgH <= A4H) {
-          pdf.addImage(imgData, "JPEG", 0, 0, A4W, imgH);
-        } else {
-          pdf.addImage(imgData, "JPEG", 0, 0, A4W, A4H);
-        }
-      }
-      pdf.save(`Devis_${devis.nomClient}_${devis.refDevis}.pdf`);
+      const doc = (
+        <DevisPDFDoc
+          devis={devis}
+          lignes={actives}
+          cats={cats}
+          batPuVente={batPuVente}
+          batQte={batQte}
+          primeFaciale={stats.effectivePrimeFaciale}
+          primeCEESimu={primeCEESimu}
+          stats={stats}
+          params={devis.pdfParams || {}}
+        />
+      );
+      const blob = await pdf(doc).toBlob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `Devis_${devis.nomClient || "client"}_${devis.refDevis || "ref"}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch(e) {
       alert("Erreur export PDF : " + e.message);
     }
@@ -904,6 +893,10 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
               {l}
             </button>
           ))}
+          <button onClick={() => setEditParams(true)}
+            style={{background:C.bg,color:C.textMid,border:`1px solid ${C.border}`,borderRadius:7,padding:"6px 14px",fontSize:13,cursor:"pointer"}}>
+            ⚙ Paramètres PDF
+          </button>
           <button onClick={exportPDF} disabled={exporting}
             style={{background:exporting?"#94A3B8":"#16A34A",color:"#fff",border:"none",borderRadius:7,padding:"6px 16px",fontSize:13,fontWeight:700,cursor:exporting?"not-allowed":"pointer"}}>
             {exporting ? "⏳ Export..." : "⬇ PDF"}
@@ -1095,15 +1088,36 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
           </div>
         </div>
 
-        {/* APERÇU DEVIS */}
-        <div style={{flex:1,overflow:"auto",background:"#E2E8F0",display:"flex",flexDirection:"column",alignItems:"center",padding:"16px 12px",gap:0}}>
-          <DevisPreviewDyn ref={printRef} devis={devis} lignes={actives} cats={cats} batPuVente={batPuVente} batQte={batQte} primeFaciale={stats.effectivePrimeFaciale} primeCEESimu={primeCEESimu} stats={stats}/>
+        {/* APERÇU DEVIS — PDFViewer react-pdf */}
+        <div style={{flex:1,overflow:"hidden",background:"#E2E8F0",display:"flex",flexDirection:"column"}}>
+          <PDFViewer width="100%" height="100%" style={{border:"none"}}>
+            <DevisPDFDoc
+              devis={devis}
+              lignes={actives}
+              cats={cats}
+              batPuVente={batPuVente}
+              batQte={batQte}
+              primeFaciale={stats.effectivePrimeFaciale}
+              primeCEESimu={primeCEESimu}
+              stats={stats}
+              params={devis.pdfParams || {}}
+            />
+          </PDFViewer>
         </div>
       </div>
 
       {/* Modal edit infos */}
       {editInfo && (
         <ModalEditInfo devis={devis} onSave={updates => { setDevis(d => ({...d,...updates,updatedAt:Date.now()})); setEditInfo(false); }} onCancel={() => setEditInfo(false)}/>
+      )}
+
+      {/* Modal paramètres PDF */}
+      {editParams && (
+        <ModalPDFParams
+          params={devis.pdfParams || {}}
+          onSave={p => { setDevis(d => ({...d, pdfParams: p, updatedAt: Date.now()})); setEditParams(false); }}
+          onCancel={() => setEditParams(false)}
+        />
       )}
     </div>
   );
@@ -1152,6 +1166,90 @@ function ModalEditInfo({ devis, onSave, onCancel }) {
         <div style={{display:"flex",gap:10}}>
           <button onClick={onCancel} style={{flex:1,padding:"11px",background:"transparent",border:`1px solid ${C.border}`,color:C.textMid,borderRadius:8,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
           <button onClick={() => onSave(form)} style={{flex:2,padding:"11px",background:C.accent,border:"none",color:"#fff",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Enregistrer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal paramètres PDF ────────────────────────────────────────────────────
+function ModalPDFParams({ params, onSave, onCancel }) {
+  const [form, setForm] = useState({
+    societeNom:      params.societeNom      || "AF2E",
+    societeAdresse:  params.societeAdresse  || "2 Rue de la Darse — 94600 Choisy le Roi",
+    societeSiret:    params.societeSiret    || "881 279 665 00023",
+    societeTVA:      params.societeTVA      || "FR 238 812 796 65",
+    numeroRGE:       params.numeroRGE       || "PICPUS ENERGIE000114876",
+    validiteJours:   params.validiteJours   || 30,
+    condPaiement:    params.condPaiement    || "Règlement comptant à réception de facture. Pénalités au taux légal + 5 points (art. L.441-10 Code de commerce). Indemnité forfaitaire 40 €.",
+    mentionCEE:      params.mentionCEE      || "",
+    cgv:             params.cgv             || "",
+    mentionLegale:   params.mentionLegale   || "",
+  });
+  const set = (k, v) => setForm(f => ({...f, [k]: v}));
+  const F = {width:"100%",boxSizing:"border-box",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit"};
+  const L = {display:"block",fontSize:11,fontWeight:600,color:C.textMid,marginBottom:4,textTransform:"uppercase",letterSpacing:.4};
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={onCancel}>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"28px 32px",width:620,maxHeight:"88vh",overflowY:"auto",boxShadow:"0 25px 60px rgba(0,0,0,.4)"}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:6}}>⚙️ Paramètres du PDF</div>
+        <div style={{fontSize:12,color:C.textSoft,marginBottom:20}}>Ces réglages s'appliquent à l'aperçu et à l'export — ils sont sauvegardés avec le devis.</div>
+
+        <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:10,borderBottom:`2px solid ${C.accent}`,paddingBottom:4}}>Société émettrice</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
+          {[
+            {l:"Nom société",k:"societeNom",ph:"AF2E"},
+            {l:"N° document / RGE",k:"numeroRGE",ph:"PICPUS ENERGIE000114876"},
+            {l:"Adresse",k:"societeAdresse",ph:"2 Rue de la Darse...",full:true},
+            {l:"SIRET",k:"societeSiret",ph:"881 279 665 00023"},
+            {l:"N° TVA intracommunautaire",k:"societeTVA",ph:"FR 238 812 796 65"},
+          ].map(f=>(
+            <div key={f.k} style={{gridColumn:f.full?"1/-1":"auto"}}>
+              <label style={L}>{f.l}</label>
+              <input value={form[f.k]} onChange={e=>set(f.k,e.target.value)} placeholder={f.ph} style={F}/>
+            </div>
+          ))}
+        </div>
+
+        <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:10,borderBottom:`2px solid ${C.accent}`,paddingBottom:4}}>Conditions commerciales</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
+          <div>
+            <label style={L}>Validité (jours)</label>
+            <input type="number" value={form.validiteJours} onChange={e=>set("validiteJours",Number(e.target.value))} style={F}/>
+          </div>
+          <div style={{gridColumn:"1/-1"}}>
+            <label style={L}>Conditions de paiement</label>
+            <textarea value={form.condPaiement} onChange={e=>set("condPaiement",e.target.value)} rows={2}
+              style={{...F,resize:"vertical"}}/>
+          </div>
+        </div>
+
+        <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:10,borderBottom:`2px solid ${C.accent}`,paddingBottom:4}}>Mentions &amp; CGV</div>
+        <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:20}}>
+          <div>
+            <label style={L}>Mention CEE (page 2) — laisser vide pour la mention par défaut</label>
+            <textarea value={form.mentionCEE} onChange={e=>set("mentionCEE",e.target.value)} rows={3}
+              placeholder="Les travaux objet du présent document donneront lieu..."
+              style={{...F,resize:"vertical"}}/>
+          </div>
+          <div>
+            <label style={L}>Conditions Générales de Vente (optionnel)</label>
+            <textarea value={form.cgv} onChange={e=>set("cgv",e.target.value)} rows={4}
+              placeholder="Article 1 — Objet..."
+              style={{...F,resize:"vertical"}}/>
+          </div>
+          <div>
+            <label style={L}>Mentions légales supplémentaires (optionnel)</label>
+            <textarea value={form.mentionLegale} onChange={e=>set("mentionLegale",e.target.value)} rows={3}
+              placeholder="Assurance décennale n°..."
+              style={{...F,resize:"vertical"}}/>
+          </div>
+        </div>
+
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onCancel} style={{flex:1,padding:"11px",background:"transparent",border:`1px solid ${C.border}`,color:C.textMid,borderRadius:8,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
+          <button onClick={() => onSave(form)} style={{flex:2,padding:"11px",background:C.accent,border:"none",color:"#fff",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Appliquer</button>
         </div>
       </div>
     </div>
@@ -1570,8 +1668,14 @@ export default function PICPUSHub() {
   const location = useLocation();
   const { module: initModule, prefill: initPrefill } = location.state || {};
   const [page, setPage] = useState(initModule || null);
-  const [prefill] = useState(initPrefill || null);
+  const [prefill, setPrefill] = useState(initPrefill || null);
   const current = page && MODULES.find(m=>m.id===page);
+
+  // Sync quand on navigue vers /hub depuis la sidebar (même composant, state différent)
+  useEffect(() => {
+    const { module: m, prefill: p } = location.state || {};
+    if (m) { setPage(m); setPrefill(p || null); }
+  }, [location.state]);
 
   // Vue module
   if (page && renderModule(page, prefill)) return (

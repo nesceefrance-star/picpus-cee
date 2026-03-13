@@ -64,7 +64,7 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
   }
 
   const go = (path, module) => {
-    if (module) navigate(path, { state: { module } })
+    if (module) navigate(path, { state: { module }, replace: currentPath === path })
     else navigate(path)
     onMobileClose?.()
   }
