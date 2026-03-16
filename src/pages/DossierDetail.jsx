@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import useStore from '../store/useStore'
+import { refDefault } from '../lib/genRef'
 
 // ── IND-BA-110 ADEME coefficients (kWh cumac / kW) ────────────────────────
 const COEFFICIENTS_IND_110 = {
@@ -656,7 +657,7 @@ export default function DossierDetail() {
                           adresseSite: [dossier.prospects?.adresse, dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(', '),
                           nomContact: dossier.prospects?.contact_nom || '',
                           fonctionContact: '',
-                          refDevis: dossier.ref || `PICPUS-${Date.now().toString().slice(-6)}`,
+                          refDevis: dossier.ref || refDefault(),
                           dateDevis: new Date().toLocaleDateString('fr-FR'),
                           prime: sim.prime_estimee || 0,
                           batQte: sim.nb_equipements || 0,

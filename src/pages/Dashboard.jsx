@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useStore from '../store/useStore'
 import NouveauDossierWizard from '../components/NouveauDossierWizard'
+import { nextRef } from '../lib/genRef'
 
 const STATUTS = [
   { id: 'simulation',  label: 'Simulation',   color: '#7C3AED', bg: '#EDE9FE' },
@@ -190,7 +191,7 @@ function NouveauDossierModal({ onClose, onCreate }) {
       fiche_cee: form.fiche_cee,
       statut: 'simulation',
       assigne_a: user?.id,
-      ref: `PICPUS-${Date.now().toString().slice(-6)}`,
+      ref: await nextRef('dossiers', 'ref'),
     })
     setLoading(false)
     onCreate(dossier)

@@ -101,7 +101,7 @@ function Header({ devis, params }) {
           <Text style={s.devisRef}>Devis {devis.refDevis || '—'}</Text>
           <Text style={s.devisMeta}>
             Date : {devis.dateDevis || '—'}{'\n'}
-            N° {params.numeroRGE || 'PICPUS ENERGIE000114876'}
+            {params.numeroRGE ? `N° ${params.numeroRGE}` : ''}
           </Text>
         </View>
       </View>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import useStore from '../store/useStore'
+import { nextRef } from '../lib/genRef'
 
 // ── Fiches CEE disponibles ────────────────────────────────────────────────────
 // ── Fiches CEE disponibles — ajouter ici les nouvelles fiches au fil du temps ─
@@ -443,7 +444,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
       if (e1) throw new Error(e1.message || e1.details || JSON.stringify(e1))
       if (!prospect) throw new Error('Prospect non créé (vérifiez les permissions Supabase)')
 
-      const ref = `PICPUS-${Date.now().toString().slice(-6)}`
+      const ref = await nextRef('dossiers', 'ref')
       const { data: dossier, error: e2 } = await createDossier({
         prospect_id: prospect.id,
         fiche_cee: tech.fiche_cee,

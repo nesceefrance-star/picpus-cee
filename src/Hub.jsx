@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, forwardRef, useCallback, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { supabase } from "./lib/supabase";
+import { refDefault, nextRef } from "./lib/genRef";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { DevisPDFDoc } from "./components/DevisPDF";
 
@@ -200,7 +201,7 @@ Structure: {"avis_global":"CONFORME|ATTENTION|BLOQUANT","resume":"synthèse 2-3 
             <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"18px",marginBottom:16,display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
               <div>
                 <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text,marginBottom:5}}>Référence dossier</label>
-                <input value={ref_} onChange={e=>setRef_(e.target.value)} placeholder="PICPUS ENERGIE000114876" style={{width:"100%",border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+                <input value={ref_} onChange={e=>setRef_(e.target.value)} placeholder="ex : référence dossier" style={{width:"100%",border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",boxSizing:"border-box"}}/>
               </div>
               <div>
                 <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text,marginBottom:5}}>Fiche CEE</label>
@@ -519,7 +520,8 @@ function ModalNouveauDevis({ onConfirm, onCancel }) {
   const [nomClient, setNomClient]   = useState("");
   const [siret, setSiret]           = useState("");
   const [adresseSite, setAdresseSite] = useState("");
-  const [refDevis, setRefDevis]     = useState("2025-" + String(Date.now()).slice(-6));
+  const [refDevis, setRefDevis]     = useState(refDefault);
+  useEffect(() => { nextRef('devis_hub', 'ref_devis').then(setRefDevis).catch(() => {}) }, []);
   const [dateDevis, setDateDevis]   = useState(new Date().toLocaleDateString("fr-FR"));
   const [nomContact, setNomContact] = useState("");
   const [fonctionContact, setFonctionContact] = useState("");
@@ -1179,7 +1181,7 @@ function ModalPDFParams({ params, onSave, onCancel }) {
     societeAdresse:  params.societeAdresse  || "2 Rue de la Darse — 94600 Choisy le Roi",
     societeSiret:    params.societeSiret    || "881 279 665 00023",
     societeTVA:      params.societeTVA      || "FR 238 812 796 65",
-    numeroRGE:       params.numeroRGE       || "PICPUS ENERGIE000114876",
+    numeroRGE:       params.numeroRGE       || "",
     validiteJours:   params.validiteJours   || 30,
     condPaiement:    params.condPaiement    || "Règlement comptant à réception de facture. Pénalités au taux légal + 5 points (art. L.441-10 Code de commerce). Indemnité forfaitaire 40 €.",
     mentionCEE:      params.mentionCEE      || "",
@@ -1200,7 +1202,7 @@ function ModalPDFParams({ params, onSave, onCancel }) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
           {[
             {l:"Nom société",k:"societeNom",ph:"AF2E"},
-            {l:"N° document / RGE",k:"numeroRGE",ph:"PICPUS ENERGIE000114876"},
+            {l:"N° document / RGE",k:"numeroRGE",ph:"000114876"},
             {l:"Adresse",k:"societeAdresse",ph:"2 Rue de la Darse...",full:true},
             {l:"SIRET",k:"societeSiret",ph:"881 279 665 00023"},
             {l:"N° TVA intracommunautaire",k:"societeTVA",ph:"FR 238 812 796 65"},
@@ -1271,7 +1273,7 @@ const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVent
         </div>
         <div style={{textAlign:"right"}}>
           <div style={{fontSize:10,fontWeight:800,color:"#111"}}>Devis {devis.refDevis||"—"}</div>
-          <div style={{fontSize:7,color:"#555",marginTop:2,lineHeight:1.7}}>Date : {devis.dateDevis||"—"} — N° PICPUS ENERGIE000114876</div>
+          <div style={{fontSize:7,color:"#555",marginTop:2,lineHeight:1.7}}>Date : {devis.dateDevis||"—"}{devis.numeroRGE ? ` — N° ${devis.numeroRGE}` : ""}</div>
         </div>
       </div>
       <HR/>
