@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import useStore from '../store/useStore'
@@ -153,6 +153,16 @@ export default function DossierDetail() {
   const [simuStep, setSimuStep] = useState(1)
   const [sForm, setSForm] = useState({})
   const setS = (k, v) => setSForm(f => ({ ...f, [k]: v }))
+
+  // Documents
+  const [documents, setDocuments] = useState([])
+  const [docsLoading, setDocsLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef(null)
+  const [renamingDoc, setRenamingDoc] = useState(null)
+  const [renameValue, setRenameValue] = useState('')
   const [simuResult, setSimuResult] = useState(null)
   const [savingSimu, setSavingSimu] = useState(false)
 
@@ -182,7 +192,58 @@ export default function DossierDetail() {
   useEffect(() => {
     fetchProfiles()
     loadData()
+    loadDocuments()
   }, [id])
+
+  const BUCKET = 'dossier-documents'
+
+  const loadDocuments = async () => {
+    setDocsLoading(true)
+    const { data, error } = await supabase.storage.from(BUCKET).list(id, { sortBy: { column: 'created_at', order: 'desc' } })
+    if (error) console.error('[Documents] list error:', error)
+    if (!error && data) setDocuments(data.filter(f => f.name !== '.emptyFolderPlaceholder'))
+    setDocsLoading(false)
+  }
+
+  const uploadFiles = async (files) => {
+    if (!files?.length) return
+    setUploading(true)
+    setUploadError(null)
+    const errors = []
+    for (const file of Array.from(files)) {
+      const safeName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+      const { error } = await supabase.storage.from(BUCKET).upload(`${id}/${safeName}`, file, { upsert: true })
+      if (error) errors.push(`${file.name} : ${error.message}`)
+    }
+    if (errors.length) setUploadError(errors.join('\n'))
+    // Reset input pour permettre de re-uploader le même fichier
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    await loadDocuments()
+    setUploading(false)
+  }
+
+  const deleteDocument = async (fileName) => {
+    if (!window.confirm(`Supprimer « ${fileName} » ?`)) return
+    await supabase.storage.from(BUCKET).remove([`${id}/${fileName}`])
+    setDocuments(d => d.filter(f => f.name !== fileName))
+  }
+
+  const downloadDocument = async (fileName) => {
+    const { data } = await supabase.storage.from(BUCKET).createSignedUrl(`${id}/${fileName}`, 60)
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+  }
+
+  const renameDocument = async (oldFileName, newDisplayName) => {
+    const trimmed = newDisplayName.trim()
+    if (!trimmed) return
+    const ext = oldFileName.includes('.') ? oldFileName.split('.').pop() : ''
+    const baseName = trimmed.includes('.') ? trimmed : ext ? `${trimmed}.${ext}` : trimmed
+    const safeName = baseName.replace(/[^a-zA-Z0-9._\- ]/g, '_')
+    const { error } = await supabase.storage.from(BUCKET).move(`${id}/${oldFileName}`, `${id}/${safeName}`)
+    if (error) { setUploadError(`Renommage : ${error.message}`); return }
+    setRenamingDoc(null)
+    await loadDocuments()
+  }
 
   const loadData = async () => {
     setLoading(true)
@@ -415,9 +476,9 @@ export default function DossierDetail() {
   const simParams = sim?.parametres || {}
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: C.bg, fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" }}>
       {/* Nav */}
-      <div style={{ background: C.nav, borderBottom: '1px solid #334155', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ background: C.nav, borderBottom: '1px solid #334155', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <button onClick={() => navigate('/')} style={{ background: 'transparent', border: 'none', color: '#94A3B8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: '5px 10px', borderRadius: 6 }}>← Dashboard</button>
           <span style={{ color: '#334155' }}>|</span>
@@ -427,7 +488,8 @@ export default function DossierDetail() {
         <span style={{ fontSize: 12, color: '#64748B' }}>{user?.email}</span>
       </div>
 
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '28px 24px' }}>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div style={{ maxWidth: 1040, margin: '0 auto', padding: '28px 24px 48px' }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
           <div>
@@ -478,7 +540,9 @@ export default function DossierDetail() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 16, alignItems: 'start' }}>
+          {/* ── Colonne gauche : Client + Notes ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* ── Prospect card ── */}
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -516,6 +580,16 @@ export default function DossierDetail() {
               </div>
             )}
           </div>
+
+          {/* ── Notes (dans la colonne gauche) ── */}
+          {dossier.notes && (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 22px' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>📝 Notes</div>
+              <div style={{ fontSize: 13, color: C.textMid, whiteSpace: 'pre-wrap' }}>{dossier.notes}</div>
+            </div>
+          )}
+
+          </div>{/* fin colonne gauche */}
 
           {/* ── Simulation card ── */}
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
@@ -964,13 +1038,115 @@ export default function DossierDetail() {
           </div>
         </div>
 
-        {/* Notes */}
-        {dossier.notes && (
-          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 22px', marginTop: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>📝 Notes</div>
-            <div style={{ fontSize: 13, color: C.textMid, whiteSpace: 'pre-wrap' }}>{dossier.notes}</div>
+        {/* ── Documents ── */}
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px', marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>📎 Documents</span>
+            <span style={{ fontSize: 11, color: C.textSoft }}>{documents.length} fichier{documents.length !== 1 ? 's' : ''}</span>
           </div>
-        )}
+
+          {/* Zone drag & drop */}
+          <div
+            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={e => { e.preventDefault(); setDragOver(false); uploadFiles(e.dataTransfer.files) }}
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              border: `2px dashed ${dragOver ? C.accent : C.border}`,
+              borderRadius: 10,
+              padding: '24px 16px',
+              textAlign: 'center',
+              cursor: uploading ? 'not-allowed' : 'pointer',
+              background: dragOver ? '#EFF6FF' : C.bg,
+              transition: 'all .15s',
+              marginBottom: 16,
+              opacity: uploading ? .6 : 1,
+            }}>
+            <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }}
+              onChange={e => uploadFiles(e.target.files)} />
+            {uploading ? (
+              <div style={{ fontSize: 13, color: C.accent, fontWeight: 600 }}>⏳ Upload en cours…</div>
+            ) : (
+              <>
+                <div style={{ fontSize: 24, marginBottom: 6 }}>☁️</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.textMid }}>Glissez des fichiers ici ou cliquez pour parcourir</div>
+                <div style={{ fontSize: 11, color: C.textSoft, marginTop: 4 }}>PDF, images, Word, Excel, ZIP… tous formats acceptés</div>
+              </>
+            )}
+          </div>
+
+          {uploadError && (
+            <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: '#DC2626', whiteSpace: 'pre-wrap' }}>
+              ⚠️ Erreur upload : {uploadError}
+              <button onClick={() => setUploadError(null)} style={{ float: 'right', background: 'transparent', border: 'none', color: '#DC2626', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
+            </div>
+          )}
+
+          {/* Liste des fichiers */}
+          {docsLoading ? (
+            <div style={{ textAlign: 'center', padding: '12px 0', color: C.textSoft, fontSize: 12 }}>Chargement…</div>
+          ) : documents.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '12px 0', color: C.textSoft, fontSize: 12 }}>Aucun document pour ce dossier.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {documents.map(doc => {
+                const ext = doc.name.split('.').pop().toLowerCase()
+                const icon = ['pdf'].includes(ext) ? '📄' : ['jpg','jpeg','png','gif','webp'].includes(ext) ? '🖼️' : ['doc','docx'].includes(ext) ? '📝' : ['xls','xlsx','csv'].includes(ext) ? '📊' : ['zip','rar','7z'].includes(ext) ? '🗜️' : '📎'
+                const sizeKb = doc.metadata?.size ? (doc.metadata.size / 1024).toFixed(0) : null
+                const date = doc.created_at ? new Date(doc.created_at).toLocaleDateString('fr-FR') : null
+                // Retirer le préfixe timestamp ajouté lors de l'upload
+                const displayName = doc.name.replace(/^\d+_/, '')
+                return (
+                  <div key={doc.name} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.bg, border: `1px solid ${renamingDoc === doc.name ? C.accent : C.border}`, borderRadius: 8, padding: '9px 12px', transition: 'border-color .15s' }}>
+                    <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
+                    {renamingDoc === doc.name ? (
+                      <>
+                        <input
+                          autoFocus
+                          value={renameValue}
+                          onChange={e => setRenameValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') renameDocument(doc.name, renameValue); if (e.key === 'Escape') setRenamingDoc(null) }}
+                          style={{ flex: 1, fontSize: 12, fontWeight: 600, background: C.surface, border: `1px solid ${C.accent}`, borderRadius: 6, padding: '5px 8px', color: C.text, outline: 'none', fontFamily: 'inherit' }}
+                        />
+                        <button onClick={() => renameDocument(doc.name, renameValue)}
+                          style={{ background: '#16A34A', border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, flexShrink: 0 }}>
+                          ✓
+                        </button>
+                        <button onClick={() => setRenamingDoc(null)}
+                          style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+                          ✕
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</div>
+                          <div style={{ fontSize: 10, color: C.textSoft, marginTop: 1 }}>
+                            {[sizeKb ? `${sizeKb} Ko` : null, date].filter(Boolean).join(' · ')}
+                          </div>
+                        </div>
+                        <button onClick={() => { setRenamingDoc(doc.name); setRenameValue(displayName) }}
+                          style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }} title="Renommer">
+                          ✏️
+                        </button>
+                        <button onClick={() => downloadDocument(doc.name)}
+                          style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.accent, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, flexShrink: 0 }}>
+                          ↓ Ouvrir
+                        </button>
+                        <button onClick={() => deleteDocument(doc.name)}
+                          style={{ background: 'transparent', border: `1px solid #FECACA`, color: '#DC2626', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+                          🗑
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+      </div>
       </div>
     </div>
   )
