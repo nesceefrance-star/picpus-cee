@@ -25,26 +25,21 @@ function AuthGuard({ children }) {
     let done = false
     const finish = () => { if (!done) { done = true; setReady(true) } }
 
-    // Timeout de secours — 8s pour laisser le temps sur mobile lent
-    const timeout = setTimeout(finish, 8000)
+    // Timeout de secours — si tout échoue, on débloque quand même après 4s
+    const timeout = setTimeout(finish, 4000)
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      clearTimeout(timeout)
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
-      if (session?.user) {
-        try { await fetchProfile(session.user.id) } catch (_) {}
-      }
+      // fetchProfile en arrière-plan : ne bloque pas le rendu
+      if (session?.user) fetchProfile(session.user.id).catch(() => {})
       finish()
-    }).catch(() => { clearTimeout(timeout); finish() })
+    }).catch(() => finish())
 
     // Écoute les changements d'auth (login/logout depuis n'importe quel onglet)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
-      if (session?.user) {
-        try { await fetchProfile(session.user.id) } catch (_) {}
-      }
-      // Si on vient de se connecter et qu'on n'est pas encore ready, on l'est maintenant
-      if (!done) finish()
+      if (session?.user) fetchProfile(session.user.id).catch(() => {})
+      finish()
     })
 
     return () => { subscription.unsubscribe(); clearTimeout(timeout) }
