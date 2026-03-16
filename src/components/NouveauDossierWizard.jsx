@@ -315,6 +315,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
   // Reset propre lors du changement de fiche
   const switchFiche = (ficheId) => {
     setSimulation(null)
+    setBonification163(false)
     setTech(t => ({
       ...t,
       fiche_cee: ficheId,
@@ -334,6 +335,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
   }
 
   const [prixMwh, setPrixMwh] = useState('7.5')
+  const [bonification163, setBonification163] = useState(false)
   const [simulation, setSimulation] = useState(null)
   const [assigneA, setAssigneA] = useState(user?.id || '')
 
@@ -398,10 +400,23 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
       coutTotal = nbDestratEffectif * cout
     }
 
-    const prime = Math.round(kwhCumac * (prix / 1000) * 100) / 100
+    const kwhCumacBase = kwhCumac
+    const kwhCumacFinal = (tech.fiche_cee === 'BAT-TH-163' && bonification163) ? kwhCumacBase * 3 : kwhCumacBase
+    const prime = Math.round(kwhCumacFinal * (prix / 1000) * 100) / 100
     const marge = Math.round((prime - coutTotal) * 100) / 100
-    setSimulation({ kwhCumac, mwhCumac: Math.round(kwhCumac / 100) / 10, prixMwh: prix, prime, coutTotal, marge, rentable: marge > 0, nbDestrat: nbDestratEffectif, pConvectif, pRadiatif, ...details })
+    setSimulation({ kwhCumac: kwhCumacFinal, kwhCumacBase, mwhCumac: Math.round(kwhCumacFinal / 100) / 10, prixMwh: prix, prime, coutTotal, marge, rentable: marge > 0, nbDestrat: nbDestratEffectif, pConvectif, pRadiatif, bonification: tech.fiche_cee === 'BAT-TH-163' && bonification163, ...details })
     setStep(4)
+  }
+
+  const toggleBonification = (v) => {
+    setBonification163(v)
+    if (!simulation) return
+    const base = simulation.kwhCumacBase ?? simulation.kwhCumac
+    const kwhCumacFinal = v ? base * 3 : base
+    const prix = parseFloat(prixMwh) || 7.5
+    const prime = Math.round(kwhCumacFinal * (prix / 1000) * 100) / 100
+    const marge = Math.round((prime - simulation.coutTotal) * 100) / 100
+    setSimulation(s => ({ ...s, kwhCumac: kwhCumacFinal, kwhCumacBase: base, mwhCumac: Math.round(kwhCumacFinal / 100) / 10, prime, marge, rentable: marge > 0, bonification: v }))
   }
 
   const canCalculer = tech.zone_climatique && (
@@ -448,6 +463,8 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
         forfait: simulation?.forfait,
         facteur_secteur: simulation?.facteurSecteur,
         kwh_cumac: simulation?.kwhCumac,
+        kwh_cumac_base: simulation?.kwhCumacBase,
+        bonification_x3: bonification163,
         cout_installation: tech.cout_installation_163,
         cout_total: simulation?.coutTotal,
         marge: simulation?.marge,
@@ -888,6 +905,21 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                   <button onClick={calculerSimulation} style={{ background: C.accent, border: 'none', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Recalculer</button>
                 </div>
               </div>
+
+              {/* Bonification ×3 — BAT-TH-163 uniquement */}
+              {tech.fiche_cee === 'BAT-TH-163' && (
+                <div onClick={() => toggleBonification(!bonification163)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, background: bonification163 ? '#1a2e1a' : '#0a1a2e', border: `1px solid ${bonification163 ? '#16A34A' : '#1e3a5f'}`, borderRadius: 8, padding: '11px 16px', marginBottom: 14, cursor: 'pointer', userSelect: 'none' }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${bonification163 ? '#16A34A' : C.border}`, background: bonification163 ? '#16A34A' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
+                    {bonification163 && <span style={{ color: '#fff', fontSize: 13, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: bonification163 ? '#4ade80' : C.text }}>Activer la bonification ×3</div>
+                    <div style={{ fontSize: 11, color: C.textSoft, marginTop: 2 }}>Multiplie le volume cumac par 3 — prime et rentabilité recalculées</div>
+                  </div>
+                  {bonification163 && <span style={{ fontSize: 11, fontWeight: 700, color: '#4ade80', background: '#14532d', borderRadius: 5, padding: '3px 8px' }}>×3 ACTIF</span>}
+                </div>
+              )}
 
               {/* Résumé technique */}
               <div style={{ background: '#0a1120', border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: C.textMid, lineHeight: 1.7 }}>
