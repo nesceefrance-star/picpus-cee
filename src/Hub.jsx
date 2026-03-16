@@ -484,7 +484,7 @@ function ListeDevis({ devis, onCreate, onOpen, onDelete, confirmDeleteId, onCanc
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                     <div>
                       <div style={{fontSize:15,fontWeight:800,color:C.text,marginBottom:3}}>{d.nomClient || "Sans nom"}</div>
-                      <div style={{fontSize:11,color:C.textSoft}}>{d.refDevis || "—"} · {d.dateDevis || "—"}</div>
+                      <div style={{fontSize:11,color:C.textSoft}}>Devis {d.refDevis || "—"} du {d.dateDevis || "—"}</div>
                     </div>
                     <span style={{background:MC2(margePct)+"22",color:MC2(margePct),border:`1px solid ${MC2(margePct)}44`,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,marginRight:20}}>
                       {margePct.toFixed(1)}% marge
@@ -525,10 +525,28 @@ function ModalNouveauDevis({ onConfirm, onCancel }) {
   const [dateDevis, setDateDevis]   = useState(new Date().toLocaleDateString("fr-FR"));
   const [nomContact, setNomContact] = useState("");
   const [fonctionContact, setFonctionContact] = useState("");
+  const [adresseSiege, setAdresseSiege] = useState("");
+  const [telephoneClient, setTelephoneClient] = useState("");
+  const [emailClient, setEmailClient] = useState("");
+  const [codeNAF, setCodeNAF] = useState("");
+
+  const fetchEntreprise = async (siretVal) => {
+    if (!siretVal.trim()) return;
+    try {
+      const r = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(siretVal.trim())}&per_page=1`);
+      if (!r.ok) return;
+      const d = await r.json();
+      const e = d.results?.[0];
+      if (!e) return;
+      if (e.activite_principale && !codeNAF) setCodeNAF(e.activite_principale);
+      if (e.siege?.adresse_complete && !adresseSiege) setAdresseSiege(e.siege.adresse_complete);
+      if (!nomClient) setNomClient(e.nom_complet || e.nom_raison_sociale || "");
+    } catch (_) {}
+  };
 
   const go = () => {
     if (!nomClient.trim()) return;
-    onConfirm({ nomClient, siret, adresseSite, refDevis, dateDevis, nomContact, fonctionContact });
+    onConfirm({ nomClient, siret, adresseSite, refDevis, dateDevis, nomContact, fonctionContact, adresseSiege, telephoneClient, emailClient, codeNAF });
   };
 
   const INP = {width:"100%",boxSizing:"border-box",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit"};
@@ -548,16 +566,20 @@ function ModalNouveauDevis({ onConfirm, onCancel }) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:20}}>
           {[
             {l:"Client *",v:nomClient,set:setNomClient,ph:"KIABI LOGISTIQUE",full:true},
-            {l:"SIRET",v:siret,set:setSiret,ph:"347 727 950 00094"},
+            {l:"SIRET",v:siret,set:setSiret,ph:"347 727 950 00094",onBlur:(val)=>fetchEntreprise(val)},
             {l:"Adresse site",v:adresseSite,set:setAdresseSite,ph:"771 Rue de la Plaine, 59553 Lauwin-Planque",full:true},
             {l:"Référence devis",v:refDevis,set:setRefDevis,ph:"2025-0001"},
             {l:"Date devis",v:dateDevis,set:setDateDevis,ph:"22/07/2025"},
             {l:"Contact (nom)",v:nomContact,set:setNomContact,ph:"M. Dupont"},
             {l:"Fonction contact",v:fonctionContact,set:setFonctionContact,ph:"Responsable Technique"},
+            {l:"Adresse siège social",v:adresseSiege,set:setAdresseSiege,ph:"12 Rue de..., 75001 Paris",full:true},
+            {l:"Code NAF",v:codeNAF,set:setCodeNAF,ph:"4690Z"},
+            {l:"Téléphone",v:telephoneClient,set:setTelephoneClient,ph:"01 23 45 67 89"},
+            {l:"Email",v:emailClient,set:setEmailClient,ph:"contact@societe.fr"},
           ].map(f=>(
             <div key={f.l} style={{gridColumn:f.full?"1/-1":"auto"}}>
               <label style={{display:"block",fontSize:11,fontWeight:600,color:C.textMid,marginBottom:4,textTransform:"uppercase",letterSpacing:.4}}>{f.l}</label>
-              <input value={f.v} onChange={e=>f.set(e.target.value)} placeholder={f.ph} style={INP}/>
+              <input value={f.v} onChange={e=>f.set(e.target.value)} placeholder={f.ph} onBlur={f.onBlur ? e=>f.onBlur(e.target.value) : undefined} style={INP}/>
             </div>
           ))}
         </div>
@@ -1138,6 +1160,10 @@ function ModalEditInfo({ devis, onSave, onCancel }) {
     sousTraitant: devis.sousTraitant||"DC LINK",
     rgeNum: devis.rgeNum||"AU 084 742",
     rgeValidite: devis.rgeValidite||"31/12/2026",
+    adresseSiege: devis.adresseSiege||"",
+    telephoneClient: devis.telephoneClient||"",
+    emailClient: devis.emailClient||"",
+    codeNAF: devis.codeNAF||"",
   });
   const set = (k, v) => setForm(f => ({...f, [k]: v}));
 
@@ -1157,6 +1183,10 @@ function ModalEditInfo({ devis, onSave, onCancel }) {
             {l:"Sous-traitant",k:"sousTraitant",ph:"DC LINK"},
             {l:"N° RGE",k:"rgeNum",ph:"AU 084 742"},
             {l:"RGE valable jusqu'au",k:"rgeValidite",ph:"31/12/2026"},
+            {l:"Adresse siège social",k:"adresseSiege",ph:"12 Rue de..., 75001 Paris",full:true},
+            {l:"Code NAF",k:"codeNAF",ph:"4690Z"},
+            {l:"Téléphone client",k:"telephoneClient",ph:"01 23 45 67 89"},
+            {l:"Email client",k:"emailClient",ph:"contact@societe.fr"},
           ].map(f => (
             <div key={f.k} style={{gridColumn:f.full?"1/-1":"auto"}}>
               <label style={{display:"block",fontSize:11,fontWeight:600,color:C.textMid,marginBottom:4,textTransform:"uppercase",letterSpacing:.4}}>{f.l}</label>
@@ -1187,6 +1217,8 @@ function ModalPDFParams({ params, onSave, onCancel }) {
     mentionCEE:      params.mentionCEE      || "",
     cgv:             params.cgv             || "",
     mentionLegale:   params.mentionLegale   || "",
+    dateVisiteTechnique: params.dateVisiteTechnique || "",
+    dateDevis:           params.dateDevis           || "",
   });
   const set = (k, v) => setForm(f => ({...f, [k]: v}));
   const F = {width:"100%",boxSizing:"border-box",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit"};
@@ -1225,6 +1257,19 @@ function ModalPDFParams({ params, onSave, onCancel }) {
             <textarea value={form.condPaiement} onChange={e=>set("condPaiement",e.target.value)} rows={2}
               style={{...F,resize:"vertical"}}/>
           </div>
+        </div>
+
+        <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:10,borderBottom:`2px solid ${C.accent}`,paddingBottom:4}}>Intervention</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
+          {[
+            {l:"Date du devis",k:"dateDevis",ph:"18/12/2023"},
+            {l:"Date visite technique",k:"dateVisiteTechnique",ph:"15/03/2026"},
+          ].map(f=>(
+            <div key={f.k} style={{gridColumn:f.full?"1/-1":"auto"}}>
+              <label style={L}>{f.l}</label>
+              <input value={form[f.k]} onChange={e=>set(f.k,e.target.value)} placeholder={f.ph} style={F}/>
+            </div>
+          ))}
         </div>
 
         <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:10,borderBottom:`2px solid ${C.accent}`,paddingBottom:4}}>Mentions &amp; CGV</div>
@@ -1272,8 +1317,8 @@ const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVent
           <div style={{fontSize:6.5,color:"#333",lineHeight:1.6}}>AF2E AGENCE FRANÇAISE DES ECONOMIES D'ENERGIES<br/>2 Rue de la Darse — 94600 Choisy le Roi — SIRET 881 279 665 00023</div>
         </div>
         <div style={{textAlign:"right"}}>
-          <div style={{fontSize:10,fontWeight:800,color:"#111"}}>Devis {devis.refDevis||"—"}</div>
-          <div style={{fontSize:7,color:"#555",marginTop:2,lineHeight:1.7}}>Date : {devis.dateDevis||"—"}{devis.numeroRGE ? ` — N° ${devis.numeroRGE}` : ""}</div>
+          <div style={{fontSize:10,fontWeight:800,color:"#111"}}>Devis {devis.refDevis||"—"} du {devis.dateDevis||"—"}</div>
+          <div style={{fontSize:7,color:"#555",marginTop:2,lineHeight:1.7}}>{devis.numeroRGE ? `N° ${devis.numeroRGE}` : ""}</div>
         </div>
       </div>
       <HR/>
@@ -1453,6 +1498,11 @@ const normalizeDevis = d => ({
   primeFaciale: d.prime_faciale ?? null,
   createdAt: new Date(d.created_at).getTime(),
   updatedAt: new Date(d.updated_at).getTime(),
+  adresseSiege: d.adresse_siege || "",
+  telephoneClient: d.telephone_client || "",
+  emailClient: d.email_client || "",
+  codeNAF: d.code_naf || "",
+  pdfParams: d.pdf_params || {},
 });
 
 function MargesDevis({ prefill }) {
@@ -1468,11 +1518,26 @@ function MargesDevis({ prefill }) {
   const [reuploadId, setReuploadId] = useState(null);
 
   // Si on arrive depuis DossierDetail avec un prefill, sauter ModalNouveauDevis
+  // et auto-fetch NAF + adresse siège depuis le SIRET
   useEffect(() => {
-    if (prefill) {
-      setInfosEnCours(prefill);
+    if (!prefill) return;
+    const enrichAndGo = async () => {
+      let infos = { ...prefill };
+      if (prefill.siret && !prefill.codeNAF) {
+        try {
+          const r = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(prefill.siret)}&per_page=1`);
+          const d = await r.json();
+          const e = d.results?.[0];
+          if (e) {
+            if (e.activite_principale) infos.codeNAF = e.activite_principale;
+            if (e.siege?.adresse_complete && !infos.adresseSiege) infos.adresseSiege = e.siege.adresse_complete;
+          }
+        } catch (_) {}
+      }
+      setInfosEnCours(infos);
       setStep("upload");
-    }
+    };
+    enrichAndGo();
   }, []);
 
   // ── Chargement depuis Supabase (avec cache pour affichage instantané) ──
@@ -1511,6 +1576,11 @@ function MargesDevis({ prefill }) {
     bat_pu_vente: d.batPuVente || 0,
     prime: d.prime || 0,
     updated_at: new Date().toISOString(),
+    adresse_siege: d.adresseSiege || "",
+    telephone_client: d.telephoneClient || "",
+    email_client: d.emailClient || "",
+    code_naf: d.codeNAF || "",
+    pdf_params: d.pdfParams || {},
   });
 
   // ── Créer un nouveau devis ────────────────────────────────────────────

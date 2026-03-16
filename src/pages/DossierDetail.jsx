@@ -657,6 +657,8 @@ export default function DossierDetail() {
                           adresseSite: [dossier.prospects?.adresse, dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(', '),
                           nomContact: dossier.prospects?.contact_nom || '',
                           fonctionContact: '',
+                          telephoneClient: dossier.prospects?.contact_tel || '',
+                          emailClient: dossier.prospects?.contact_email || '',
                           refDevis: dossier.ref || refDefault(),
                           dateDevis: new Date().toLocaleDateString('fr-FR'),
                           prime: sim.prime_estimee || 0,

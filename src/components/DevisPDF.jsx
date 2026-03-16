@@ -98,9 +98,8 @@ function Header({ devis, params }) {
           </Text>
         </View>
         <View>
-          <Text style={s.devisRef}>Devis {devis.refDevis || '—'}</Text>
+          <Text style={s.devisRef}>Devis {devis.refDevis || '—'} du {params.dateDevis || devis.dateDevis || '—'}</Text>
           <Text style={s.devisMeta}>
-            Date : {devis.dateDevis || '—'}{'\n'}
             {params.numeroRGE ? `N° ${params.numeroRGE}` : ''}
           </Text>
         </View>
@@ -194,24 +193,46 @@ export function DevisPDFDoc({ devis, lignes, cats, batPuVente, batQte, primeFaci
       <Page size="A4" style={s.page}>
         <Header devis={devis} params={params} />
 
-        {/* Bloc client + site */}
-        <View style={s.clientRow}>
+        {/* Ligne A: infos client (gauche) + destinataire (droite) */}
+        <View style={{ flexDirection: 'row', gap: 16, marginBottom: 8 }}>
+          {/* Gauche — infos administratives */}
           <View style={{ flex: 1 }}>
-            <Text style={s.clientName}>{devis.nomClient || 'CLIENT'}</Text>
-            <Text style={s.clientSub}>
-              {devis.nomContact || ''}{devis.fonctionContact ? ` — ${devis.fonctionContact}` : ''}{'\n'}
-              {devis.siret ? `SIRET : ${devis.siret}` : ''}
-            </Text>
+            <Text style={[s.clientSub, { fontFamily: 'Helvetica-Bold', color: DARK, marginBottom: 3 }]}>Informations client</Text>
+            <Text style={s.clientSub}>Unité monétaire : Euro (€)</Text>
+            {devis.siret ? <Text style={s.clientSub}>SIRET : {devis.siret}</Text> : null}
+            {devis.codeNAF ? <Text style={s.clientSub}>Code NAF : {devis.codeNAF}</Text> : null}
+            {devis.telephoneClient ? <Text style={s.clientSub}>Tél. : {devis.telephoneClient}</Text> : null}
+            {devis.emailClient ? <Text style={s.clientSub}>Email : {devis.emailClient}</Text> : null}
           </View>
-          <View style={s.siteBox}>
-            <Text style={[s.clientSub, { fontFamily: 'Helvetica-Bold', color: DARK }]}>Site d'intervention :</Text>
+          {/* Droite — destinataire */}
+          <View style={{ width: 200, borderLeftWidth: 0.5, borderLeftColor: '#E2E8F0', paddingLeft: 12 }}>
+            <Text style={s.clientName}>{devis.nomClient || 'CLIENT'}</Text>
+            {(devis.nomContact || devis.fonctionContact) ? (
+              <Text style={s.clientSub}>
+                À l'attention de {devis.nomContact || ''}{devis.fonctionContact ? ` — ${devis.fonctionContact}` : ''}
+              </Text>
+            ) : null}
+            {devis.adresseSiege ? <Text style={[s.clientSub, { marginTop: 3 }]}>{devis.adresseSiege}</Text> : null}
+          </View>
+        </View>
+
+        {/* Ligne B: site intervention */}
+        <View style={{ backgroundColor: '#F8FAFC', borderRadius: 3, padding: '5pt 8pt', marginBottom: 8, flexDirection: 'row', gap: 20 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.clientSub, { fontFamily: 'Helvetica-Bold', color: DARK, marginBottom: 2 }]}>Adresse des travaux :</Text>
             <Text style={s.clientSub}>{devis.adresseSite || '—'}</Text>
-            <Text style={[s.clientSub, { marginTop: 4 }]}>
-              <Text style={{ fontFamily: 'Helvetica-Bold' }}>Sous-traitant : </Text>
-              {devis.sousTraitant || 'DC LINK'}{'\n'}
-              <Text style={{ fontFamily: 'Helvetica-Bold' }}>RGE : </Text>
-              {devis.rgeNum || 'AU 084 742'} (val. {devis.rgeValidite || '31/12/2026'})
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.clientSub}>
+              <Text style={{ fontFamily: 'Helvetica-Bold' }}>Posé par : </Text>
+              {devis.sousTraitant || 'DC LINK'}
             </Text>
+            {params.dateVisiteTechnique ? (
+              <Text style={[s.clientSub, { marginTop: 2 }]}>
+                <Text style={{ fontFamily: 'Helvetica-Bold' }}>Visite technique : </Text>
+                Réalisée le {params.dateVisiteTechnique} par {devis.sousTraitant || 'DC LINK'}
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -290,6 +311,7 @@ export function DevisPDFDoc({ devis, lignes, cats, batPuVente, batQte, primeFaci
           {[
             { l: 'Devis n°',   v: devis.refDevis || '—' },
             { l: 'Date',       v: devis.dateDevis || '—' },
+            { l: 'Visite tech.', v: params.dateVisiteTechnique || '—' },
             { l: 'Client',     v: devis.nomClient || '—' },
             { l: 'Total TTC',  v: fmtE(stats.totalTTC) },
             { l: 'Prime CEE',  v: '− ' + fmtE(primeFaciale) },
