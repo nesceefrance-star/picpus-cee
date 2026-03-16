@@ -64,7 +64,12 @@ const s = StyleSheet.create({
 })
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-const fmt  = n => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmt  = n => {
+  const num = Number(n || 0)
+  const [int, dec] = num.toFixed(2).split('.')
+  const intFmt = int.replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0')
+  return intFmt + ',' + dec
+}
 const fmtE = n => fmt(n) + ' €'
 
 const CAT_COLORS = {
