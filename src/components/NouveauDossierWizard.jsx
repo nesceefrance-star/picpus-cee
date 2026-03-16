@@ -403,8 +403,10 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
     const kwhCumacBase = kwhCumac
     const kwhCumacFinal = (tech.fiche_cee === 'BAT-TH-163' && bonification163) ? kwhCumacBase * 3 : kwhCumacBase
     const prime = Math.round(kwhCumacFinal * (prix / 1000) * 100) / 100
+    const primeNette = Math.round(prime * 0.9 * 100) / 100
     const marge = Math.round((prime - coutTotal) * 100) / 100
-    setSimulation({ kwhCumac: kwhCumacFinal, kwhCumacBase, mwhCumac: Math.round(kwhCumacFinal / 100) / 10, prixMwh: prix, prime, coutTotal, marge, rentable: marge > 0, nbDestrat: nbDestratEffectif, pConvectif, pRadiatif, bonification: tech.fiche_cee === 'BAT-TH-163' && bonification163, ...details })
+    const margeNette = Math.round((primeNette - coutTotal) * 100) / 100
+    setSimulation({ kwhCumac: kwhCumacFinal, kwhCumacBase, mwhCumac: Math.round(kwhCumacFinal / 100) / 10, prixMwh: prix, prime, primeNette, coutTotal, marge, margeNette, rentable: margeNette > 0, nbDestrat: nbDestratEffectif, pConvectif, pRadiatif, bonification: tech.fiche_cee === 'BAT-TH-163' && bonification163, ...details })
     setStep(4)
   }
 
@@ -415,8 +417,10 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
     const kwhCumacFinal = v ? base * 3 : base
     const prix = parseFloat(prixMwh) || 7.5
     const prime = Math.round(kwhCumacFinal * (prix / 1000) * 100) / 100
+    const primeNette = Math.round(prime * 0.9 * 100) / 100
     const marge = Math.round((prime - simulation.coutTotal) * 100) / 100
-    setSimulation(s => ({ ...s, kwhCumac: kwhCumacFinal, kwhCumacBase: base, mwhCumac: Math.round(kwhCumacFinal / 100) / 10, prime, marge, rentable: marge > 0, bonification: v }))
+    const margeNette = Math.round((primeNette - simulation.coutTotal) * 100) / 100
+    setSimulation(s => ({ ...s, kwhCumac: kwhCumacFinal, kwhCumacBase: base, mwhCumac: Math.round(kwhCumacFinal / 100) / 10, prime, primeNette, marge, margeNette, rentable: margeNette > 0, bonification: v }))
   }
 
   const canCalculer = tech.zone_climatique && (
@@ -942,43 +946,50 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-                {[
-                  {
-                    label: 'kWh cumac', icon: '📊', color: '#94A3B8',
-                    value: `${simulation.kwhCumac?.toLocaleString('fr')} kWh`,
-                    sub: tech.fiche_cee === 'BAT-TH-163'
+                {/* kWh cumac */}
+                <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
+                  <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 4 }}>📊 kWh cumac</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#94A3B8' }}>{simulation.kwhCumac?.toLocaleString('fr')} kWh</div>
+                  <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>
+                    {tech.fiche_cee === 'BAT-TH-163'
                       ? `${simulation.forfait} × ${tech.surface_m2} m² × ${simulation.facteurSecteur}`
-                      : `${simulation.coeffConv||0} × ${pConvectif} kW${pRadiatif > 0 ? ` + ${simulation.coeffRad||0} × ${pRadiatif} kW` : ''}`,
-                  },
-                  {
-                    label: 'Prime CEE brute', icon: '💶', color: '#a78bfa',
-                    value: `${simulation.prime?.toLocaleString('fr')} €`,
-                    sub: `${simulation.kwhCumac?.toLocaleString('fr')} kWh × ${simulation.prixMwh}/1000`,
-                  },
-                  {
-                    label: 'Coût prestation', icon: '🔧', color: '#fb923c',
-                    value: `${simulation.coutTotal?.toLocaleString('fr')} €`,
-                    sub: tech.fiche_cee === 'BAT-TH-163'
-                      ? 'Coût installation PAC'
-                      : `${simulation.nbDestrat} destrats × ${parseFloat(tech.cout_unitaire_destrat).toLocaleString('fr')} €`,
-                  },
-                  {
-                    label: 'Marge nette', icon: simulation.marge > 0 ? '✅' : '❌',
-                    color: simulation.marge > 0 ? '#4ade80' : '#ef4444',
-                    value: `${simulation.marge?.toLocaleString('fr')} €`,
-                    sub: 'Prime − Coût prestation',
-                  },
-                ].map(item => (
-                  <div key={item.label} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
-                    <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 4 }}>{item.icon} {item.label}</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: item.color }}>{item.value}</div>
-                    <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>{item.sub}</div>
+                      : `${simulation.coeffConv||0} × ${pConvectif} kW${pRadiatif > 0 ? ` + ${simulation.coeffRad||0} × ${pRadiatif} kW` : ''}`}
                   </div>
-                ))}
+                </div>
+
+                {/* Prime CEE brute */}
+                <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
+                  <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 4 }}>💶 Prime CEE brute</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#a78bfa' }}>{simulation.prime?.toLocaleString('fr')} €</div>
+                  <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>{simulation.kwhCumac?.toLocaleString('fr')} kWh × {simulation.prixMwh}/1000</div>
+                </div>
+
+                {/* Prime CEE nette */}
+                <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
+                  <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 4 }}>💵 Prime CEE nette <span style={{ color: '#475569' }}>(hors TVA 10%)</span></div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#818cf8' }}>{simulation.primeNette?.toLocaleString('fr')} €</div>
+                  <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>{simulation.prime?.toLocaleString('fr')} € × 0,9</div>
+                </div>
+
+                {/* Coût prestation */}
+                <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
+                  <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 4 }}>🔧 Coût prestation</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#fb923c' }}>{simulation.coutTotal?.toLocaleString('fr')} €</div>
+                  <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>
+                    {tech.fiche_cee === 'BAT-TH-163' ? 'Coût installation PAC' : `${simulation.nbDestrat} destrats × ${parseFloat(tech.cout_unitaire_destrat).toLocaleString('fr')} €`}
+                  </div>
+                </div>
+
+                {/* Marge nette — pleine largeur */}
+                <div style={{ gridColumn: '1/-1', background: simulation.margeNette > 0 ? '#052e16' : '#1c0a00', border: `1px solid ${simulation.margeNette > 0 ? '#166534' : '#7f1d1d'}`, borderRadius: 10, padding: '14px 16px' }}>
+                  <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 4 }}>{simulation.margeNette > 0 ? '✅' : '❌'} Marge nette</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: simulation.margeNette > 0 ? '#4ade80' : '#ef4444' }}>{simulation.margeNette?.toLocaleString('fr')} €</div>
+                  <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>Prime nette ({simulation.primeNette?.toLocaleString('fr')} €) − Coût prestation ({simulation.coutTotal?.toLocaleString('fr')} €)</div>
+                </div>
               </div>
 
-              <div style={{ background: simulation.marge > 0 ? '#052e16' : '#1c0a00', border: `1px solid ${simulation.marge > 0 ? '#166534' : '#92400e'}`, borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12 }}>
-                <strong style={{ color: simulation.marge > 0 ? '#4ade80' : '#fb923c' }}>{simulation.marge > 0 ? '✅ Opération rentable' : '⚠️ Opération déficitaire'}</strong>
+              <div style={{ background: simulation.margeNette > 0 ? '#052e16' : '#1c0a00', border: `1px solid ${simulation.margeNette > 0 ? '#166534' : '#92400e'}`, borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12 }}>
+                <strong style={{ color: simulation.margeNette > 0 ? '#4ade80' : '#fb923c' }}>{simulation.margeNette > 0 ? '✅ Opération rentable' : '⚠️ Opération déficitaire'}</strong>
                 <span style={{ color: C.textMid, marginLeft: 8 }}>{client.raison_sociale} · Zone {tech.zone_climatique}{tech.hauteur_m ? ` · h=${tech.hauteur_m}m` : ''}</span>
               </div>
 
@@ -997,8 +1008,8 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
               <div style={{ display: 'flex', gap: 10 }}>
                 <button onClick={() => setStep(3)} style={{ flex: 1, padding: '11px', background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← Retour</button>
                 <button onClick={submit} disabled={loading}
-                  style={{ flex: 2, padding: '11px', background: simulation.marge > 0 ? '#16A34A' : C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {loading ? 'Création…' : simulation.marge > 0 ? '✅ Créer le dossier' : '📁 Créer quand même'}
+                  style={{ flex: 2, padding: '11px', background: simulation.margeNette > 0 ? '#16A34A' : C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {loading ? 'Création…' : simulation.margeNette > 0 ? '✅ Créer le dossier' : '📁 Créer quand même'}
                 </button>
               </div>
             </>
