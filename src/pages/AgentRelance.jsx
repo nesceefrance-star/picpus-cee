@@ -63,15 +63,23 @@ function daysAgo(isoDate) {
   return Math.floor((Date.now() - new Date(isoDate).getTime()) / 86400000)
 }
 
+function fmtDate(iso) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
 // ─── Carte d'une relance ──────────────────────────────────────────────────────
 function RelanceCard({ relance, apiHeaders, onDraftCreated }) {
-  const [open,      setOpen]      = useState(false)
+  const [open,       setOpen]       = useState(false)
   const [generating, setGenerating] = useState(false)
-  const [result,    setResult]    = useState(null)
-  const [params,    setParams]    = useState({ ton: 'chaleureux', argument: 'roi', longueur: 'moyen', attachPdf: false })
-  const [err,       setErr]       = useState(null)
+  const [result,     setResult]     = useState(null)
+  const [params,     setParams]     = useState({ ton: 'chaleureux', argument: 'roi', longueur: 'moyen', attachPdf: false })
+  const [err,        setErr]        = useState(null)
 
-  const bucket = BUCKETS[relance.bucket]
+  const bucket      = BUCKETS[relance.bucket]
+  const hasDraft    = result || relance.lastRelance // brouillon existant (session ou DB)
+  const borderColor = hasDraft ? 'rgba(34,197,94,0.3)' : bucket.border
+  const bgColor     = hasDraft ? 'rgba(34,197,94,0.04)' : bucket.bg
 
   const handleGenerate = async () => {
     setGenerating(true)
@@ -85,6 +93,7 @@ function RelanceCard({ relance, apiHeaders, onDraftCreated }) {
       const data = await res.json()
       if (!res.ok || !data.success) throw new Error(data.error + (data.detail ? ' — ' + JSON.stringify(data.detail) : ''))
       setResult(data)
+      setOpen(false)
       onDraftCreated?.()
     } catch (e) {
       setErr(e.message)
@@ -94,12 +103,12 @@ function RelanceCard({ relance, apiHeaders, onDraftCreated }) {
 
   return (
     <Box sx={{
-      border: `1px solid ${result ? 'rgba(34,197,94,0.3)' : bucket.border}`,
+      border: `1px solid ${borderColor}`,
       borderRadius: 2,
-      background: result ? 'rgba(34,197,94,0.04)' : bucket.bg,
+      background: bgColor,
       mb: 1.5,
       overflow: 'hidden',
-      transition: 'border-color .2s',
+      transition: 'border-color .2s, background .2s',
     }}>
       {/* Header de la carte */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 2, py: 1.5 }}>
@@ -146,49 +155,61 @@ function RelanceCard({ relance, apiHeaders, onDraftCreated }) {
           </Tooltip>
         )}
 
-        {/* Bouton expand / lien Gmail */}
-        {result ? (
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<OpenInNewIcon fontSize="small" />}
-            href={result.gmailUrl}
-            target="_blank"
-            sx={{ color: '#22C55E', borderColor: 'rgba(34,197,94,0.4)', fontSize: 12, whiteSpace: 'nowrap',
-              '&:hover': { borderColor: '#22C55E', background: 'rgba(34,197,94,0.08)' } }}
-          >
-            Ouvrir brouillon
-          </Button>
-        ) : (
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={open ? <ExpandLessIcon fontSize="small" /> : <EmailIcon fontSize="small" />}
-            onClick={() => setOpen(o => !o)}
-            sx={{ color: DARK.accent, borderColor: 'rgba(59,130,246,0.4)', fontSize: 12, whiteSpace: 'nowrap',
-              '&:hover': { borderColor: DARK.accent, background: 'rgba(59,130,246,0.08)' } }}
-          >
-            {open ? 'Fermer' : 'Générer'}
-          </Button>
-        )}
+        {/* Bouton Générer (toujours visible) */}
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={open ? <ExpandLessIcon fontSize="small" /> : <EmailIcon fontSize="small" />}
+          onClick={() => setOpen(o => !o)}
+          sx={{ color: DARK.accent, borderColor: 'rgba(59,130,246,0.4)', fontSize: 12, whiteSpace: 'nowrap',
+            '&:hover': { borderColor: DARK.accent, background: 'rgba(59,130,246,0.08)' } }}
+        >
+          {open ? 'Fermer' : 'Générer'}
+        </Button>
       </Box>
 
-      {/* Zone de résultat */}
-      {result && (
+      {/* Notification brouillon — persistante (DB) ou session */}
+      {hasDraft && (
         <Box sx={{ px: 2, pb: 1.5 }}>
           <Divider sx={{ borderColor: DARK.border, mb: 1 }} />
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-            <CheckCircleIcon sx={{ color: '#22C55E', fontSize: 16 }} />
-            <Typography sx={{ fontSize: 12, color: '#22C55E', fontWeight: 600 }}>
-              Brouillon #{result.relanceNum} créé dans Gmail
-            </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CheckCircleIcon sx={{ color: '#22C55E', fontSize: 15 }} />
+              <Typography sx={{ fontSize: 12, color: '#22C55E', fontWeight: 600 }}>
+                {result
+                  ? `Brouillon #${result.relanceNum} créé — ${fmtDate(new Date().toISOString())}`
+                  : `Dernier brouillon : ${fmtDate(relance.lastRelance.date)}`
+                }
+              </Typography>
+            </Box>
+            {result && (
+              <Button
+                size="small"
+                href={result.gmailUrl}
+                target="_blank"
+                startIcon={<OpenInNewIcon sx={{ fontSize: 13 }} />}
+                sx={{ fontSize: 11, color: '#22C55E', p: 0, minWidth: 0, textTransform: 'none',
+                  '&:hover': { background: 'transparent', textDecoration: 'underline' } }}
+              >
+                Ouvrir dans Gmail
+              </Button>
+            )}
           </Box>
-          <Typography sx={{ fontSize: 12, color: DARK.soft }}>Objet : <b style={{ color: DARK.text }}>{result.objet}</b></Typography>
+          {result && (
+            <Typography sx={{ fontSize: 11, color: DARK.soft, mt: 0.3 }}>
+              Objet : <b style={{ color: DARK.text }}>{result.objet}</b>
+            </Typography>
+          )}
+          {!result && relance.lastRelance?.contenu && (
+            <Typography sx={{ fontSize: 11, color: DARK.soft, mt: 0.3 }}>
+              {relance.lastRelance.contenu}
+            </Typography>
+          )}
         </Box>
       )}
 
       {/* Formulaire de génération */}
-      <Collapse in={open && !result}>
+      <Collapse in={open}>
         <Divider sx={{ borderColor: DARK.border }} />
         <Box sx={{ px: 2, py: 1.5, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'flex-end' }}>
 

@@ -54,9 +54,10 @@ export default async function handler(req, res) {
   const dossierIds = dossiers.map(d => d.id)
   const { data: activites } = await supabase
     .from('activites')
-    .select('dossier_id, created_at')
+    .select('dossier_id, created_at, contenu')
     .in('dossier_id', dossierIds)
     .eq('type', 'email')
+    .order('created_at', { ascending: false })
 
   // Profils commerciaux pour la vue admin
   let profilesMap = {}
@@ -79,9 +80,12 @@ export default async function handler(req, res) {
     const b = bucket(daysSince)
     if (!b) return null
 
-    const relancesDone = activites
+    const emailActivites = activites
       ?.filter(a => a.dossier_id === dossier.id && new Date(a.created_at) > new Date(dossier.updated_at))
-      .length || 0
+      || []
+
+    const relancesDone  = emailActivites.length
+    const lastRelance   = emailActivites[0] || null // déjà trié desc
 
     return {
       dossierId:    dossier.id,
@@ -93,6 +97,7 @@ export default async function handler(req, res) {
       daysSince,
       bucket:       b,
       relancesDone,
+      lastRelance:  lastRelance ? { date: lastRelance.created_at, contenu: lastRelance.contenu } : null,
       prospect:     dossier.prospect,
       commercial:   isAdmin ? (profilesMap[dossier.assigne_a] || null) : undefined,
       assigneA:     dossier.assigne_a,
