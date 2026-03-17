@@ -83,7 +83,7 @@ function RelanceCard({ relance, apiHeaders, onDraftCreated }) {
         body: JSON.stringify({ dossierId: relance.dossierId, ...params }),
       })
       const data = await res.json()
-      if (!res.ok || !data.success) throw new Error(data.error || 'Erreur inconnue')
+      if (!res.ok || !data.success) throw new Error(data.error + (data.detail ? ' — ' + JSON.stringify(data.detail) : ''))
       setResult(data)
       onDraftCreated?.()
     } catch (e) {
