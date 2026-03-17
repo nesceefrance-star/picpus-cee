@@ -4,12 +4,13 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
-
 export default async function handler(req, res) {
+  try {
+  const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )
+
   const { code, state, error } = req.query
 
   if (error) return res.redirect('/?error=google_denied')
@@ -67,4 +68,9 @@ export default async function handler(req, res) {
   }
 
   res.redirect('/relances?google=connected')
+
+  } catch (e) {
+    console.error('auth-callback crash:', e)
+    return res.redirect(`/relances?error=${encodeURIComponent(e.message)}`)
+  }
 }
