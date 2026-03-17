@@ -344,7 +344,7 @@ export default function AgentRelance() {
 
   // Filtrage par commercial (admin)
   const filtered = (relances || []).filter(r =>
-    filterCommercial === 'all' || r.dossier?.assigneA === filterCommercial
+    filterCommercial === 'all' || r.assigneA === filterCommercial
   )
 
   const byBucket = {
@@ -429,7 +429,7 @@ export default function AgentRelance() {
           >
             <MenuItem value="all" sx={{ fontSize: 12 }}>Tous les commerciaux ({relances?.length || 0})</MenuItem>
             {commercials.map(c => {
-              const count = (relances || []).filter(r => r.dossier?.assigneA === c.id).length
+              const count = (relances || []).filter(r => r.assigneA === c.id).length
               return (
                 <MenuItem key={c.id} value={c.id} sx={{ fontSize: 12 }}>
                   {c.prenom} {c.nom} ({count})
