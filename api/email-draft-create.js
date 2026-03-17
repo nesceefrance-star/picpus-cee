@@ -117,40 +117,37 @@ export default async function handler(req, res) {
   if (authErr || !user) return res.status(401).json({ error: 'unauthorized' })
 
   const {
-    devisId,
+    dossierId,
     ton       = 'chaleureux',
     argument  = 'roi',
     longueur  = 'moyen',
     attachPdf = false,
   } = req.body
 
-  if (!devisId) return res.status(400).json({ error: 'devisId requis' })
+  if (!dossierId) return res.status(400).json({ error: 'dossierId requis' })
 
-  // Récupérer le devis + dossier + prospect
-  const { data: devis, error: devisErr } = await supabase
-    .from('devis')
+  // Récupérer le dossier + prospect directement
+  const { data: dossier, error: dossierErr } = await supabase
+    .from('dossiers')
     .select(`
-      id, numero, total_ttc, prime_cee, reste_ttc, updated_at,
-      dossier:dossiers(
-        id, ref, fiche_cee,
-        prospect:prospects(raison_sociale, contact_nom, contact_email)
-      )
+      id, ref, fiche_cee, updated_at, prime_estimee, montant_devis,
+      prospect:prospects(raison_sociale, contact_nom, contact_email)
     `)
-    .eq('id', devisId)
+    .eq('id', dossierId)
     .single()
 
-  if (devisErr || !devis) return res.status(404).json({ error: 'Devis introuvable' })
+  if (dossierErr || !dossier) return res.status(404).json({ error: 'Dossier introuvable' })
 
-  const { prospect, fiche_cee, ref: dossierRef, id: dossierId } = devis.dossier
-  const daysSince = Math.floor((Date.now() - new Date(devis.updated_at).getTime()) / 86400000)
+  const { prospect, fiche_cee, ref: dossierRef } = dossier
+  const daysSince = Math.floor((Date.now() - new Date(dossier.updated_at).getTime()) / 86400000)
 
-  // Compter les relances déjà faites (activites email après date d'envoi)
+  // Compter les relances déjà faites
   const { data: activites } = await supabase
     .from('activites')
     .select('id')
     .eq('dossier_id', dossierId)
     .eq('type', 'email')
-    .gt('created_at', devis.updated_at)
+    .gt('created_at', dossier.updated_at)
 
   const relanceNum = (activites?.length || 0) + 1
 
@@ -170,9 +167,8 @@ CONTEXTE DU DOSSIER :
 - Contact : ${prospect.contact_nom || 'le responsable'}
 - Fiche CEE concernée : ${fiche_cee}
 - Référence dossier : ${dossierRef}
-- Montant devis TTC : ${fmt(devis.total_ttc)} €
-- Prime CEE déduite : ${fmt(devis.prime_cee)} €
-- Reste à charge prospect : ${fmt(devis.reste_ttc)} €
+- Montant devis : ${fmt(dossier.montant_devis)} €
+- Prime CEE estimée : ${fmt(dossier.prime_estimee)} €
 - Devis envoyé il y a : ${daysSince} jours
 - Numéro de cette relance : ${relanceNum}
 
@@ -252,7 +248,7 @@ RÉPONDS UNIQUEMENT avec un objet JSON valide (pas de markdown, pas d'explicatio
 
   // ─── Log activité dans le CRM ───────────────────────────────────────────────
   await supabase.from('activites').insert({
-    dossier_id: dossierId,
+    dossier_id: dossier.id,
     user_id:    user.id,
     type:       'email',
     contenu:    `Brouillon relance #${relanceNum} créé — ${objet}`,

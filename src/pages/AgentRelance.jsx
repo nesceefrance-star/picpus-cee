@@ -80,7 +80,7 @@ function RelanceCard({ relance, apiHeaders, onDraftCreated }) {
       const res = await fetch('/api/email-draft-create', {
         method: 'POST',
         headers: apiHeaders,
-        body: JSON.stringify({ devisId: relance.devisId, ...params }),
+        body: JSON.stringify({ dossierId: relance.dossierId, ...params }),
       })
       const data = await res.json()
       if (!res.ok || !data.success) throw new Error(data.error || 'Erreur inconnue')
@@ -117,13 +117,13 @@ function RelanceCard({ relance, apiHeaders, onDraftCreated }) {
           </Typography>
           <Typography sx={{ fontSize: 12, color: DARK.soft }}>
             {relance.prospect?.contact_nom && `${relance.prospect.contact_nom} · `}
-            {relance.dossier?.ficheCee} · {relance.dossier?.ref}
+            {relance.ficheCee} · {relance.dossierRef}
           </Typography>
         </Box>
 
         {/* Montants */}
         <Box sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
-          <Typography sx={{ fontSize: 13, fontWeight: 700, color: DARK.text }}>{fmt(relance.totalTtc)}</Typography>
+          <Typography sx={{ fontSize: 13, fontWeight: 700, color: DARK.text }}>{fmt(relance.montantDevis)}</Typography>
           <Typography sx={{ fontSize: 11, color: '#22C55E' }}>Prime : {fmt(relance.primeCee)}</Typography>
         </Box>
 

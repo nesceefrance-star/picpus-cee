@@ -1,6 +1,6 @@
 // api/relances-list.js — ÉTAPE 1 (rapide, < 1s)
-// Retourne les devis "envoyé" en attente de relance depuis Supabase.
-// Pour l'admin : tous les commerciaux. Pour un commercial : uniquement ses dossiers.
+// Détecte les relances depuis dossiers.statut = 'devis' (= devis envoyé dans le CRM).
+// Les montants viennent des champs prime_estimee / montant_devis du dossier.
 // Buckets : J+7 (7-13j), J+14 (14-19j), J+20+ (20j+).
 
 import { createClient } from '@supabase/supabase-js'
@@ -28,86 +28,74 @@ export default async function handler(req, res) {
   const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
   if (authErr || !user) return res.status(401).json({ error: 'unauthorized' })
 
-  // Profil pour déterminer le rôle
   const { data: profile } = await supabase
     .from('profiles').select('role').eq('id', user.id).single()
   const isAdmin = profile?.role === 'admin'
 
-  // Dossiers au statut 'devis' = devis envoyé dans le CRM
-  // On prend le dernier devis de chaque dossier concerné
-  const { data: devisList, error: devisErr } = await supabase
-    .from('devis')
+  // Dossiers au statut 'devis' avec prospect
+  let query = supabase
+    .from('dossiers')
     .select(`
-      id, numero, total_ttc, prime_cee, reste_ttc, updated_at,
-      dossier:dossiers(
-        id, ref, fiche_cee, assigne_a, statut,
-        prospect:prospects(raison_sociale, contact_nom, contact_email, contact_tel)
-      )
+      id, ref, fiche_cee, statut, assigne_a, updated_at,
+      prime_estimee, montant_devis, marge_pct,
+      prospect:prospects(raison_sociale, contact_nom, contact_email, contact_tel)
     `)
+    .eq('statut', 'devis')
     .order('updated_at', { ascending: true })
 
-  if (devisErr) return res.status(500).json({ error: devisErr.message })
+  if (!isAdmin) query = query.eq('assigne_a', user.id)
 
-  // Garder uniquement les devis dont le dossier est au statut 'devis' (= envoyé)
-  // + filtrer par commercial si non-admin
-  const filtered = (devisList || []).filter(d => {
-    if (d.dossier?.statut !== 'devis') return false
-    if (!isAdmin && d.dossier?.assigne_a !== user.id) return false
-    return true
-  })
+  const { data: dossiers, error: dossierErr } = await query
+  if (dossierErr) return res.status(500).json({ error: dossierErr.message })
 
-  if (!filtered.length) return res.json({ relances: [], isAdmin, commercials: [] })
+  if (!dossiers?.length) return res.json({ relances: [], isAdmin, commercials: [] })
 
-  // Compter les activités email déjà faites après envoi du devis (= relances effectuées)
-  const dossierIds = [...new Set(filtered.map(d => d.dossier?.id).filter(Boolean))]
+  // Activités email par dossier (relances déjà faites)
+  const dossierIds = dossiers.map(d => d.id)
   const { data: activites } = await supabase
     .from('activites')
     .select('dossier_id, created_at')
     .in('dossier_id', dossierIds)
     .eq('type', 'email')
 
-  // Récupérer les profils des commerciaux pour la vue admin
+  // Profils commerciaux pour la vue admin
   let profilesMap = {}
   let commercials = []
   if (isAdmin) {
-    const userIds = [...new Set(filtered.map(d => d.dossier?.assigne_a).filter(Boolean))]
-    const { data: profiles } = await supabase
-      .from('profiles').select('id, nom, prenom').in('id', userIds)
-    profiles?.forEach(p => { profilesMap[p.id] = p })
-    commercials = profiles || []
+    const userIds = [...new Set(dossiers.map(d => d.assigne_a).filter(Boolean))]
+    if (userIds.length) {
+      const { data: profiles } = await supabase
+        .from('profiles').select('id, nom, prenom').in('id', userIds)
+      profiles?.forEach(p => { profilesMap[p.id] = p })
+      commercials = profiles || []
+    }
   }
 
   const now = Date.now()
 
-  const relances = filtered.map(devis => {
-    const sentAt   = new Date(devis.updated_at).getTime()
+  const relances = dossiers.map(dossier => {
+    const sentAt    = new Date(dossier.updated_at).getTime()
     const daysSince = Math.floor((now - sentAt) / 86400000)
     const b = bucket(daysSince)
-    if (!b) return null // Pas encore J+7
+    if (!b) return null
 
-    const dossierId = devis.dossier?.id
     const relancesDone = activites
-      ?.filter(a => a.dossier_id === dossierId && new Date(a.created_at) > new Date(devis.updated_at))
+      ?.filter(a => a.dossier_id === dossier.id && new Date(a.created_at) > new Date(dossier.updated_at))
       .length || 0
 
     return {
-      devisId:      devis.id,
-      devisNumero:  devis.numero,
-      totalTtc:     devis.total_ttc,
-      primeCee:     devis.prime_cee,
-      resteTtc:     devis.reste_ttc,
-      sentAt:       devis.updated_at,
+      dossierId:    dossier.id,
+      dossierRef:   dossier.ref,
+      ficheCee:     dossier.fiche_cee,
+      primeCee:     dossier.prime_estimee,
+      montantDevis: dossier.montant_devis,
+      sentAt:       dossier.updated_at,
       daysSince,
       bucket:       b,
       relancesDone,
-      dossier: {
-        id:       dossierId,
-        ref:      devis.dossier?.ref,
-        ficheCee: devis.dossier?.fiche_cee,
-        assigneA: devis.dossier?.assigne_a,
-      },
-      prospect:      devis.dossier?.prospect,
-      commercial:    isAdmin ? (profilesMap[devis.dossier?.assigne_a] || null) : undefined,
+      prospect:     dossier.prospect,
+      commercial:   isAdmin ? (profilesMap[dossier.assigne_a] || null) : undefined,
+      assigneA:     dossier.assigne_a,
     }
   }).filter(Boolean)
 
