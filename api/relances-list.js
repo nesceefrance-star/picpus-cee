@@ -33,25 +33,28 @@ export default async function handler(req, res) {
     .from('profiles').select('role').eq('id', user.id).single()
   const isAdmin = profile?.role === 'admin'
 
-  // Tous les devis envoyés avec leur dossier + prospect
+  // Dossiers au statut 'devis' = devis envoyé dans le CRM
+  // On prend le dernier devis de chaque dossier concerné
   const { data: devisList, error: devisErr } = await supabase
     .from('devis')
     .select(`
       id, numero, total_ttc, prime_cee, reste_ttc, updated_at,
       dossier:dossiers(
-        id, ref, fiche_cee, assigne_a,
+        id, ref, fiche_cee, assigne_a, statut,
         prospect:prospects(raison_sociale, contact_nom, contact_email, contact_tel)
       )
     `)
-    .eq('statut', 'envoye')
     .order('updated_at', { ascending: true })
 
   if (devisErr) return res.status(500).json({ error: devisErr.message })
 
-  // Filtrer par commercial si non-admin
-  const filtered = isAdmin
-    ? devisList
-    : devisList.filter(d => d.dossier?.assigne_a === user.id)
+  // Garder uniquement les devis dont le dossier est au statut 'devis' (= envoyé)
+  // + filtrer par commercial si non-admin
+  const filtered = (devisList || []).filter(d => {
+    if (d.dossier?.statut !== 'devis') return false
+    if (!isAdmin && d.dossier?.assigne_a !== user.id) return false
+    return true
+  })
 
   if (!filtered.length) return res.json({ relances: [], isAdmin, commercials: [] })
 
