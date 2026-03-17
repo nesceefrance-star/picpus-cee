@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import DossierDetail from './pages/DossierDetail'
 import AdminUsers from './pages/AdminUsers'
+import AgentRelance from './pages/AgentRelance'
 import ResetPassword from './pages/ResetPassword'
 import PICPUSHub from './Hub'
 import AppLayout from './components/AppLayout'
@@ -78,6 +79,7 @@ export default function AppRouter() {
           <Route path="/"               element={<WithLayout><Dashboard /></WithLayout>} />
           <Route path="/hub"            element={<WithLayout><PICPUSHub /></WithLayout>} />
           <Route path="/dossier/:id"    element={<WithLayout><DossierDetail /></WithLayout>} />
+          <Route path="/relances"       element={<WithLayout><AgentRelance /></WithLayout>} />
           <Route path="/admin/users"    element={<WithLayout><AdminUsers /></WithLayout>} />
           <Route path="*"               element={<Navigate to="/" replace />} />
         </Routes>

@@ -23,6 +23,7 @@ import BuildIcon from '@mui/icons-material/Build'
 import SearchIcon from '@mui/icons-material/Search'
 import ChecklistIcon from '@mui/icons-material/Checklist'
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
+import ForwardToInboxIcon from '@mui/icons-material/ForwardToInbox'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import PeopleIcon from '@mui/icons-material/People'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
@@ -188,6 +189,10 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
             <Item icon={<ChecklistIcon fontSize="small" />}   label="Checklist CEE"        path="/hub" module="checklist"    indent />
             <Item icon={<ReceiptLongIcon fontSize="small" />} label="Générateur de devis"  path="/hub" module="marges"       indent />
           </Collapse>
+
+          {/* Agent Relances */}
+          <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
+          <Item icon={<ForwardToInboxIcon fontSize="small" />} label="Agent Relances" path="/relances" />
 
           {/* Admin */}
           {isAdmin && <>

@@ -99,6 +99,24 @@ create table if not exists activites (
   created_at      timestamptz default now()
 );
 
+-- ─── GOOGLE TOKENS (Agent Relances) ─────────────────────────
+-- Stocke les tokens OAuth2 Google par utilisateur Supabase.
+-- Nécessite SUPABASE_SERVICE_ROLE_KEY côté serveur pour écrire.
+create table if not exists google_tokens (
+  user_id       uuid primary key references auth.users(id) on delete cascade,
+  access_token  text not null,
+  refresh_token text,
+  expires_at    timestamptz not null,
+  email         text,
+  updated_at    timestamptz default now()
+);
+
+alter table google_tokens enable row level security;
+
+-- Chaque utilisateur ne voit que ses propres tokens
+create policy "Own tokens only" on google_tokens
+  for all using (auth.uid() = user_id);
+
 -- ─── INDEX ───────────────────────────────────────────────────
 create index if not exists idx_dossiers_prospect on dossiers(prospect_id);
 create index if not exists idx_dossiers_statut on dossiers(statut);
