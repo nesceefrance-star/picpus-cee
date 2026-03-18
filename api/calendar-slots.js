@@ -11,10 +11,10 @@ const supabase = createClient(
 
 async function getValidToken(userId) {
   const { data } = await supabase.from('google_tokens').select('*').eq('user_id', userId).single()
-  if (!data) throw new Error('Gmail non connecté')
+  if (!data) throw new Error('Google non connecté')
 
   if (new Date(data.expires_at) > new Date(Date.now() + 5 * 60 * 1000)) {
-    return data.access_token
+    return { token: data.access_token, calendarIds: data.calendar_ids || [] }
   }
 
   const r = await fetch('https://oauth2.googleapis.com/token', {
@@ -28,7 +28,7 @@ async function getValidToken(userId) {
     }),
   })
   const tokens = await r.json()
-  if (!tokens.access_token) throw new Error('Token Google expiré — reconnectez Gmail')
+  if (!tokens.access_token) throw new Error('Token Google expiré — reconnectez dans Paramètres')
 
   await supabase.from('google_tokens').update({
     access_token: tokens.access_token,
@@ -36,7 +36,7 @@ async function getValidToken(userId) {
     updated_at:   new Date().toISOString(),
   }).eq('user_id', userId)
 
-  return tokens.access_token
+  return { token: tokens.access_token, calendarIds: data.calendar_ids || [] }
 }
 
 // Retourne n jours ouvrés en partant de startOffset jours ouvrés à partir d'aujourd'hui
@@ -81,9 +81,9 @@ export default async function handler(req, res) {
   const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
   if (authErr || !user) return res.status(401).json({ error: 'unauthorized' })
 
-  let accessToken
+  let accessToken, calendarIds
   try {
-    accessToken = await getValidToken(user.id)
+    ({ token: accessToken, calendarIds } = await getValidToken(user.id))
   } catch (e) {
     return res.status(400).json({ error: e.message })
   }
@@ -94,13 +94,16 @@ export default async function handler(req, res) {
   const timeMax  = new Date(workDays[workDays.length - 1])
   timeMax.setHours(23, 59, 59)
 
-  // Récupérer les événements existants
-  const eventsRes = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax.toISOString()}&singleEvents=true&orderBy=startTime`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  )
-  const eventsData = await eventsRes.json()
-  const events = eventsData.items || []
+  // Agendas à interroger
+  const cals = calendarIds.length > 0 ? calendarIds : ['primary']
+
+  const allEvents = await Promise.all(cals.map(calId =>
+    fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${timeMin}&timeMax=${timeMax.toISOString()}&singleEvents=true&orderBy=startTime`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    ).then(r => r.json()).then(d => d.items || []).catch(() => [])
+  ))
+  const events = allEvents.flat()
 
   // Convertir les événements en plages occupées
   const busy = events

@@ -15,7 +15,7 @@ async function getValidToken(userId) {
   if (!data) throw new Error('Google non connecté')
 
   if (new Date(data.expires_at) > new Date(Date.now() + 5 * 60 * 1000)) {
-    return data.access_token
+    return { token: data.access_token, calendarIds: data.calendar_ids || [] }
   }
 
   const r = await fetch('https://oauth2.googleapis.com/token', {
@@ -37,7 +37,7 @@ async function getValidToken(userId) {
     updated_at:   new Date().toISOString(),
   }).eq('user_id', userId)
 
-  return tokens.access_token
+  return { token: tokens.access_token, calendarIds: data.calendar_ids || [] }
 }
 
 const WINDOWS = [
@@ -72,9 +72,9 @@ export default async function handler(req, res) {
   const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
   if (authErr || !user) return res.status(401).json({ error: 'unauthorized' })
 
-  let accessToken
+  let accessToken, calendarIds
   try {
-    accessToken = await getValidToken(user.id)
+    ({ token: accessToken, calendarIds } = await getValidToken(user.id))
   } catch (e) {
     return res.status(400).json({ error: e.message })
   }
@@ -84,14 +84,19 @@ export default async function handler(req, res) {
   if (!year || !month) return res.status(400).json({ error: 'year et month requis' })
 
   const timeMin = new Date(year, month - 1, 1).toISOString()
-  const timeMax = new Date(year, month, 1).toISOString() // 1er du mois suivant
+  const timeMax = new Date(year, month, 1).toISOString()
 
-  const eventsRes = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=250`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  )
-  const eventsData = await eventsRes.json()
-  const events = eventsData.items || []
+  // Agendas à interroger : sélection ou agenda principal par défaut
+  const cals = calendarIds.length > 0 ? calendarIds : ['primary']
+
+  // Récupérer les événements de tous les agendas en parallèle
+  const allEvents = await Promise.all(cals.map(calId =>
+    fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=250`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    ).then(r => r.json()).then(d => d.items || []).catch(() => [])
+  ))
+  const events = allEvents.flat()
 
   // Grouper les événements par jour
   // busy[dateStr] = [{ start, end }]

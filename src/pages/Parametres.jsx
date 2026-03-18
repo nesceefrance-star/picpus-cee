@@ -78,8 +78,11 @@ function IntegrationCard({ icon, name, description, status, onConnect, onDisconn
 export default function Parametres() {
   const { session, user, profile } = useStore()
 
-  const [googleStatus, setGoogleStatus] = useState({ connected: false, email: null, loaded: false })
-  const [disconnecting, setDisconnecting] = useState(false)
+  const [googleStatus,   setGoogleStatus]   = useState({ connected: false, email: null, loaded: false })
+  const [disconnecting,  setDisconnecting]  = useState(false)
+  const [calendars,      setCalendars]      = useState([])
+  const [calsLoading,    setCalsLoading]    = useState(false)
+  const [calsSaved,      setCalsSaved]      = useState(false)
 
   useEffect(() => {
     if (!session) return
@@ -87,9 +90,38 @@ export default function Parametres() {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
       .then(r => r.json())
-      .then(d => setGoogleStatus({ connected: d.connected, email: d.email, loaded: true }))
+      .then(d => {
+        setGoogleStatus({ connected: d.connected, email: d.email, loaded: true })
+        if (d.connected) loadCalendars()
+      })
       .catch(() => setGoogleStatus(s => ({ ...s, loaded: true })))
   }, [session])
+
+  const loadCalendars = async () => {
+    setCalsLoading(true)
+    try {
+      const r = await fetch('/api/calendar-list', { headers: { Authorization: `Bearer ${session.access_token}` } })
+      const d = await r.json()
+      setCalendars(d.calendars || [])
+    } catch {}
+    setCalsLoading(false)
+  }
+
+  const toggleCalendar = (id) => {
+    setCalendars(prev => prev.map(c => c.id === id ? { ...c, selected: !c.selected } : c))
+    setCalsSaved(false)
+  }
+
+  const saveCalendars = async () => {
+    const selected = calendars.filter(c => c.selected).map(c => c.id)
+    await fetch('/api/calendar-list', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ calendarIds: selected }),
+    })
+    setCalsSaved(true)
+    setTimeout(() => setCalsSaved(false), 3000)
+  }
 
   const connectGoogle = () => {
     window.location.href = `/api/auth-google?userId=${user?.id}`
@@ -133,9 +165,34 @@ export default function Parametres() {
           <Box sx={{ mt: 0.5 }}><CircularProgress size={14} /></Box>
         )}
         {googleStatus.connected && (
-          <Typography sx={{ fontSize: 11, color: DARK.textSoft, mt: 0.5 }}>
-            Accès : Gmail · Agenda · Meet
-          </Typography>
+          <Box sx={{ mt: 1.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 700, color: DARK.textMid }}>
+                Agendas pris en compte pour les disponibilités
+              </Typography>
+              {calendars.length > 0 && (
+                <Button size="small" variant={calsSaved ? 'contained' : 'outlined'} color={calsSaved ? 'success' : 'primary'}
+                  onClick={saveCalendars} sx={{ fontSize: 11, textTransform: 'none', minWidth: 90 }}>
+                  {calsSaved ? '✓ Sauvegardé' : 'Sauvegarder'}
+                </Button>
+              )}
+            </Box>
+            {calsLoading && <Typography sx={{ fontSize: 12, color: DARK.textSoft }}>Chargement…</Typography>}
+            {calendars.map(cal => (
+              <Box key={cal.id} onClick={() => toggleCalendar(cal.id)}
+                sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1, borderRadius: 1.5, cursor: 'pointer',
+                  '&:hover': { background: '#273549' }, mb: 0.5, transition: 'background .1s' }}>
+                <Box sx={{ width: 12, height: 12, borderRadius: '50%', background: cal.backgroundColor, flexShrink: 0 }} />
+                <Typography sx={{ fontSize: 12, color: cal.selected ? DARK.text : DARK.textSoft, flex: 1 }}>
+                  {cal.summary}{cal.primary ? ' (principal)' : ''}
+                </Typography>
+                <Box sx={{ width: 16, height: 16, borderRadius: 0.5, border: `2px solid ${cal.selected ? '#3B82F6' : '#475569'}`,
+                  background: cal.selected ? '#3B82F6' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {cal.selected && <span style={{ color: '#fff', fontSize: 10, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                </Box>
+              </Box>
+            ))}
+          </Box>
         )}
       </IntegrationCard>
 
