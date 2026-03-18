@@ -759,39 +759,9 @@ export default function DossierDetail() {
                 />
               </div>
 
-              {/* Actions */}
+              {/* Visio */}
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 16 }}>⚡ Actions rapides</div>
-
-                {/* Créer un devis */}
-                <button
-                  onClick={() => navigate('/hub', {
-                    state: {
-                      module: 'marges',
-                      prefill: {
-                        nomClient: dossier.prospects?.raison_sociale || '',
-                        siret: dossier.prospects?.siret || '',
-                        adresseSite: [dossier.prospects?.adresse, dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(', '),
-                        nomContact: dossier.prospects?.contact_nom || '',
-                        fonctionContact: '',
-                        telephoneClient: dossier.prospects?.contact_tel || '',
-                        emailClient: dossier.prospects?.contact_email || '',
-                        refDevis: dossier.ref || refDefault(),
-                        dateDevis: new Date().toLocaleDateString('fr-FR'),
-                        prime: simulation?.prime_estimee || 0,
-                        batQte: simulation?.nb_equipements || 0,
-                        batPuVente: simulation?.parametres?.cout_unitaire_destrat ? parseFloat(simulation.parametres.cout_unitaire_destrat) : 0,
-                        batDebit: simulation?.parametres?.debit_unitaire || '14000',
-                        ficheCee: simulation?.fiche_cee || dossier.fiche_cee || 'BAT-TH-142',
-                      },
-                    },
-                  })}
-                  style={{ width: '100%', padding: '10px', background: C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 12 }}>
-                  📄 Créer un devis à partir d'un devis prestataire
-                </button>
-
-                {/* Réunion en ligne */}
-                <div style={{ fontSize: 12, fontWeight: 600, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>Réunion en ligne</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>📹 Visio</div>
 
                 {/* Choix provider */}
                 <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
@@ -1002,6 +972,33 @@ export default function DossierDetail() {
                 <InfoRow label="Coût prestation" value={simParams.cout_total != null ? `${Number(simParams.cout_total).toLocaleString('fr')} €` : null} color="#D97706" />
                 <InfoRow label="Marge nette" value={simParams.marge != null ? `${Number(simParams.marge).toLocaleString('fr')} €` : null} color={simParams.marge >= 0 ? '#16A34A' : '#DC2626'} />
                 <InfoRow label="Prix MWh" value={sim.prix_mwh != null ? `${sim.prix_mwh} €/MWh` : null} />
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                  <button
+                    onClick={() => navigate('/hub', {
+                      state: {
+                        module: 'marges',
+                        prefill: {
+                          nomClient: dossier.prospects?.raison_sociale || '',
+                          siret: dossier.prospects?.siret || '',
+                          adresseSite: [dossier.prospects?.adresse, dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(', '),
+                          nomContact: dossier.prospects?.contact_nom || '',
+                          fonctionContact: '',
+                          telephoneClient: dossier.prospects?.contact_tel || '',
+                          emailClient: dossier.prospects?.contact_email || '',
+                          refDevis: dossier.ref || refDefault(),
+                          dateDevis: new Date().toLocaleDateString('fr-FR'),
+                          prime: sim.prime_estimee || 0,
+                          batQte: sim.nb_equipements || 0,
+                          batPuVente: simParams.cout_unitaire_destrat ? parseFloat(simParams.cout_unitaire_destrat) : 0,
+                          batDebit: simParams.debit_unitaire || '14000',
+                          ficheCee: sim.fiche_cee || 'BAT-TH-142',
+                        },
+                      },
+                    })}
+                    style={{ width: '100%', padding: '10px', background: C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    📄 Créer un devis à partir d'un devis prestataire
+                  </button>
+                </div>
               </div>
             )}
 
