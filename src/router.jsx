@@ -11,6 +11,7 @@ import MonAssistante from './pages/MonAssistante'
 import SuiviEquipe from './pages/SuiviEquipe'
 import ResetPassword from './pages/ResetPassword'
 import PICPUSHub from './Hub'
+import Parametres from './pages/Parametres'
 import AppLayout from './components/AppLayout'
 import { createTheme, ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
@@ -85,6 +86,7 @@ export default function AppRouter() {
           <Route path="/assistante"    element={<WithLayout><MonAssistante /></WithLayout>} />
           <Route path="/suivi-equipe"  element={<WithLayout><SuiviEquipe /></WithLayout>} />
           <Route path="/admin/users"    element={<WithLayout><AdminUsers /></WithLayout>} />
+          <Route path="/parametres"    element={<WithLayout><Parametres /></WithLayout>} />
           <Route path="*"               element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

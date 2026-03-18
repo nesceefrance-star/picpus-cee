@@ -32,6 +32,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import LogoutIcon from '@mui/icons-material/Logout'
 import ElectricBoltIcon from '@mui/icons-material/ElectricBolt'
+import SettingsIcon from '@mui/icons-material/Settings'
 
 const DRAWER_OPEN  = 240
 const DRAWER_MINI  = 64
@@ -213,8 +214,9 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
         </List>
       </Box>
 
-      {/* Footer — profil + déconnexion */}
+      {/* Footer — paramètres + profil + déconnexion */}
       <Box sx={{ borderTop: `1px solid ${DARK.border}`, p: 1, flexShrink: 0 }}>
+        <Item icon={<SettingsIcon fontSize="small" />} label="Paramètres" path="/parametres" />
         {open ? (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, px: 1, py: 0.8, borderRadius: 2, '&:hover': { background: DARK.bgHover }, cursor: 'default' }}>
             <Avatar sx={{ width: 32, height: 32, fontSize: 13, fontWeight: 700, background: DARK.accent }}>
