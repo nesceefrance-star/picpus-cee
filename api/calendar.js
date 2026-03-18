@@ -162,7 +162,8 @@ export default async function handler(req, res) {
       const start = new Date(e.start.dateTime); const end = new Date(e.end.dateTime)
       const dateStr = parisDateStr(start)
       if (!busyByDay[dateStr]) busyByDay[dateStr] = []
-      busyByDay[dateStr].push({ start, end, allDay: false })
+      const fmtTime = (dt) => new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }).format(dt)
+      busyByDay[dateStr].push({ start, end, allDay: false, summary: e.summary || '(sans titre)', startLabel: fmtTime(start), endLabel: fmtTime(end) })
     }
 
     const today = new Date(); today.setHours(0,0,0,0)
@@ -171,9 +172,11 @@ export default async function handler(req, res) {
       const date = new Date(year, month - 1, d); const dow = date.getDay()
       if (dow === 0 || dow === 6 || date < today) continue
       const dateStr = date.toISOString().split('T')[0]
-      const busy = (busyByDay[dateStr] || []).filter(b => !b.allDay)
-      const hasAllDay = (busyByDay[dateStr] || []).some(b => b.allDay)
-      days[dateStr] = { eventCount: (busyByDay[dateStr] || []).length, hasAllDay, slots: hasAllDay ? [] : freeSlots(dateStr, busy) }
+      const dayEntries = busyByDay[dateStr] || []
+      const busy       = dayEntries.filter(b => !b.allDay)
+      const hasAllDay  = dayEntries.some(b => b.allDay)
+      const eventsInfo = dayEntries.filter(b => !b.allDay).map(b => ({ summary: b.summary, start: b.startLabel, end: b.endLabel }))
+      days[dateStr] = { eventCount: dayEntries.length, hasAllDay, slots: hasAllDay ? [] : freeSlots(dateStr, busy), events: eventsInfo }
     }
     return res.json({ days })
   }

@@ -203,15 +203,29 @@ export default function CalendarPicker({ session, onSelect, selectedDate, select
       {selectedDay && (
         <div style={{ borderTop: `1px solid ${C.border}`, padding: '12px 14px' }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 8 }}>
-            Créneaux disponibles — {new Date(selectedDay + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {new Date(selectedDay + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
           </div>
 
           {!selectedDayInfo && loading && (
             <div style={{ fontSize: 12, color: C.textSoft }}>Chargement…</div>
           )}
 
+          {/* Événements du jour */}
+          {selectedDayInfo?.events?.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMid, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 4 }}>
+                Agenda
+              </div>
+              {selectedDayInfo.events.map((ev, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '3px 0', borderBottom: i < selectedDayInfo.events.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#DC2626', flexShrink: 0 }}>{ev.start} – {ev.end}</span>
+                  <span style={{ fontSize: 12, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.summary}</span>
+                </div>
+              ))}
+            </div>
+          )}
           {selectedDayInfo?.hasAllDay && (
-            <div style={{ fontSize: 12, color: '#991B1B', background: '#FEF2F2', borderRadius: 6, padding: '6px 10px' }}>
+            <div style={{ fontSize: 12, color: '#991B1B', background: '#FEF2F2', borderRadius: 6, padding: '6px 10px', marginBottom: 8 }}>
               Journée entière bloquée
             </div>
           )}
@@ -223,6 +237,10 @@ export default function CalendarPicker({ session, onSelect, selectedDate, select
           )}
 
           {selectedDayInfo?.slots?.length > 0 && (
+            <>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.textMid, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 6 }}>
+              Créneaux libres
+            </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {selectedDayInfo.slots.map(slot => {
                 const isSelected = selectedDate === selectedDay && selectedTime === slot.time
@@ -241,6 +259,7 @@ export default function CalendarPicker({ session, onSelect, selectedDate, select
                 )
               })}
             </div>
+            </>
           )}
 
           {!selectedDayInfo && !loading && (
