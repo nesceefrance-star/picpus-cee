@@ -60,8 +60,14 @@ const WINDOWS = [
 ]
 
 function freeSlots(dateStr, busy) {
+  // Détecter l'offset Paris pour ce jour (gère le passage heure d'été)
+  const ref    = new Date(`${dateStr}T12:00:00Z`)
+  const tzStr  = new Intl.DateTimeFormat('en', { timeZone: 'Europe/Paris', timeZoneName: 'shortOffset' })
+    .formatToParts(ref).find(p => p.type === 'timeZoneName').value // "GMT+1" ou "GMT+2"
+  const offsetH = parseInt(tzStr.replace('GMT', '')) || 1
+  const [Y, M, D] = dateStr.split('-').map(Number)
   return WINDOWS.reduce((acc, [h, m]) => {
-    const start = new Date(`${dateStr}T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00`)
+    const start = new Date(Date.UTC(Y, M - 1, D, h - offsetH, m, 0))
     const end   = new Date(start.getTime() + 45 * 60 * 1000)
     if (!busy.some(b => start < b.end && end > b.start)) {
       acc.push({ time: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`, label: `${String(h).padStart(2,'0')}h${m === 0 ? '00' : m}` })
