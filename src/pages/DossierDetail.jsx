@@ -852,17 +852,28 @@ export default function DossierDetail() {
                     {meetCreating ? '⏳ Création en cours…' : '🟢 Créer la réunion Google Meet'}
                   </button>
                 ) : (
-                  <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 7, padding: '10px 12px', marginBottom: 10, fontSize: 12, color: '#92400E' }}>
-                    🟣 <strong>Teams</strong> nécessite une connexion Azure AD. En attendant, colle le lien manuellement ci-dessous après avoir créé la réunion dans Teams.
-                  </div>
+                  <button
+                    onClick={() => {
+                      const start = new Date(`${teamsDate}T${teamsTime}:00`)
+                      const end   = new Date(start.getTime() + teamsDuration * 60000)
+                      const subject   = `RDV ${dossier.prospects?.raison_sociale || 'Client'} — RÉGIE PICPUS`
+                      const attendees = teamsEmails.split(',').map(e => e.trim()).filter(Boolean).join(',')
+                      const p = new URLSearchParams({ subject, startTime: start.toISOString(), endTime: end.toISOString() })
+                      if (attendees) p.set('attendees', attendees)
+                      window.open(`https://teams.microsoft.com/l/meeting/new?${p}`, '_blank')
+                    }}
+                    disabled={!teamsDate || !teamsTime}
+                    style={{ width: '100%', padding: '9px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: '#5B5EA6', border: 'none', color: '#fff', marginBottom: 10 }}>
+                    🟣 Ouvrir le formulaire Teams
+                  </button>
                 )}
 
                 {meetError && (
                   <div style={{ fontSize: 12, color: '#DC2626', marginBottom: 10 }}>⚠️ {meetError}</div>
                 )}
 
-                {/* Coller le lien manuellement (Teams ou fallback) */}
-                {(meetProvider === 'teams' || !reunionLink) && (
+                {/* Coller le lien manuellement (Teams uniquement) */}
+                {meetProvider === 'teams' && (
                   <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 7, padding: '10px 12px', marginBottom: 8 }}>
                     <div style={{ fontSize: 11, color: C.textMid, fontWeight: 600, marginBottom: 6 }}>
                       Coller le lien de la réunion :

@@ -143,30 +143,18 @@ export default function Parametres() {
       <IntegrationCard
         icon="🟣"
         name="Microsoft Teams"
-        description="Création automatique de réunions Teams avec lien de jointure directement dans le dossier."
-        status={{ loaded: true, connected: false }}
+        description="Ouverture du formulaire de création de réunion Teams pré-rempli. Le lien de jointure est ensuite collé manuellement dans le dossier."
+        status={{ loaded: true }}
         comingSoon={false}
         onConnect={() => {}}
       >
-        <Box sx={{ mt: 1.5, background: '#1a2744', border: '1px solid #1e3a6e', borderRadius: 1.5, p: 1.5 }}>
-          <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#60A5FA', mb: 1 }}>
-            Configuration requise
-          </Typography>
+        <Box sx={{ mt: 1.5, background: '#1E293B', border: '1px solid #334155', borderRadius: 1.5, p: 1.5 }}>
           <Typography sx={{ fontSize: 12, color: DARK.textMid, lineHeight: 1.7 }}>
-            1. Crée une app dans <strong style={{ color: DARK.text }}>Azure Active Directory</strong> → Inscriptions d'applications<br />
-            2. URI de redirection : <code style={{ fontSize: 11, background: '#0F172A', padding: '1px 6px', borderRadius: 4, color: '#60A5FA' }}>
-              {window.location.origin}/api/auth-microsoft-callback
-            </code><br />
-            3. Permissions : <code style={{ fontSize: 11, background: '#0F172A', padding: '1px 6px', borderRadius: 4, color: '#60A5FA' }}>OnlineMeetings.ReadWrite</code> · <code style={{ fontSize: 11, background: '#0F172A', padding: '1px 6px', borderRadius: 4, color: '#60A5FA' }}>offline_access</code><br />
-            4. Ajoute dans Vercel : <code style={{ fontSize: 11, background: '#0F172A', padding: '1px 6px', borderRadius: 4, color: '#60A5FA' }}>MICROSOFT_CLIENT_ID</code> · <code style={{ fontSize: 11, background: '#0F172A', padding: '1px 6px', borderRadius: 4, color: '#60A5FA' }}>MICROSOFT_CLIENT_SECRET</code> · <code style={{ fontSize: 11, background: '#0F172A', padding: '1px 6px', borderRadius: 4, color: '#60A5FA' }}>MICROSOFT_REDIRECT_URI</code>
+            Teams fonctionne en mode <strong style={{ color: DARK.text }}>formulaire pré-rempli</strong> — le CRM ouvre Teams avec la date, l'heure et les participants déjà renseignés. Tu confirmes dans Teams, puis tu colles le lien de jointure dans le dossier.
           </Typography>
-          <Button
-            size="small"
-            variant="outlined"
-            disabled
-            sx={{ mt: 1.5, fontSize: 11, textTransform: 'none', borderColor: '#1e3a6e', color: '#60A5FA' }}>
-            Connecter Teams (Azure requis)
-          </Button>
+          <Typography sx={{ fontSize: 11, color: DARK.textSoft, mt: 1 }}>
+            La création automatique du lien (sans quitter le CRM) nécessite un compte Microsoft 365 professionnel.
+          </Typography>
         </Box>
       </IntegrationCard>
 
