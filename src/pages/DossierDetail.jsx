@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import useStore from '../store/useStore'
 import { refDefault } from '../lib/genRef'
+import EmailSection from '../components/EmailSection'
 
 // ── IND-BA-110 ADEME coefficients (kWh cumac / kW) ────────────────────────
 const COEFFICIENTS_IND_110 = {
@@ -103,12 +104,17 @@ const C = {
 }
 
 const STATUTS = [
-  { id: 'simulation', label: 'Simulation',   color: '#7C3AED', bg: '#EDE9FE' },
-  { id: 'prospect',   label: 'Prospect',     color: '#0369A1', bg: '#DBEAFE' },
-  { id: 'devis',      label: 'Devis envoyé', color: '#D97706', bg: '#FEF3C7' },
-  { id: 'ah',         label: 'AH en cours',  color: '#DC2626', bg: '#FEE2E2' },
-  { id: 'conforme',   label: 'Conforme',     color: '#16A34A', bg: '#DCFCE7' },
-  { id: 'facture',    label: 'Facturé',      color: '#64748B', bg: '#F1F5F9' },
+  { id: 'simulation',       label: 'Simulation',        color: '#7C3AED', bg: '#EDE9FE' },
+  { id: 'prospect',         label: 'Prospect',          color: '#0369A1', bg: '#DBEAFE' },
+  { id: 'contacte',         label: 'Contacté',          color: '#0891B2', bg: '#CFFAFE' },
+  { id: 'visio_planifiee',  label: 'Visio planifiée',   color: '#0D9488', bg: '#CCFBF1' },
+  { id: 'visio_effectuee',  label: 'Visio effectuée',   color: '#059669', bg: '#D1FAE5' },
+  { id: 'visite_planifiee', label: 'Visite planifiée',  color: '#D97706', bg: '#FEF3C7' },
+  { id: 'visite_effectuee', label: 'Visite effectuée',  color: '#EA580C', bg: '#FFEDD5' },
+  { id: 'devis',            label: 'Devis envoyé',      color: '#9333EA', bg: '#F3E8FF' },
+  { id: 'ah',               label: 'AH en cours',       color: '#DC2626', bg: '#FEE2E2' },
+  { id: 'conforme',         label: 'Conforme',          color: '#16A34A', bg: '#DCFCE7' },
+  { id: 'facture',          label: 'Facturé',           color: '#64748B', bg: '#F1F5F9' },
 ]
 
 
@@ -138,12 +144,14 @@ function InfoRow({ label, value, color }) {
 export default function DossierDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { currentDossier, user, profile, updateDossier, updateProspect, fetchSimulations, createSimulation, profiles, fetchProfiles } = useStore()
+  const { currentDossier, user, profile, session, updateDossier, updateProspect, fetchSimulations, createSimulation, profiles, fetchProfiles } = useStore()
 
   const [dossier, setDossier] = useState(null)
   const [simulation, setSimulation] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [savingStatut, setSavingStatut] = useState(false)
+  const [savingStatut,  setSavingStatut]  = useState(false)
+  const [statutForm,    setStatutForm]    = useState({ statut: '', date: new Date().toISOString().split('T')[0] })
+  const [statutSaved,   setStatutSaved]   = useState(false)
   const [savingAssigne, setSavingAssigne] = useState(false)
 
   const [editProspect, setEditProspect] = useState(false)
@@ -255,6 +263,10 @@ export default function DossierDetail() {
     }
     if (d) {
       setDossier(d)
+      setStatutForm({
+        statut: d.statut || 'simulation',
+        date: d.statut_date ? new Date(d.statut_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      })
       const sims = await fetchSimulations(d.id)
       const sim = sims[0] || null
       setSimulation(sim)
@@ -313,10 +325,21 @@ export default function DossierDetail() {
     setLoading(false)
   }
 
-  const changeStatut = async (statut) => {
+  const changeStatut = async () => {
+    if (!session) return
     setSavingStatut(true)
-    const { data } = await updateDossier(id, { statut })
-    if (data) setDossier(data)
+    setStatutSaved(false)
+    try {
+      const r = await fetch('/api/dossier-status-update', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dossierId: id, statut: statutForm.statut, statut_date: statutForm.date }),
+      })
+      const d = await r.json()
+      if (d.dossier) setDossier(prev => ({ ...prev, statut: d.dossier.statut, statut_date: d.dossier.statut_date }))
+      setStatutSaved(true)
+      setTimeout(() => setStatutSaved(false), 3000)
+    } catch (e) { /* ignore */ }
     setSavingStatut(false)
   }
 
@@ -531,13 +554,28 @@ export default function DossierDetail() {
             </div>
           </div>
           {/* Changement de statut */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {STATUTS.map(s => (
-              <button key={s.id} onClick={() => changeStatut(s.id)} disabled={savingStatut || dossier.statut === s.id}
-                style={{ padding: '6px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: dossier.statut === s.id ? 'default' : 'pointer', fontFamily: 'inherit', border: `1px solid ${s.color}`, background: dossier.statut === s.id ? s.bg : 'transparent', color: s.color, opacity: savingStatut ? .6 : 1, transition: 'all .1s' }}>
-                {s.label}
-              </button>
-            ))}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select
+              value={statutForm.statut}
+              onChange={e => setStatutForm(f => ({ ...f, statut: e.target.value }))}
+              style={{ fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 10px', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              {STATUTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+            <input
+              type="date"
+              value={statutForm.date}
+              onChange={e => setStatutForm(f => ({ ...f, date: e.target.value }))}
+              style={{ fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 10px', fontFamily: 'inherit' }}
+            />
+            <button
+              onClick={changeStatut}
+              disabled={savingStatut}
+              style={{ padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: savingStatut ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: 'none', background: C.accent, color: '#fff', opacity: savingStatut ? .6 : 1 }}
+            >
+              {savingStatut ? '…' : 'Sauvegarder'}
+            </button>
+            {statutSaved && <span style={{ fontSize: 12, color: '#16A34A', fontWeight: 600 }}>✓ Statut mis à jour</span>}
           </div>
         </div>
 
@@ -1148,6 +1186,9 @@ export default function DossierDetail() {
             </div>
           )}
         </div>
+
+        {/* ── Emails ── */}
+        <EmailSection dossierId={id} statut={dossier.statut} />
 
       </div>
       </div>

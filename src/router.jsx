@@ -8,6 +8,7 @@ import DossierDetail from './pages/DossierDetail'
 import AdminUsers from './pages/AdminUsers'
 import AgentRelance from './pages/AgentRelance'
 import MonAssistante from './pages/MonAssistante'
+import SuiviEquipe from './pages/SuiviEquipe'
 import ResetPassword from './pages/ResetPassword'
 import PICPUSHub from './Hub'
 import AppLayout from './components/AppLayout'
@@ -82,6 +83,7 @@ export default function AppRouter() {
           <Route path="/dossier/:id"    element={<WithLayout><DossierDetail /></WithLayout>} />
           <Route path="/relances"       element={<WithLayout><AgentRelance /></WithLayout>} />
           <Route path="/assistante"    element={<WithLayout><MonAssistante /></WithLayout>} />
+          <Route path="/suivi-equipe"  element={<WithLayout><SuiviEquipe /></WithLayout>} />
           <Route path="/admin/users"    element={<WithLayout><AdminUsers /></WithLayout>} />
           <Route path="*"               element={<Navigate to="/" replace />} />
         </Routes>
