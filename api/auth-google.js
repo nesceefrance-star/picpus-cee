@@ -15,6 +15,7 @@ export default function handler(req, res) {
     scope: [
       'https://mail.google.com/',
       'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/calendar.readonly',
     ].join(' '),
     access_type: 'offline',
     prompt:      'consent', // force refresh_token à chaque connexion

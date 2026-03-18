@@ -190,9 +190,9 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
             <Item icon={<ReceiptLongIcon fontSize="small" />} label="Générateur de devis"  path="/hub" module="marges"       indent />
           </Collapse>
 
-          {/* Agent Relances */}
+          {/* Mon assistante */}
           <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
-          <Item icon={<ForwardToInboxIcon fontSize="small" />} label="Agent Relances" path="/relances" />
+          <Item icon={<ForwardToInboxIcon fontSize="small" />} label="Mon assistante" path="/assistante" />
 
           {/* Admin */}
           {isAdmin && <>

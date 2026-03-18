@@ -1,7 +1,6 @@
-// api/relances-list.js — ÉTAPE 1 (rapide, < 1s)
-// Détecte les relances depuis dossiers.statut = 'devis' (= devis envoyé dans le CRM).
-// Les montants viennent des champs prime_estimee / montant_devis du dossier.
-// Buckets : J+7 (7-13j), J+14 (14-19j), J+20+ (20j+).
+// api/relances-list.js — retourne tous les dossiers actifs + leurs générations d'emails.
+// "Actif" = dans le cycle commercial : contacte → devis.
+// statut_date est la date de référence pour le compteur J+7/J+14/J+20+ (devis seulement).
 
 import { createClient } from '@supabase/supabase-js'
 
@@ -10,7 +9,12 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-function bucket(days) {
+const ACTIVE_STATUTS = [
+  'contacte', 'visio_planifiee', 'visio_effectuee',
+  'visite_planifiee', 'visite_effectuee', 'devis',
+]
+
+function relanceBucket(days) {
   if (days >= 7  && days < 14) return 'J+7'
   if (days >= 14 && days < 20) return 'J+14'
   if (days >= 20)              return 'J+20+'
@@ -32,34 +36,37 @@ export default async function handler(req, res) {
     .from('profiles').select('role').eq('id', user.id).single()
   const isAdmin = profile?.role === 'admin'
 
-  // Dossiers au statut 'devis' avec prospect
   let query = supabase
     .from('dossiers')
     .select(`
-      id, ref, fiche_cee, statut, assigne_a, updated_at,
+      id, ref, fiche_cee, statut, statut_date, assigne_a, updated_at,
       prime_estimee, montant_devis, marge_pct,
       prospect:prospects(raison_sociale, contact_nom, contact_email, contact_tel)
     `)
-    .eq('statut', 'devis')
-    .order('updated_at', { ascending: true })
+    .in('statut', ACTIVE_STATUTS)
+    .order('statut_date', { ascending: true, nullsFirst: false })
 
   if (!isAdmin) query = query.eq('assigne_a', user.id)
 
   const { data: dossiers, error: dossierErr } = await query
   if (dossierErr) return res.status(500).json({ error: dossierErr.message })
+  if (!dossiers?.length) return res.json({ dossiers: [], isAdmin, commercials: [] })
 
-  if (!dossiers?.length) return res.json({ relances: [], isAdmin, commercials: [] })
-
-  // Activités email par dossier (relances déjà faites)
   const dossierIds = dossiers.map(d => d.id)
-  const { data: activites } = await supabase
-    .from('activites')
-    .select('dossier_id, created_at, contenu')
-    .in('dossier_id', dossierIds)
-    .eq('type', 'email')
-    .order('created_at', { ascending: false })
 
-  // Profils commerciaux pour la vue admin
+  // Dernières générations d'emails par dossier
+  const { data: generations } = await supabase
+    .from('email_generations')
+    .select('dossier_id, type, subject, body, updated_at')
+    .in('dossier_id', dossierIds)
+
+  const genMap = {}
+  generations?.forEach(g => {
+    if (!genMap[g.dossier_id]) genMap[g.dossier_id] = {}
+    genMap[g.dossier_id][g.type] = g
+  })
+
+  // Profils commerciaux (admin seulement)
   let profilesMap = {}
   let commercials = []
   if (isAdmin) {
@@ -74,35 +81,26 @@ export default async function handler(req, res) {
 
   const now = Date.now()
 
-  const relances = dossiers.map(dossier => {
-    const sentAt    = new Date(dossier.updated_at).getTime()
-    const daysSince = Math.floor((now - sentAt) / 86400000)
-    const b = bucket(daysSince)
-    if (!b) return null
-
-    const emailActivites = activites
-      ?.filter(a => a.dossier_id === dossier.id && new Date(a.created_at) > new Date(dossier.updated_at))
-      || []
-
-    const relancesDone  = emailActivites.length
-    const lastRelance   = emailActivites[0] || null // déjà trié desc
+  const result = dossiers.map(dossier => {
+    const refDate   = dossier.statut_date || dossier.updated_at
+    const daysSince = Math.floor((now - new Date(refDate).getTime()) / 86400000)
 
     return {
-      dossierId:    dossier.id,
-      dossierRef:   dossier.ref,
-      ficheCee:     dossier.fiche_cee,
-      primeCee:     dossier.prime_estimee,
-      montantDevis: dossier.montant_devis,
-      sentAt:       dossier.updated_at,
+      dossierId:     dossier.id,
+      dossierRef:    dossier.ref,
+      ficheCee:      dossier.fiche_cee,
+      statut:        dossier.statut,
+      statutDate:    dossier.statut_date,
+      primeCee:      dossier.prime_estimee,
+      montantDevis:  dossier.montant_devis,
       daysSince,
-      bucket:       b,
-      relancesDone,
-      lastRelance:  lastRelance ? { date: lastRelance.created_at, contenu: lastRelance.contenu } : null,
-      prospect:     dossier.prospect,
-      commercial:   isAdmin ? (profilesMap[dossier.assigne_a] || null) : undefined,
-      assigneA:     dossier.assigne_a,
+      relanceBucket: dossier.statut === 'devis' ? relanceBucket(daysSince) : null,
+      prospect:      dossier.prospect,
+      commercial:    isAdmin ? (profilesMap[dossier.assigne_a] || null) : undefined,
+      assigneA:      dossier.assigne_a,
+      generations:   genMap[dossier.id] || {},
     }
-  }).filter(Boolean)
+  })
 
-  return res.json({ relances, isAdmin, commercials })
+  return res.json({ dossiers: result, isAdmin, commercials })
 }

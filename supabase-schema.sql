@@ -99,6 +99,56 @@ create table if not exists activites (
   created_at      timestamptz default now()
 );
 
+-- ─── MON ASSISTANTE — Migrations ────────────────────────────
+-- À coller dans Supabase SQL Editor et exécuter une seule fois.
+
+-- 1. Nouveau champ statut_date (date manuelle du changement de statut)
+alter table dossiers add column if not exists statut_date timestamptz;
+
+-- 2. Nouveaux statuts (cycle commercial complet)
+alter table dossiers drop constraint if exists dossiers_statut_check;
+alter table dossiers add constraint dossiers_statut_check
+  check (statut in (
+    'simulation','prospect','contacte',
+    'visio_planifiee','visio_effectuee',
+    'visite_planifiee','visite_effectuee',
+    'devis','ah','conforme','facture'
+  ));
+
+-- 3. Générations d'emails (dernière par dossier + type)
+create table if not exists email_generations (
+  id          uuid primary key default uuid_generate_v4(),
+  dossier_id  uuid references dossiers(id) on delete cascade,
+  type        text not null,
+  subject     text,
+  body        text,
+  updated_at  timestamptz default now(),
+  unique(dossier_id, type)
+);
+alter table email_generations enable row level security;
+create policy "Authenticated users" on email_generations
+  for all using (auth.role() = 'authenticated');
+
+-- 4. Guide rédactionnel partagé (singleton)
+create table if not exists style_guide (
+  id         uuid primary key default uuid_generate_v4(),
+  contenu    text not null default '',
+  updated_at timestamptz default now()
+);
+alter table style_guide enable row level security;
+create policy "Authenticated users" on style_guide
+  for all using (auth.role() = 'authenticated');
+
+-- 5. Exemples d'emails par type (partagés, un par type)
+create table if not exists email_exemples (
+  id      uuid primary key default uuid_generate_v4(),
+  type    text not null unique,
+  contenu text not null default ''
+);
+alter table email_exemples enable row level security;
+create policy "Authenticated users" on email_exemples
+  for all using (auth.role() = 'authenticated');
+
 -- ─── GOOGLE TOKENS (Agent Relances) ─────────────────────────
 -- Stocke les tokens OAuth2 Google par utilisateur Supabase.
 -- Nécessite SUPABASE_SERVICE_ROLE_KEY côté serveur pour écrire.
