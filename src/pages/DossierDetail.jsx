@@ -153,7 +153,7 @@ export default function DossierDetail() {
   const [statutForm,    setStatutForm]    = useState({ statut: '', date: new Date().toISOString().split('T')[0] })
   const [statutSaved,   setStatutSaved]   = useState(false)
   const [pendingStatut, setPendingStatut] = useState(null) // pipeline click
-  const [activeTab, setActiveTab] = useState('infos')
+  const [activeTab, setActiveTab] = useState('dossier')
   const [savingAssigne, setSavingAssigne] = useState(false)
 
   const [notesForm,     setNotesForm]     = useState('')
@@ -579,16 +579,16 @@ export default function DossierDetail() {
         {/* ── Pipeline statuts ── */}
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px', marginBottom: 20 }}>
           {/* Steps */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 0, overflowX: 'auto', paddingBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, overflowX: 'auto', paddingBottom: 4 }}>
             {STATUTS.map((s, i) => {
               const currentIdx = STATUTS.findIndex(x => x.id === dossier.statut)
               const isDone    = i < currentIdx
               const isCurrent = i === currentIdx
               const isPending = pendingStatut === s.id
               return (
-                <div key={s.id} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                <div key={s.id} style={{ display: 'flex', alignItems: 'flex-start', flexShrink: 0 }}>
                   {i > 0 && (
-                    <div style={{ width: 20, height: 2, background: isDone ? s.color : C.border, transition: 'background .2s' }} />
+                    <div style={{ width: 24, height: 3, background: isDone ? s.color : C.border, marginTop: 11, transition: 'background .2s' }} />
                   )}
                   <button
                     onClick={() => {
@@ -596,23 +596,27 @@ export default function DossierDetail() {
                       setPendingStatut(s.id)
                       setStatutForm({ statut: s.id, date: new Date().toISOString().split('T')[0] })
                     }}
-                    title={s.label}
                     style={{
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                      background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 6px', borderRadius: 8,
-                      outline: isPending ? `2px solid ${s.color}` : 'none',
-                      transition: 'all .15s',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                      background: isPending ? `${s.color}11` : 'transparent',
+                      border: isPending ? `1px solid ${s.color}44` : '1px solid transparent',
+                      cursor: 'pointer', padding: '6px 8px', borderRadius: 10,
+                      transition: 'all .15s', minWidth: 60,
                     }}
                   >
                     <div style={{
-                      width: isCurrent ? 14 : 10, height: isCurrent ? 14 : 10,
+                      width: isCurrent ? 22 : 14, height: isCurrent ? 22 : 14,
                       borderRadius: '50%', flexShrink: 0,
-                      background: isCurrent ? s.color : isDone ? s.color + '88' : C.border,
-                      border: isCurrent ? `3px solid ${s.color}44` : isDone ? 'none' : `2px solid ${C.border}`,
+                      background: isCurrent ? s.color : isDone ? s.color + '99' : '#E2E8F0',
+                      border: isCurrent ? `4px solid ${s.color}33` : 'none',
+                      boxShadow: isCurrent ? `0 0 0 3px ${s.color}22` : 'none',
                       boxSizing: 'border-box',
                       transition: 'all .2s',
-                    }} />
-                    <span style={{ fontSize: 9, color: isCurrent ? s.color : isDone ? C.textMid : C.textSoft, fontWeight: isCurrent ? 700 : 400, whiteSpace: 'nowrap', textAlign: 'center', maxWidth: 52, lineHeight: 1.2 }}>
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {isDone && <span style={{ fontSize: 8, color: '#fff', fontWeight: 900 }}>✓</span>}
+                    </div>
+                    <span style={{ fontSize: 10, color: isCurrent ? s.color : isDone ? C.textMid : C.textSoft, fontWeight: isCurrent ? 800 : isDone ? 500 : 400, whiteSpace: 'nowrap', textAlign: 'center', maxWidth: 64, lineHeight: 1.3 }}>
                       {s.label}
                     </span>
                   </button>
@@ -657,9 +661,8 @@ export default function DossierDetail() {
         {/* ── Barre d'onglets ── */}
         <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: `2px solid ${C.border}` }}>
           {[
-            { id: 'infos',      label: '👤 Infos',      badge: null },
-            { id: 'simulation', label: '⚡ Simulation',  badge: sim ? (dossier.prime_estimee ? `${Math.round(dossier.prime_estimee).toLocaleString('fr')} €` : '✓') : null },
-            { id: 'documents',  label: '📎 Documents',  badge: documents.length > 0 ? String(documents.length) : null },
+            { id: 'dossier',   label: '📋 Dossier',    badge: null },
+            { id: 'documents', label: '📎 Documents',  badge: documents.length > 0 ? String(documents.length) : null },
             ...(['contacte','visio_planifiee','visio_effectuee','visite_planifiee','visite_effectuee','devis'].includes(dossier.statut) ? [{ id: 'email', label: '✉️ Email', badge: null }] : []),
           ].map(t => (
             <button key={t.id} onClick={() => setActiveTab(t.id)}
@@ -681,69 +684,70 @@ export default function DossierDetail() {
           ))}
         </div>
 
-        {/* ── Tab: Infos ── */}
-        {activeTab === 'infos' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
-            {/* ── Prospect card ── */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Informations client</span>
-                {!editProspect
-                  ? <button onClick={() => setEditProspect(true)} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Modifier</button>
-                  : <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={() => setEditProspect(false)} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Annuler</button>
-                      <button onClick={saveProspect} style={{ background: C.accent, border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>Enregistrer</button>
+        {/* ── Tab: Dossier (Infos + Simulation) ── */}
+        {activeTab === 'dossier' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 16, alignItems: 'start' }}>
+
+            {/* Colonne gauche : Client + Notes */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Client */}
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Informations client</span>
+                  {!editProspect
+                    ? <button onClick={() => setEditProspect(true)} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Modifier</button>
+                    : <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => setEditProspect(false)} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Annuler</button>
+                        <button onClick={saveProspect} style={{ background: C.accent, border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>Enregistrer</button>
+                      </div>
+                  }
+                </div>
+                {editProspect ? (
+                  <>
+                    <Field label="Raison sociale" value={pForm.raison_sociale} onChange={v => setP('raison_sociale', v)} />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+                      <Field label="SIRET" value={pForm.siret} onChange={v => setP('siret', v)} />
+                      <Field label="Ville" value={pForm.ville} onChange={v => setP('ville', v)} />
+                      <div style={{ gridColumn: '1/-1' }}><Field label="Adresse" value={pForm.adresse} onChange={v => setP('adresse', v)} /></div>
+                      <Field label="Code postal" value={pForm.code_postal} onChange={v => setP('code_postal', v)} />
+                      <Field label="Contact" value={pForm.contact_nom} onChange={v => setP('contact_nom', v)} />
+                      <Field label="Email" value={pForm.contact_email} onChange={v => setP('contact_email', v)} type="email" />
+                      <Field label="Téléphone" value={pForm.contact_tel} onChange={v => setP('contact_tel', v)} />
                     </div>
-                }
-              </div>
-              {editProspect ? (
-                <>
-                  <Field label="Raison sociale" value={pForm.raison_sociale} onChange={v => setP('raison_sociale', v)} />
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
-                    <Field label="SIRET" value={pForm.siret} onChange={v => setP('siret', v)} />
-                    <Field label="Ville" value={pForm.ville} onChange={v => setP('ville', v)} />
-                    <div style={{ gridColumn: '1/-1' }}><Field label="Adresse" value={pForm.adresse} onChange={v => setP('adresse', v)} /></div>
-                    <Field label="Code postal" value={pForm.code_postal} onChange={v => setP('code_postal', v)} />
-                    <Field label="Contact" value={pForm.contact_nom} onChange={v => setP('contact_nom', v)} />
-                    <Field label="Email" value={pForm.contact_email} onChange={v => setP('contact_email', v)} type="email" />
-                    <Field label="Téléphone" value={pForm.contact_tel} onChange={v => setP('contact_tel', v)} />
+                  </>
+                ) : (
+                  <div>
+                    <InfoRow label="SIRET" value={dossier.prospects?.siret} />
+                    <InfoRow label="Adresse" value={dossier.prospects?.adresse} />
+                    <InfoRow label="Ville" value={[dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(' ') || null} />
+                    <InfoRow label="Contact" value={dossier.prospects?.contact_nom} />
+                    <InfoRow label="Email" value={dossier.prospects?.contact_email} />
+                    <InfoRow label="Tél" value={dossier.prospects?.contact_tel} />
                   </div>
-                </>
-              ) : (
-                <div>
-                  <InfoRow label="SIRET" value={dossier.prospects?.siret} />
-                  <InfoRow label="Adresse" value={dossier.prospects?.adresse} />
-                  <InfoRow label="Ville" value={[dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(' ') || null} />
-                  <InfoRow label="Contact" value={dossier.prospects?.contact_nom} />
-                  <InfoRow label="Email" value={dossier.prospects?.contact_email} />
-                  <InfoRow label="Tél" value={dossier.prospects?.contact_tel} />
-                </div>
-              )}
-            </div>
-
-            {/* ── Notes éditables ── */}
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Notes</span>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  {notesSaved && <span style={{ fontSize: 11, color: '#16A34A', fontWeight: 600 }}>✓ Sauvegardé</span>}
-                  <button onClick={saveNotes} disabled={savingNotes}
-                    style={{ padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: savingNotes ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: 'none', background: C.accent, color: '#fff', opacity: savingNotes ? .6 : 1 }}>
-                    {savingNotes ? '…' : 'Sauvegarder'}
-                  </button>
-                </div>
+                )}
               </div>
-              <textarea value={notesForm} onChange={e => setNotesForm(e.target.value)}
-                placeholder="Ajoute des notes sur ce dossier…" rows={8}
-                style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, lineHeight: 1.6, outline: 'none', fontFamily: 'inherit', resize: 'vertical' }}
-              />
-            </div>
-          </div>
-        )}
 
-        {/* ── Tab: Simulation ── */}
-        {activeTab === 'simulation' && (
-          <div style={{ maxWidth: 640 }}>
+              {/* Notes */}
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Notes</span>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    {notesSaved && <span style={{ fontSize: 11, color: '#16A34A', fontWeight: 600 }}>✓ Sauvegardé</span>}
+                    <button onClick={saveNotes} disabled={savingNotes}
+                      style={{ padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: savingNotes ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: 'none', background: C.accent, color: '#fff', opacity: savingNotes ? .6 : 1 }}>
+                      {savingNotes ? '…' : 'Sauvegarder'}
+                    </button>
+                  </div>
+                </div>
+                <textarea value={notesForm} onChange={e => setNotesForm(e.target.value)}
+                  placeholder="Ajoute des notes sur ce dossier…" rows={6}
+                  style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, lineHeight: 1.6, outline: 'none', fontFamily: 'inherit', resize: 'vertical' }}
+                />
+              </div>
+            </div>
+
+            {/* Colonne droite : Simulation */}
+            <div>
                 {/* ── Simulation card ── */}
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -1191,6 +1195,7 @@ export default function DossierDetail() {
               </div>
             )}
           </div>
+            </div>
           </div>
         )}
 
