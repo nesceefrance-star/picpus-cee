@@ -652,7 +652,6 @@ export default function DossierDetail() {
             )
           })()}
         </div>
-        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 16, alignItems: 'start' }}>
           {/* ── Colonne gauche : Client + Notes ── */}
