@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import useStore from '../store/useStore'
 import { refDefault } from '../lib/genRef'
 import EmailSection from '../components/EmailSection'
+import CalendarPicker from '../components/CalendarPicker'
 
 // ── IND-BA-110 ADEME coefficients (kWh cumac / kW) ────────────────────────
 const COEFFICIENTS_IND_110 = {
@@ -160,8 +161,8 @@ export default function DossierDetail() {
   const [savingNotes,   setSavingNotes]   = useState(false)
   const [notesSaved,    setNotesSaved]    = useState(false)
   const [meetProvider,     setMeetProvider]     = useState('meet') // 'teams' | 'meet'
-  const [teamsDate,        setTeamsDate]        = useState(() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0] })
-  const [teamsTime,        setTeamsTime]        = useState('10:00')
+  const [teamsDate,        setTeamsDate]        = useState('')
+  const [teamsTime,        setTeamsTime]        = useState('')
   const [teamsDuration,    setTeamsDuration]    = useState(45)
   const [teamsEmails,      setTeamsEmails]      = useState('')
   const [reunionLinkInput, setReunionLinkInput] = useState('')
@@ -779,19 +780,26 @@ export default function DossierDetail() {
                   ))}
                 </div>
 
-                {/* Date / Heure */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                  <div>
-                    <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 3 }}>Date</div>
-                    <input type="date" value={teamsDate} onChange={e => setTeamsDate(e.target.value)}
-                      style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 3 }}>Heure</div>
-                    <input type="time" value={teamsTime} onChange={e => setTeamsTime(e.target.value)}
-                      style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
-                  </div>
+                {/* Calendrier dispo */}
+                <div style={{ marginBottom: 10 }}>
+                  <CalendarPicker
+                    session={session}
+                    selectedDate={teamsDate}
+                    selectedTime={teamsTime}
+                    onSelect={(date, time) => { setTeamsDate(date); setTeamsTime(time) }}
+                  />
                 </div>
+
+                {/* Date / heure sélectionnées */}
+                {teamsDate && teamsTime && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, background: '#EFF6FF', border: `1px solid ${C.accent}`, borderRadius: 7, padding: '7px 12px' }}>
+                    <span style={{ fontSize: 12, color: C.accent, fontWeight: 700 }}>
+                      📅 {new Date(teamsDate + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à {teamsTime.replace(':', 'h')}
+                    </span>
+                    <button onClick={() => { setTeamsDate(''); setTeamsTime('') }}
+                      style={{ marginLeft: 'auto', background: 'none', border: 'none', color: C.textSoft, cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
+                  </div>
+                )}
 
                 {/* Durée */}
                 <div style={{ marginBottom: 8 }}>
