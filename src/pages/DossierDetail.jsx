@@ -159,6 +159,18 @@ export default function DossierDetail() {
   const [notesForm,     setNotesForm]     = useState('')
   const [savingNotes,   setSavingNotes]   = useState(false)
   const [notesSaved,    setNotesSaved]    = useState(false)
+  const [meetProvider,     setMeetProvider]     = useState('meet') // 'teams' | 'meet'
+  const [teamsDate,        setTeamsDate]        = useState(() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0] })
+  const [teamsTime,        setTeamsTime]        = useState('10:00')
+  const [teamsDuration,    setTeamsDuration]    = useState(45)
+  const [teamsEmails,      setTeamsEmails]      = useState('')
+  const [reunionLinkInput, setReunionLinkInput] = useState('')
+  const [reunionLink,      setReunionLink]      = useState(null)
+  const [savingReunion,    setSavingReunion]    = useState(false)
+  const [reunionSaved,     setReunionSaved]     = useState(false)
+  const [reunionCopied,    setReunionCopied]    = useState(false)
+  const [meetCreating,     setMeetCreating]     = useState(false)
+  const [meetError,        setMeetError]        = useState(null)
 
   const [editProspect, setEditProspect] = useState(false)
   const [pForm, setPForm] = useState({})
@@ -270,6 +282,8 @@ export default function DossierDetail() {
     if (d) {
       setDossier(d)
       setNotesForm(d.notes || '')
+      setTeamsEmails(d.prospects?.contact_email || '')
+      if (d.reunion_link) { setReunionLink(d.reunion_link); setReunionLinkInput(d.reunion_link) }
       setStatutForm({
         statut: d.statut || 'simulation',
         date: d.statut_date ? new Date(d.statut_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -744,6 +758,193 @@ export default function DossierDetail() {
                   style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, lineHeight: 1.6, outline: 'none', fontFamily: 'inherit', resize: 'vertical' }}
                 />
               </div>
+
+              {/* Actions */}
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 16 }}>⚡ Actions rapides</div>
+
+                {/* Créer un devis */}
+                <button
+                  onClick={() => navigate('/hub', {
+                    state: {
+                      module: 'marges',
+                      prefill: {
+                        nomClient: dossier.prospects?.raison_sociale || '',
+                        siret: dossier.prospects?.siret || '',
+                        adresseSite: [dossier.prospects?.adresse, dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(', '),
+                        nomContact: dossier.prospects?.contact_nom || '',
+                        fonctionContact: '',
+                        telephoneClient: dossier.prospects?.contact_tel || '',
+                        emailClient: dossier.prospects?.contact_email || '',
+                        refDevis: dossier.ref || refDefault(),
+                        dateDevis: new Date().toLocaleDateString('fr-FR'),
+                        prime: simulation?.prime_estimee || 0,
+                        batQte: simulation?.nb_equipements || 0,
+                        batPuVente: simulation?.parametres?.cout_unitaire_destrat ? parseFloat(simulation.parametres.cout_unitaire_destrat) : 0,
+                        batDebit: simulation?.parametres?.debit_unitaire || '14000',
+                        ficheCee: simulation?.fiche_cee || dossier.fiche_cee || 'BAT-TH-142',
+                      },
+                    },
+                  })}
+                  style={{ width: '100%', padding: '10px', background: C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 12 }}>
+                  📄 Créer un devis à partir d'un devis prestataire
+                </button>
+
+                {/* Réunion en ligne */}
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>Réunion en ligne</div>
+
+                {/* Choix provider */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                  {[
+                    { id: 'teams', label: '🟣 Teams' },
+                    { id: 'meet',  label: '🟢 Google Meet' },
+                  ].map(p => (
+                    <button key={p.id} onClick={() => setMeetProvider(p.id)}
+                      style={{ flex: 1, padding: '7px 0', borderRadius: 7, fontSize: 12, fontWeight: meetProvider === p.id ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit',
+                        border: `1px solid ${meetProvider === p.id ? (p.id === 'teams' ? '#5B5EA6' : '#16A34A') : C.border}`,
+                        background: meetProvider === p.id ? (p.id === 'teams' ? '#EDEDFF' : '#F0FDF4') : C.bg,
+                        color: meetProvider === p.id ? (p.id === 'teams' ? '#5B5EA6' : '#15803D') : C.textMid }}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Date / Heure */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 3 }}>Date</div>
+                    <input type="date" value={teamsDate} onChange={e => setTeamsDate(e.target.value)}
+                      style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 3 }}>Heure</div>
+                    <input type="time" value={teamsTime} onChange={e => setTeamsTime(e.target.value)}
+                      style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+                  </div>
+                </div>
+
+                {/* Durée */}
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 3 }}>Durée</div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {[30, 45, 60, 90].map(d => (
+                      <button key={d} onClick={() => setTeamsDuration(d)}
+                        style={{ flex: 1, padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: teamsDuration === d ? 700 : 400, cursor: 'pointer', fontFamily: 'inherit',
+                          border: `1px solid ${teamsDuration === d ? C.accent : C.border}`,
+                          background: teamsDuration === d ? '#EFF6FF' : C.bg,
+                          color: teamsDuration === d ? C.accent : C.textMid }}>
+                        {d < 60 ? `${d}min` : `${d / 60}h`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Participants */}
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 3 }}>Participants (séparés par des virgules)</div>
+                  <textarea value={teamsEmails} onChange={e => setTeamsEmails(e.target.value)}
+                    rows={2} placeholder="client@exemple.com, collègue@picpus.fr"
+                    style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit', resize: 'none', lineHeight: 1.5 }} />
+                </div>
+
+                {/* Action principale selon provider */}
+                {meetProvider === 'meet' ? (
+                  <button
+                    onClick={async () => {
+                      setMeetCreating(true); setMeetError(null)
+                      try {
+                        const start = new Date(`${teamsDate}T${teamsTime}:00`)
+                        const end   = new Date(start.getTime() + teamsDuration * 60000)
+                        const r = await fetch('/api/google-meet', {
+                          method: 'POST',
+                          headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            subject: `RDV ${dossier.prospects?.raison_sociale || 'Client'} — RÉGIE PICPUS`,
+                            startDateTime: start.toISOString(),
+                            endDateTime:   end.toISOString(),
+                            emails: teamsEmails.split(',').map(e => e.trim()).filter(Boolean),
+                          }),
+                        })
+                        const d = await r.json()
+                        if (d.error === 'scope_missing') throw new Error('Scope manquant — reconnecte ton compte Google dans les paramètres')
+                        if (d.error) throw new Error(d.error)
+                        // Auto-sauvegarder le lien
+                        setReunionLinkInput(d.meetLink)
+                        setReunionLink(d.meetLink)
+                        await updateDossier(id, { reunion_link: d.meetLink })
+                        setReunionSaved(true)
+                        setTimeout(() => setReunionSaved(false), 3000)
+                      } catch (e) { setMeetError(e.message) }
+                      setMeetCreating(false)
+                    }}
+                    disabled={meetCreating || !teamsDate || !teamsTime}
+                    style={{ width: '100%', padding: '9px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: '#16A34A', border: 'none', color: '#fff', marginBottom: meetError ? 8 : 10, opacity: meetCreating ? .7 : 1 }}>
+                    {meetCreating ? '⏳ Création en cours…' : '🟢 Créer la réunion Google Meet'}
+                  </button>
+                ) : (
+                  <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 7, padding: '10px 12px', marginBottom: 10, fontSize: 12, color: '#92400E' }}>
+                    🟣 <strong>Teams</strong> nécessite une connexion Azure AD. En attendant, colle le lien manuellement ci-dessous après avoir créé la réunion dans Teams.
+                  </div>
+                )}
+
+                {meetError && (
+                  <div style={{ fontSize: 12, color: '#DC2626', marginBottom: 10 }}>⚠️ {meetError}</div>
+                )}
+
+                {/* Coller le lien manuellement (Teams ou fallback) */}
+                {(meetProvider === 'teams' || !reunionLink) && (
+                  <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 7, padding: '10px 12px', marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, color: C.textMid, fontWeight: 600, marginBottom: 6 }}>
+                      Coller le lien de la réunion :
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        value={reunionLinkInput}
+                        onChange={e => { setReunionLinkInput(e.target.value); setReunionSaved(false) }}
+                        placeholder="https://meet.google.com/xxx  ou  https://teams.microsoft.com/..."
+                        style={{ flex: 1, background: '#fff', border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', fontSize: 12, color: C.text, outline: 'none', fontFamily: 'inherit' }}
+                      />
+                      <button
+                        onClick={async () => {
+                          if (!reunionLinkInput.trim()) return
+                          setSavingReunion(true)
+                          await updateDossier(id, { reunion_link: reunionLinkInput.trim() })
+                          setReunionLink(reunionLinkInput.trim())
+                          setReunionSaved(true)
+                          setSavingReunion(false)
+                          setTimeout(() => setReunionSaved(false), 3000)
+                        }}
+                        disabled={savingReunion || !reunionLinkInput.trim()}
+                        style={{ padding: '7px 14px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', border: 'none',
+                          background: reunionSaved ? '#16A34A' : C.accent, color: '#fff', whiteSpace: 'nowrap', opacity: savingReunion ? .6 : 1 }}>
+                        {reunionSaved ? '✓' : savingReunion ? '…' : 'Sauvegarder'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Lien sauvegardé */}
+                {reunionLink && (
+                  <div style={{ marginTop: 8, background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 7, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 11, color: '#15803D', fontWeight: 700, marginBottom: 6 }}>🔗 Lien de réunion sauvegardé</div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input readOnly value={reunionLink}
+                        style={{ flex: 1, background: '#fff', border: '1px solid #BBF7D0', borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#166534', outline: 'none', fontFamily: 'monospace' }} />
+                      <button onClick={() => { navigator.clipboard.writeText(reunionLink).catch(() => {}); setReunionCopied(true); setTimeout(() => setReunionCopied(false), 2000) }}
+                        style={{ padding: '6px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                          border: `1px solid ${reunionCopied ? '#16A34A' : '#BBF7D0'}`,
+                          background: reunionCopied ? '#DCFCE7' : '#fff',
+                          color: reunionCopied ? '#16A34A' : '#166534', whiteSpace: 'nowrap' }}>
+                        {reunionCopied ? '✓' : '⎘'}
+                      </button>
+                      <button onClick={() => window.open(reunionLink, '_blank')}
+                        style={{ padding: '6px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid #BBF7D0', background: '#16A34A', color: '#fff', whiteSpace: 'nowrap' }}>
+                        Rejoindre
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Colonne droite : Simulation */}
@@ -801,34 +1002,6 @@ export default function DossierDetail() {
                 <InfoRow label="Coût prestation" value={simParams.cout_total != null ? `${Number(simParams.cout_total).toLocaleString('fr')} €` : null} color="#D97706" />
                 <InfoRow label="Marge nette" value={simParams.marge != null ? `${Number(simParams.marge).toLocaleString('fr')} €` : null} color={simParams.marge >= 0 ? '#16A34A' : '#DC2626'} />
                 <InfoRow label="Prix MWh" value={sim.prix_mwh != null ? `${sim.prix_mwh} €/MWh` : null} />
-                {/* Bouton création devis Hub */}
-                <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
-                  <button
-                    onClick={() => navigate('/hub', {
-                      state: {
-                        module: 'marges',
-                        prefill: {
-                          nomClient: dossier.prospects?.raison_sociale || '',
-                          siret: dossier.prospects?.siret || '',
-                          adresseSite: [dossier.prospects?.adresse, dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(', '),
-                          nomContact: dossier.prospects?.contact_nom || '',
-                          fonctionContact: '',
-                          telephoneClient: dossier.prospects?.contact_tel || '',
-                          emailClient: dossier.prospects?.contact_email || '',
-                          refDevis: dossier.ref || refDefault(),
-                          dateDevis: new Date().toLocaleDateString('fr-FR'),
-                          prime: sim.prime_estimee || 0,
-                          batQte: sim.nb_equipements || 0,
-                          batPuVente: simParams.cout_unitaire_destrat ? parseFloat(simParams.cout_unitaire_destrat) : 0,
-                          batDebit: simParams.debit_unitaire || '14000',
-                          ficheCee: sim.fiche_cee || 'BAT-TH-142',
-                        },
-                      },
-                    })}
-                    style={{ width: '100%', padding: '10px', background: '#2563EB', border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                    📄 Créer un devis dans Hub Marges × Devis
-                  </button>
-                </div>
               </div>
             )}
 

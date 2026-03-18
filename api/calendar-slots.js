@@ -1,5 +1,5 @@
 // api/calendar-slots.js
-// Retourne 4 créneaux libres de 45min sur les 5 prochains jours ouvrés
+// Retourne tous les créneaux libres de 45min sur 3 jours ouvrés à partir de J+3 ouvrés
 // Plages : 9h-12h et 14h-18h (heure de Paris)
 
 import { createClient } from '@supabase/supabase-js'
@@ -39,11 +39,23 @@ async function getValidToken(userId) {
   return tokens.access_token
 }
 
-function nextWorkingDays(n) {
+// Retourne n jours ouvrés en partant de startOffset jours ouvrés à partir d'aujourd'hui
+function workingDaysFrom(startOffset, count) {
   const days = []
   const d = new Date()
+  d.setHours(0, 0, 0, 0)
   d.setDate(d.getDate() + 1) // commence demain
-  while (days.length < n) {
+
+  // Avancer de startOffset jours ouvrés
+  let skipped = 0
+  while (skipped < startOffset) {
+    const dow = d.getDay()
+    if (dow !== 0 && dow !== 6) skipped++
+    if (skipped < startOffset) d.setDate(d.getDate() + 1)
+  }
+
+  // Collecter count jours ouvrés
+  while (days.length < count) {
     const dow = d.getDay()
     if (dow !== 0 && dow !== 6) days.push(new Date(d))
     d.setDate(d.getDate() + 1)
@@ -76,9 +88,10 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: e.message })
   }
 
-  const workDays = nextWorkingDays(7) // 7 jours ouvrés pour avoir de la marge
+  // J+3 ouvrés, sur 3 jours
+  const workDays = workingDaysFrom(3, 3)
   const timeMin  = workDays[0].toISOString()
-  const timeMax  = workDays[workDays.length - 1]
+  const timeMax  = new Date(workDays[workDays.length - 1])
   timeMax.setHours(23, 59, 59)
 
   // Récupérer les événements existants
@@ -102,9 +115,8 @@ export default async function handler(req, res) {
 
   const slots = []
   for (const day of workDays) {
-    if (slots.length >= 4) break
+    const dayLabel = day.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
     for (const [h, m] of WINDOWS) {
-      if (slots.length >= 4) break
       const slotStart = new Date(day)
       slotStart.setHours(h, m, 0, 0)
       const slotEnd = new Date(slotStart.getTime() + 45 * 60 * 1000)
@@ -112,11 +124,10 @@ export default async function handler(req, res) {
       const isBusy = busy.some(b => slotStart < b.end && slotEnd > b.start)
       if (!isBusy) {
         slots.push({
-          start:   slotStart.toISOString(),
-          end:     slotEnd.toISOString(),
-          label:   slotStart.toLocaleDateString('fr-FR', {
-            weekday: 'long', day: 'numeric', month: 'long',
-          }) + ' à ' + slotStart.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          start: slotStart.toISOString(),
+          end:   slotEnd.toISOString(),
+          label: dayLabel + ' à ' + slotStart.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          day:   dayLabel,
         })
       }
     }
