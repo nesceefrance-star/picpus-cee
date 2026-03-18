@@ -20,12 +20,12 @@ const EMAIL_TYPE_LABELS = {
 }
 
 const EMAIL_TYPE_INSTRUCTIONS = {
-  visio_creneaux: "Propose les créneaux de visioconférence indiqués. L'email doit être chaleureux, professionnel, et inviter le contact à choisir un créneau.",
-  visio_confirm:  "Confirme la visioconférence planifiée. Rappelle les informations pratiques (lien ou modalités). Prépare le contact à l'échange en précisant l'ordre du jour.",
-  post_visio:     "Remercie pour la visioconférence. Explique les documents/informations nécessaires pour avancer le dossier CEE. Donne une liste claire et précise.",
-  visite_confirm: "Confirme la visite technique sur site. Précise les modalités pratiques et ce qui sera vérifié lors de la visite.",
-  envoi_devis:    "Envoie le devis avec toutes les explications nécessaires. Valorise la prime CEE et le reste à charge. Invite le contact à poser des questions.",
-  relance:        "Relance poliment pour le devis envoyé. Reste chaleureux et non-insistant. Propose d'échanger si besoin.",
+  visio_creneaux: "Email post-appel téléphonique. Fait suite à l'échange, propose les créneaux. Court, direct.",
+  visio_confirm:  "Confirme la visio avec le lien. Très court, 4-5 lignes max.",
+  post_visio:     "Demande les éléments techniques nécessaires. Liste à puces, pas d'intro longue.",
+  visite_confirm: "Confirme la visite technique avec date/heure/lieu. Court.",
+  envoi_devis:    "Accompagne l'envoi du devis. Mentionne la prime CEE et le reste à charge. Concis.",
+  relance:        "Relance courte et non-insistante pour le devis. 3-4 lignes max.",
 }
 
 export default async function handler(req, res) {
@@ -102,24 +102,28 @@ export default async function handler(req, res) {
     ? '\nCréneaux à proposer :\n' + selectedSlots.map(s => `- ${s.label}`).join('\n')
     : ''
 
-  const userMessage = `Type d'email : ${EMAIL_TYPE_LABELS[type]}
-Instructions spécifiques : ${EMAIL_TYPE_INSTRUCTIONS[type]}
+  const userMessage = `Type : ${EMAIL_TYPE_LABELS[type]}
+Instructions : ${EMAIL_TYPE_INSTRUCTIONS[type]}
 
-Contexte du dossier :
-- Référence dossier : ${dossier.ref}
-- Fiche CEE : ${dossier.fiche_cee}
+Dossier :
 - Entreprise : ${p.raison_sociale || 'N/A'}
 - Contact : ${p.contact_nom || 'N/A'}
-- Email : ${p.contact_email || 'N/A'}
 - Ville : ${p.ville || 'N/A'}
-- Prime CEE estimée : ${fmt(dossier.prime_estimee)}
-- Montant devis TTC : ${fmt(dossier.montant_devis)}
-- Commercial en charge : ${commercialName}${slotsText}
+- Fiche CEE : ${dossier.fiche_cee}
+- Prime CEE : ${fmt(dossier.prime_estimee)}
+- Montant devis : ${fmt(dossier.montant_devis)}
+- Commercial : ${commercialName}${slotsText}
 
-Génère l'email en respectant EXACTEMENT ce format :
-SUJET: [objet de l'email]
+CONTRAINTES ABSOLUES :
+- Maximum 10 lignes de corps
+- Pas de formules creuses ("N'hésitez pas à", "Je reste à votre disposition", etc.)
+- Pas de signature (elle est gérée automatiquement)
+- Respecte le style et la longueur de l'exemple fourni
+
+Format de réponse OBLIGATOIRE :
+SUJET: [objet court]
 ---
-[corps de l'email complet]`
+[corps de l'email]`
 
   // Appel Claude
   const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -132,7 +136,7 @@ SUJET: [objet de l'email]
     },
     body: JSON.stringify({
       model:      'claude-opus-4-6',
-      max_tokens: 1200,
+      max_tokens: 600,
       system:     systemParts,
       messages:   [{ role: 'user', content: userMessage }],
     }),
