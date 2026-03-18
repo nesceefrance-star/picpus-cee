@@ -37,7 +37,7 @@ export default function CalendarPicker({ session, onSelect, selectedDate, select
     if (!session) return
     setLoading(true); setError(null)
     try {
-      const r = await fetch(`/api/calendar-events?year=${year}&month=${month}`, {
+      const r = await fetch(`/api/calendar?action=events&year=${year}&month=${month}`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
       const d = await r.json()

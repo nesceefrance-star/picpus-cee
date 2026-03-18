@@ -100,7 +100,7 @@ export default function Parametres() {
   const loadCalendars = async () => {
     setCalsLoading(true)
     try {
-      const r = await fetch('/api/calendar-list', { headers: { Authorization: `Bearer ${session.access_token}` } })
+      const r = await fetch('/api/calendar?action=list', { headers: { Authorization: `Bearer ${session.access_token}` } })
       const d = await r.json()
       setCalendars(d.calendars || [])
     } catch {}
@@ -114,7 +114,7 @@ export default function Parametres() {
 
   const saveCalendars = async () => {
     const selected = calendars.filter(c => c.selected).map(c => c.id)
-    await fetch('/api/calendar-list', {
+    await fetch('/api/calendar?action=list', {
       method: 'POST',
       headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ calendarIds: selected }),

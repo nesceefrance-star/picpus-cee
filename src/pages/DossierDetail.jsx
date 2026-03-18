@@ -833,7 +833,7 @@ export default function DossierDetail() {
                       try {
                         const start = new Date(`${teamsDate}T${teamsTime}:00`)
                         const end   = new Date(start.getTime() + teamsDuration * 60000)
-                        const r = await fetch('/api/google-meet', {
+                        const r = await fetch('/api/calendar?action=meet', {
                           method: 'POST',
                           headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
                           body: JSON.stringify({

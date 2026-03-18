@@ -88,7 +88,7 @@ export default function EmailSection({ dossierId, statut }) {
     setLoadingSlots(true)
     setSlotsError(null)
     try {
-      const r = await fetch('/api/calendar-slots', {
+      const r = await fetch('/api/calendar?action=slots', {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       })
       const d = await r.json()
