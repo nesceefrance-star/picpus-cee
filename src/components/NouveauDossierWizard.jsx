@@ -444,17 +444,29 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
       if (e1) throw new Error(e1.message || e1.details || JSON.stringify(e1))
       if (!prospect) throw new Error('Prospect non créé (vérifiez les permissions Supabase)')
 
-      const ref = await nextRef('dossiers', 'ref')
-      const { data: dossier, error: e2 } = await createDossier({
-        prospect_id: prospect.id,
-        fiche_cee: tech.fiche_cee,
-        statut: simulation?.marge > 0 ? 'prospect' : 'simulation',
-        assigne_a: assigneA || user?.id,
-        ref,
-        prime_estimee: simulation?.prime ?? null,
-        montant_devis: simulation?.coutTotal ?? null,
-        notes: `Zone ${tech.zone_climatique} | h=${tech.hauteur_m}m | ${tech.surface_m2}m² | ${nbDestratEffectif} destrats | P_conv=${pConvectif}kW P_rad=${pRadiatif}kW | ${simulation?.kwhCumac?.toLocaleString('fr')} kWh cumac | Marge: ${simulation?.marge}€`,
-      })
+      let ref = await nextRef('dossiers', 'ref')
+      let dossier, e2
+      for (let attempt = 0; attempt < 5; attempt++) {
+        ;({ data: dossier, error: e2 } = await createDossier({
+          prospect_id: prospect.id,
+          fiche_cee: tech.fiche_cee,
+          statut: simulation?.marge > 0 ? 'prospect' : 'simulation',
+          assigne_a: assigneA || user?.id,
+          ref,
+          prime_estimee: simulation?.prime ?? null,
+          montant_devis: simulation?.coutTotal ?? null,
+          notes: `Zone ${tech.zone_climatique} | h=${tech.hauteur_m}m | ${tech.surface_m2}m² | ${nbDestratEffectif} destrats | P_conv=${pConvectif}kW P_rad=${pRadiatif}kW | ${simulation?.kwhCumac?.toLocaleString('fr')} kWh cumac | Marge: ${simulation?.marge}€`,
+        }))
+        if (!e2) break
+        if (e2.code === '23505') {
+          // Duplicate ref — increment and retry
+          const parts = ref.split('-')
+          const num = parseInt(parts[parts.length - 1], 10) + 1
+          ref = parts.slice(0, -1).join('-') + '-' + String(num).padStart(3, '0')
+        } else {
+          break
+        }
+      }
       if (e2) throw new Error(e2.message || e2.details || JSON.stringify(e2))
       if (!dossier) throw new Error('Dossier non créé (vérifiez les permissions Supabase)')
 

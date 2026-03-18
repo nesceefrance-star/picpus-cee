@@ -24,6 +24,9 @@ export async function nextRef(table, col) {
     .from(table)
     .select(col)
     .like(col, `${prefix}%`)
-  const num = (data?.length || 0) + 1
-  return prefix + String(num).padStart(3, '0')
+    .order(col, { ascending: false })
+    .limit(1)
+  if (!data?.length) return prefix + '001'
+  const lastNum = parseInt(data[0][col].slice(-3), 10) || 0
+  return prefix + String(lastNum + 1).padStart(3, '0')
 }
