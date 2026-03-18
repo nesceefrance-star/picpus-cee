@@ -153,6 +153,7 @@ export default function DossierDetail() {
   const [statutForm,    setStatutForm]    = useState({ statut: '', date: new Date().toISOString().split('T')[0] })
   const [statutSaved,   setStatutSaved]   = useState(false)
   const [pendingStatut, setPendingStatut] = useState(null) // pipeline click
+  const [activeTab, setActiveTab] = useState('infos')
   const [savingAssigne, setSavingAssigne] = useState(false)
 
   const [notesForm,     setNotesForm]     = useState('')
@@ -653,74 +654,97 @@ export default function DossierDetail() {
           })()}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 16, alignItems: 'start' }}>
-          {/* ── Colonne gauche : Client + Notes ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* ── Prospect card ── */}
-          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>👤 Informations client</span>
-              {!editProspect
-                ? <button onClick={() => setEditProspect(true)} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Modifier</button>
-                : <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={() => setEditProspect(false)} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Annuler</button>
-                    <button onClick={saveProspect} style={{ background: C.accent, border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>Enregistrer</button>
+        {/* ── Barre d'onglets ── */}
+        <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: `2px solid ${C.border}` }}>
+          {[
+            { id: 'infos',      label: '👤 Infos',      badge: null },
+            { id: 'simulation', label: '⚡ Simulation',  badge: sim ? (dossier.prime_estimee ? `${Math.round(dossier.prime_estimee).toLocaleString('fr')} €` : '✓') : null },
+            { id: 'documents',  label: '📎 Documents',  badge: documents.length > 0 ? String(documents.length) : null },
+            ...(['contacte','visio_planifiee','visio_effectuee','visite_planifiee','visite_effectuee','devis'].includes(dossier.statut) ? [{ id: 'email', label: '✉️ Email', badge: null }] : []),
+          ].map(t => (
+            <button key={t.id} onClick={() => setActiveTab(t.id)}
+              style={{
+                padding: '9px 18px', fontSize: 13, fontWeight: activeTab === t.id ? 700 : 500,
+                cursor: 'pointer', fontFamily: 'inherit', background: 'transparent', border: 'none',
+                borderBottom: `2px solid ${activeTab === t.id ? C.accent : 'transparent'}`,
+                marginBottom: -2, color: activeTab === t.id ? C.accent : C.textMid,
+                transition: 'all .15s', display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              {t.label}
+              {t.badge && (
+                <span style={{ fontSize: 10, fontWeight: 700, background: activeTab === t.id ? C.accent : C.border, color: activeTab === t.id ? '#fff' : C.textMid, borderRadius: 10, padding: '1px 6px' }}>
+                  {t.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Tab: Infos ── */}
+        {activeTab === 'infos' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
+            {/* ── Prospect card ── */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Informations client</span>
+                {!editProspect
+                  ? <button onClick={() => setEditProspect(true)} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Modifier</button>
+                  : <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={() => setEditProspect(false)} style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>Annuler</button>
+                      <button onClick={saveProspect} style={{ background: C.accent, border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>Enregistrer</button>
+                    </div>
+                }
+              </div>
+              {editProspect ? (
+                <>
+                  <Field label="Raison sociale" value={pForm.raison_sociale} onChange={v => setP('raison_sociale', v)} />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+                    <Field label="SIRET" value={pForm.siret} onChange={v => setP('siret', v)} />
+                    <Field label="Ville" value={pForm.ville} onChange={v => setP('ville', v)} />
+                    <div style={{ gridColumn: '1/-1' }}><Field label="Adresse" value={pForm.adresse} onChange={v => setP('adresse', v)} /></div>
+                    <Field label="Code postal" value={pForm.code_postal} onChange={v => setP('code_postal', v)} />
+                    <Field label="Contact" value={pForm.contact_nom} onChange={v => setP('contact_nom', v)} />
+                    <Field label="Email" value={pForm.contact_email} onChange={v => setP('contact_email', v)} type="email" />
+                    <Field label="Téléphone" value={pForm.contact_tel} onChange={v => setP('contact_tel', v)} />
                   </div>
-              }
-            </div>
-
-            {editProspect ? (
-              <>
-                <Field label="Raison sociale" value={pForm.raison_sociale} onChange={v => setP('raison_sociale', v)} />
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
-                  <Field label="SIRET" value={pForm.siret} onChange={v => setP('siret', v)} />
-                  <Field label="Ville" value={pForm.ville} onChange={v => setP('ville', v)} />
-                  <div style={{ gridColumn: '1/-1' }}><Field label="Adresse" value={pForm.adresse} onChange={v => setP('adresse', v)} /></div>
-                  <Field label="Code postal" value={pForm.code_postal} onChange={v => setP('code_postal', v)} />
-                  <Field label="Contact" value={pForm.contact_nom} onChange={v => setP('contact_nom', v)} />
-                  <Field label="Email" value={pForm.contact_email} onChange={v => setP('contact_email', v)} type="email" />
-                  <Field label="Téléphone" value={pForm.contact_tel} onChange={v => setP('contact_tel', v)} />
+                </>
+              ) : (
+                <div>
+                  <InfoRow label="SIRET" value={dossier.prospects?.siret} />
+                  <InfoRow label="Adresse" value={dossier.prospects?.adresse} />
+                  <InfoRow label="Ville" value={[dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(' ') || null} />
+                  <InfoRow label="Contact" value={dossier.prospects?.contact_nom} />
+                  <InfoRow label="Email" value={dossier.prospects?.contact_email} />
+                  <InfoRow label="Tél" value={dossier.prospects?.contact_tel} />
                 </div>
-              </>
-            ) : (
-              <div>
-                <InfoRow label="SIRET" value={dossier.prospects?.siret} />
-                <InfoRow label="Adresse" value={dossier.prospects?.adresse} />
-                <InfoRow label="Ville" value={[dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(' ') || null} />
-                <InfoRow label="Contact" value={dossier.prospects?.contact_nom} />
-                <InfoRow label="Email" value={dossier.prospects?.contact_email} />
-                <InfoRow label="Tél" value={dossier.prospects?.contact_tel} />
-              </div>
-            )}
-          </div>
-
-          {/* ── Notes éditables ── */}
-          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 22px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>📝 Notes</span>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                {notesSaved && <span style={{ fontSize: 11, color: '#16A34A', fontWeight: 600 }}>✓ Sauvegardé</span>}
-                <button
-                  onClick={saveNotes}
-                  disabled={savingNotes}
-                  style={{ padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: savingNotes ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: 'none', background: C.accent, color: '#fff', opacity: savingNotes ? .6 : 1 }}
-                >
-                  {savingNotes ? '…' : 'Sauvegarder'}
-                </button>
-              </div>
+              )}
             </div>
-            <textarea
-              value={notesForm}
-              onChange={e => setNotesForm(e.target.value)}
-              placeholder="Ajoute des notes sur ce dossier…"
-              rows={5}
-              style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, lineHeight: 1.6, outline: 'none', fontFamily: 'inherit', resize: 'vertical' }}
-            />
+
+            {/* ── Notes éditables ── */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Notes</span>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {notesSaved && <span style={{ fontSize: 11, color: '#16A34A', fontWeight: 600 }}>✓ Sauvegardé</span>}
+                  <button onClick={saveNotes} disabled={savingNotes}
+                    style={{ padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: savingNotes ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: 'none', background: C.accent, color: '#fff', opacity: savingNotes ? .6 : 1 }}>
+                    {savingNotes ? '…' : 'Sauvegarder'}
+                  </button>
+                </div>
+              </div>
+              <textarea value={notesForm} onChange={e => setNotesForm(e.target.value)}
+                placeholder="Ajoute des notes sur ce dossier…" rows={8}
+                style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, lineHeight: 1.6, outline: 'none', fontFamily: 'inherit', resize: 'vertical' }}
+              />
+            </div>
           </div>
+        )}
 
-          </div>{/* fin colonne gauche */}
-
-          {/* ── Simulation card ── */}
+        {/* ── Tab: Simulation ── */}
+        {activeTab === 'simulation' && (
+          <div style={{ maxWidth: 640 }}>
+                {/* ── Simulation card ── */}
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>⚡ Simulation CEE</span>
@@ -1167,10 +1191,12 @@ export default function DossierDetail() {
               </div>
             )}
           </div>
-        </div>
+          </div>
+        )}
 
-        {/* ── Documents ── */}
-        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px', marginTop: 16 }}>
+        {/* ── Tab: Documents ── */}
+        {activeTab === 'documents' && (
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>📎 Documents</span>
             <span style={{ fontSize: 11, color: C.textSoft }}>{documents.length} fichier{documents.length !== 1 ? 's' : ''}</span>
@@ -1276,9 +1302,12 @@ export default function DossierDetail() {
             </div>
           )}
         </div>
+        )}
 
-        {/* ── Emails ── */}
-        <EmailSection dossierId={id} statut={dossier.statut} />
+        {/* ── Tab: Email ── */}
+        {activeTab === 'email' && (
+          <EmailSection dossierId={id} statut={dossier.statut} />
+        )}
 
       </div>
       </div>
