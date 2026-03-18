@@ -282,7 +282,7 @@ export default function DossierDetail() {
     if (d) {
       setDossier(d)
       setNotesForm(d.notes || '')
-      setTeamsEmails(d.prospects?.contact_email || '')
+      setTeamsEmails([user?.email, d.prospects?.contact_email].filter(Boolean).join(', '))
       if (d.reunion_link) { setReunionLink(d.reunion_link); setReunionLinkInput(d.reunion_link) }
       setStatutForm({
         statut: d.statut || 'simulation',
