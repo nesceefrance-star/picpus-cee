@@ -146,13 +146,18 @@ export default function DossierDetail() {
   const navigate = useNavigate()
   const { currentDossier, user, profile, session, updateDossier, updateProspect, fetchSimulations, createSimulation, profiles, fetchProfiles } = useStore()
 
-  const [dossier, setDossier] = useState(null)
-  const [simulation, setSimulation] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [dossier,       setDossier]       = useState(null)
+  const [simulation,    setSimulation]    = useState(null)
+  const [loading,       setLoading]       = useState(true)
   const [savingStatut,  setSavingStatut]  = useState(false)
   const [statutForm,    setStatutForm]    = useState({ statut: '', date: new Date().toISOString().split('T')[0] })
   const [statutSaved,   setStatutSaved]   = useState(false)
+  const [pendingStatut, setPendingStatut] = useState(null) // pipeline click
   const [savingAssigne, setSavingAssigne] = useState(false)
+
+  const [notesForm,     setNotesForm]     = useState('')
+  const [savingNotes,   setSavingNotes]   = useState(false)
+  const [notesSaved,    setNotesSaved]    = useState(false)
 
   const [editProspect, setEditProspect] = useState(false)
   const [pForm, setPForm] = useState({})
@@ -263,6 +268,7 @@ export default function DossierDetail() {
     }
     if (d) {
       setDossier(d)
+      setNotesForm(d.notes || '')
       setStatutForm({
         statut: d.statut || 'simulation',
         date: d.statut_date ? new Date(d.statut_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -338,9 +344,19 @@ export default function DossierDetail() {
       const d = await r.json()
       if (d.dossier) setDossier(prev => ({ ...prev, statut: d.dossier.statut, statut_date: d.dossier.statut_date }))
       setStatutSaved(true)
+      setPendingStatut(null)
       setTimeout(() => setStatutSaved(false), 3000)
     } catch (e) { /* ignore */ }
     setSavingStatut(false)
+  }
+
+  const saveNotes = async () => {
+    setSavingNotes(true)
+    const { data } = await updateDossier(id, { notes: notesForm })
+    if (data) setDossier(prev => ({ ...prev, notes: notesForm }))
+    setNotesSaved(true)
+    setTimeout(() => setNotesSaved(false), 2000)
+    setSavingNotes(false)
   }
 
   const changeAssignation = async (newUserId) => {
@@ -513,70 +529,129 @@ export default function DossierDetail() {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
-      <div style={{ maxWidth: 1040, margin: '0 auto', padding: '28px 24px 48px' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ maxWidth: 1040, margin: '0 auto', padding: '24px 24px 48px' }}>
+
+        {/* ── Header compact ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, margin: '0 0 6px' }}>
+            <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, margin: '0 0 4px' }}>
               {dossier.prospects?.raison_sociale || '—'}
             </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, color: C.textMid, fontFamily: 'monospace' }}>{dossier.ref}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: C.textSoft, fontFamily: 'monospace', background: C.bg, padding: '2px 7px', borderRadius: 4, border: `1px solid ${C.border}` }}>{dossier.ref}</span>
+              <span style={{ fontSize: 11, color: C.textMid }}>{dossier.fiche_cee}</span>
               <span style={{ color: C.border }}>·</span>
-              <span style={{ fontSize: 12, color: C.textMid }}>{dossier.fiche_cee}</span>
-              <span style={{ color: C.border }}>·</span>
-              {/* Assignation — admin : dropdown, commercial : M'attribuer ou lecture */}
-              {profile?.role === 'admin' ? (
-                <select
-                  value={dossier.assigne_a || ''}
-                  onChange={e => changeAssignation(e.target.value)}
-                  disabled={savingAssigne}
-                  style={{ fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit', opacity: savingAssigne ? .6 : 1 }}>
-                  <option value="">— Non assigné —</option>
-                  {profiles.filter(p => ['admin', 'commercial'].includes(p.role)).map(p => (
-                    <option key={p.id} value={p.id}>
-                      {(`${p.prenom || ''} ${p.nom || ''}`.trim()) || p.email}
-                    </option>
-                  ))}
-                </select>
-              ) : dossier.assigne_a === user?.id ? (
-                <span style={{ fontSize: 12, color: C.textMid }}>Assigné à vous</span>
-              ) : (
-                <button
-                  onClick={() => changeAssignation(user?.id)}
-                  disabled={savingAssigne}
-                  style={{ fontSize: 11, fontWeight: 700, color: C.accent, background: '#EFF6FF', border: `1px solid ${C.accent}44`, borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: 'inherit', opacity: savingAssigne ? .6 : 1 }}>
-                  {savingAssigne ? '…' : `M'attribuer (actuellement : ${assignedName})`}
-                </button>
+              <span style={{ fontSize: 11, padding: '2px 10px', borderRadius: 20, fontWeight: 700, background: statutInfo.bg, color: statutInfo.color }}>{statutInfo.label}</span>
+              {dossier.statut_date && (
+                <span style={{ fontSize: 11, color: C.textSoft }}>
+                  depuis le {new Date(dossier.statut_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}
+                </span>
               )}
-              <span style={{ color: C.border }}>·</span>
-              <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, fontWeight: 700, background: statutInfo.bg, color: statutInfo.color }}>{statutInfo.label}</span>
             </div>
           </div>
-          {/* Changement de statut */}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <select
-              value={statutForm.statut}
-              onChange={e => setStatutForm(f => ({ ...f, statut: e.target.value }))}
-              style={{ fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 10px', cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              {STATUTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-            </select>
-            <input
-              type="date"
-              value={statutForm.date}
-              onChange={e => setStatutForm(f => ({ ...f, date: e.target.value }))}
-              style={{ fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 10px', fontFamily: 'inherit' }}
-            />
-            <button
-              onClick={changeStatut}
-              disabled={savingStatut}
-              style={{ padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: savingStatut ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: 'none', background: C.accent, color: '#fff', opacity: savingStatut ? .6 : 1 }}
-            >
-              {savingStatut ? '…' : 'Sauvegarder'}
-            </button>
-            {statutSaved && <span style={{ fontSize: 12, color: '#16A34A', fontWeight: 600 }}>✓ Statut mis à jour</span>}
+          {/* Assignation */}
+          <div>
+            {profile?.role === 'admin' ? (
+              <select
+                value={dossier.assigne_a || ''}
+                onChange={e => changeAssignation(e.target.value)}
+                disabled={savingAssigne}
+                style={{ fontSize: 12, color: C.text, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontFamily: 'inherit', opacity: savingAssigne ? .6 : 1 }}>
+                <option value="">— Non assigné —</option>
+                {profiles.filter(p => ['admin', 'commercial'].includes(p.role)).map(p => (
+                  <option key={p.id} value={p.id}>
+                    {(`${p.prenom || ''} ${p.nom || ''}`.trim()) || p.email}
+                  </option>
+                ))}
+              </select>
+            ) : dossier.assigne_a !== user?.id ? (
+              <button onClick={() => changeAssignation(user?.id)} disabled={savingAssigne}
+                style={{ fontSize: 11, fontWeight: 700, color: C.accent, background: '#EFF6FF', border: `1px solid ${C.accent}44`, borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', opacity: savingAssigne ? .6 : 1 }}>
+                {savingAssigne ? '…' : "M'attribuer"}
+              </button>
+            ) : (
+              <span style={{ fontSize: 12, color: C.textMid }}>Assigné à vous</span>
+            )}
           </div>
+        </div>
+
+        {/* ── Pipeline statuts ── */}
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px', marginBottom: 20 }}>
+          {/* Steps */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 0, overflowX: 'auto', paddingBottom: 4 }}>
+            {STATUTS.map((s, i) => {
+              const currentIdx = STATUTS.findIndex(x => x.id === dossier.statut)
+              const isDone    = i < currentIdx
+              const isCurrent = i === currentIdx
+              const isPending = pendingStatut === s.id
+              return (
+                <div key={s.id} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                  {i > 0 && (
+                    <div style={{ width: 20, height: 2, background: isDone ? s.color : C.border, transition: 'background .2s' }} />
+                  )}
+                  <button
+                    onClick={() => {
+                      if (s.id === dossier.statut) { setPendingStatut(null); return }
+                      setPendingStatut(s.id)
+                      setStatutForm({ statut: s.id, date: new Date().toISOString().split('T')[0] })
+                    }}
+                    title={s.label}
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                      background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 6px', borderRadius: 8,
+                      outline: isPending ? `2px solid ${s.color}` : 'none',
+                      transition: 'all .15s',
+                    }}
+                  >
+                    <div style={{
+                      width: isCurrent ? 14 : 10, height: isCurrent ? 14 : 10,
+                      borderRadius: '50%', flexShrink: 0,
+                      background: isCurrent ? s.color : isDone ? s.color + '88' : C.border,
+                      border: isCurrent ? `3px solid ${s.color}44` : isDone ? 'none' : `2px solid ${C.border}`,
+                      boxSizing: 'border-box',
+                      transition: 'all .2s',
+                    }} />
+                    <span style={{ fontSize: 9, color: isCurrent ? s.color : isDone ? C.textMid : C.textSoft, fontWeight: isCurrent ? 700 : 400, whiteSpace: 'nowrap', textAlign: 'center', maxWidth: 52, lineHeight: 1.2 }}>
+                      {s.label}
+                    </span>
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Confirmation inline */}
+          {pendingStatut && (() => {
+            const s = STATUTS.find(x => x.id === pendingStatut)
+            return (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
+                  Passer à <span style={{ color: s.color }}>{s.label}</span>
+                </span>
+                <input
+                  type="date"
+                  value={statutForm.date}
+                  onChange={e => setStatutForm(f => ({ ...f, date: e.target.value }))}
+                  style={{ fontSize: 12, color: C.text, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '5px 10px', fontFamily: 'inherit' }}
+                />
+                <button
+                  onClick={changeStatut}
+                  disabled={savingStatut}
+                  style={{ padding: '6px 16px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: savingStatut ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: 'none', background: s.color, color: '#fff', opacity: savingStatut ? .6 : 1 }}
+                >
+                  {savingStatut ? '…' : 'Confirmer'}
+                </button>
+                <button
+                  onClick={() => setPendingStatut(null)}
+                  style={{ padding: '6px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${C.border}`, background: 'transparent', color: C.textMid }}
+                >
+                  Annuler
+                </button>
+                {statutSaved && <span style={{ fontSize: 12, color: '#16A34A', fontWeight: 600 }}>✓ Mis à jour</span>}
+              </div>
+            )
+          })()}
+        </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 3fr', gap: 16, alignItems: 'start' }}>
@@ -620,13 +695,29 @@ export default function DossierDetail() {
             )}
           </div>
 
-          {/* ── Notes (dans la colonne gauche) ── */}
-          {dossier.notes && (
-            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 22px' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>📝 Notes</div>
-              <div style={{ fontSize: 13, color: C.textMid, whiteSpace: 'pre-wrap' }}>{dossier.notes}</div>
+          {/* ── Notes éditables ── */}
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 22px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>📝 Notes</span>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                {notesSaved && <span style={{ fontSize: 11, color: '#16A34A', fontWeight: 600 }}>✓ Sauvegardé</span>}
+                <button
+                  onClick={saveNotes}
+                  disabled={savingNotes}
+                  style={{ padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: savingNotes ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: 'none', background: C.accent, color: '#fff', opacity: savingNotes ? .6 : 1 }}
+                >
+                  {savingNotes ? '…' : 'Sauvegarder'}
+                </button>
+              </div>
             </div>
-          )}
+            <textarea
+              value={notesForm}
+              onChange={e => setNotesForm(e.target.value)}
+              placeholder="Ajoute des notes sur ce dossier…"
+              rows={5}
+              style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, lineHeight: 1.6, outline: 'none', fontFamily: 'inherit', resize: 'vertical' }}
+            />
+          </div>
 
           </div>{/* fin colonne gauche */}
 
