@@ -134,9 +134,16 @@ export default async function handler(req, res) {
     const month = parseInt(req.query.month)
     if (!year || !month) return res.status(400).json({ error: 'year et month requis' })
 
-    const timeMin = new Date(year, month - 1, 1).toISOString()
-    const timeMax = new Date(year, month, 1).toISOString()
-    const events  = await fetchAllEvents(accessToken, calendarIds, timeMin, timeMax)
+    // Étendre de 2h de chaque côté pour couvrir les events à cheval sur minuit Paris (UTC+1/+2)
+    const tMin = new Date(Date.UTC(year, month - 1, 1) - 2 * 60 * 60 * 1000).toISOString()
+    const tMax = new Date(Date.UTC(year, month, 1)     + 2 * 60 * 60 * 1000).toISOString()
+    const events  = await fetchAllEvents(accessToken, calendarIds, tMin, tMax)
+
+    const parisDateStr = (dt) => {
+      const fmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(dt)
+      const [dd, mm, yyyy] = fmt.split('/')
+      return `${yyyy}-${mm}-${dd}`
+    }
 
     const busyByDay = {}
     for (const e of events) {
@@ -147,7 +154,7 @@ export default async function handler(req, res) {
       }
       if (!e.start?.dateTime) continue
       const start = new Date(e.start.dateTime); const end = new Date(e.end.dateTime)
-      const dateStr = start.toISOString().split('T')[0]
+      const dateStr = parisDateStr(start)
       if (!busyByDay[dateStr]) busyByDay[dateStr] = []
       busyByDay[dateStr].push({ start, end, allDay: false })
     }
