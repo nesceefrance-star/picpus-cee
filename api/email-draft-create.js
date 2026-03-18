@@ -182,7 +182,7 @@ INSTRUCTIONS :
 - Met en avant l'argument principal de façon naturelle
 - Si relance >= 2, varie l'approche (ne pas répéter exactement la même accroche)
 - Termine par une invitation simple à répondre (confirmation, question, date de rappel)
-- Signe au nom de "L'équipe RÉGIE PICPUS"
+- Signe au nom de "L'équipe SOFT.IA"
 - Pas de formule trop commerciale ou insistante
 - Corps en texte brut avec sauts de ligne \\n
 

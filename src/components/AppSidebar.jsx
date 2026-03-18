@@ -152,7 +152,7 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
         <ElectricBoltIcon sx={{ color: DARK.accent, fontSize: 24, flexShrink: 0 }} />
         {open && (
           <Typography sx={{ ml: 1.2, fontSize: 15, fontWeight: 800, color: '#fff', letterSpacing: '-.01em', flex: 1, fontFamily: 'inherit' }}>
-            RÉGIE PICPUS
+            SOFT.IA
           </Typography>
         )}
         <Tooltip title={open ? 'Réduire' : 'Agrandir'} placement="right">

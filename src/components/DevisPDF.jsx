@@ -246,7 +246,7 @@ export function DevisPDFDoc({ devis, lignes, cats, batPuVente, batQte, primeFaci
               { l: 'Total H.T',              v: fmtE(stats.totalHT) },
               { l: 'TVA (20%)',              v: fmtE(stats.totalTVA) },
               { l: 'Total T.T.C',            v: fmtE(stats.totalTTC),     bold: true, bt: true },
-              { l: `Prime CEE (RÉGIE PICPUS)`, v: '− ' + fmtE(primeFaciale), color: GREEN, bt: true },
+              { l: `Prime CEE (SOFT.IA)`, v: '− ' + fmtE(primeFaciale), color: GREEN, bt: true },
               { l: 'Reste à charge T.T.C',  v: fmtE(stats.resteTTC),    bold: true, color: DARK, bt: true },
             ].map((r, i) => (
               <View key={i} style={[s.totLine, r.bt ? { borderTopWidth: 0.5, borderTopColor: '#ccc' } : {}]}>
@@ -278,7 +278,7 @@ export function DevisPDFDoc({ devis, lignes, cats, batPuVente, batQte, primeFaci
         <Text style={[s.condTitle, { fontSize: 8, marginBottom: 3 }]}>Termes et conditions CEE</Text>
         <Text style={s.condText}>
           {params.mentionCEE ||
-            `Les travaux objet du présent document donneront lieu à une contribution financière de RÉGIE PICPUS (SIREN 533 333 118), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : ${fmtE(primeCEESimu || primeFaciale)}.`}
+            `Les travaux objet du présent document donneront lieu à une contribution financière de SOFT.IA (SIREN 533 333 118), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : ${fmtE(primeCEESimu || primeFaciale)}.`}
         </Text>
 
         {params.cgv ? (

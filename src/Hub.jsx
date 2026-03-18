@@ -1390,7 +1390,7 @@ const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVent
                 {l:"Total H.T",    v:fmtE(stats.totalHT)},
                 {l:"TVA (20%)",    v:fmtE(stats.totalTVA)},
                 {l:"Total T.T.C",  v:fmtE(stats.totalTTC),  bold:true,bt:true},
-                {l:`Prime CEE (RÉGIE PICPUS)`, v:"− "+fmtE(primeFaciale), color:"#16A34A",bt:true},
+                {l:`Prime CEE (SOFT.IA)`, v:"− "+fmtE(primeFaciale), color:"#16A34A",bt:true},
                 {l:"Reste à charge T.T.C",       v:fmtE(stats.resteTTC), bold:true,bt:true},
               ].map((r,i) => (
                 <tr key={i} style={{borderTop:r.bt?"1px solid #333":"none"}}>
@@ -1425,7 +1425,7 @@ const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVent
         ))}
         <div style={{borderTop:"0.5px solid #ccc",margin:"8px 0"}}/>
         <div style={{fontSize:8,fontWeight:800,color:"#111",margin:"4px 0 3px"}}>Termes et conditions CEE</div>
-        <div style={{fontSize:7,color:"#555",lineHeight:1.7,marginBottom:5}}>Les travaux objet du présent document donneront lieu à une contribution financière de <strong>RÉGIE PICPUS</strong> (SIREN 533 333 118), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : <strong>{fmtE(primeCEESimu || primeFaciale)}</strong>.</div>
+        <div style={{fontSize:7,color:"#555",lineHeight:1.7,marginBottom:5}}>Les travaux objet du présent document donneront lieu à une contribution financière de <strong>SOFT.IA</strong> (SIREN 533 333 118), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : <strong>{fmtE(primeCEESimu || primeFaciale)}</strong>.</div>
         <Ftr/>
       </div>
 
@@ -1736,7 +1736,7 @@ const renderModule = (page, prefill) => {
   return null;
 };
 
-export default function PICPUSHub() {
+export default function AppHub() {
   const location = useLocation();
   const { module: initModule, prefill: initPrefill } = location.state || {};
   const [page, setPage] = useState(initModule || null);
@@ -1790,7 +1790,7 @@ export default function PICPUSHub() {
               <span style={{fontSize:28,fontWeight:900,color:"#60A5FA",letterSpacing:2,lineHeight:1}}>PICPUS</span>
               <div style={{width:2,height:26,background:"#475569"}}/>
               <div>
-                <div style={{fontSize:14,fontWeight:600,color:"#CBD5E1",lineHeight:1.2}}>RÉGIE PICPUS</div>
+                <div style={{fontSize:14,fontWeight:600,color:"#CBD5E1",lineHeight:1.2}}>SOFT.IA</div>
               </div>
             </div>
             <div style={{fontSize:22,fontWeight:800,color:"#F8FAFC",marginBottom:4}}>Plateforme CEE — Outils internes</div>
@@ -1864,7 +1864,7 @@ export default function PICPUSHub() {
         </div>
 
         <div style={{marginTop:28,paddingTop:16,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{fontSize:12,color:C.textSoft}}>RÉGIE PICPUS — Plateforme CEE interne — {new Date().toLocaleDateString("fr-FR")}</span>
+          <span style={{fontSize:12,color:C.textSoft}}>SOFT.IA — Plateforme CEE interne — {new Date().toLocaleDateString("fr-FR")}</span>
           <span style={{fontSize:11,color:C.border}}>Développé avec Claude · Anthropic</span>
         </div>
       </div>

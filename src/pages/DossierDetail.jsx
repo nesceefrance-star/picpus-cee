@@ -1403,7 +1403,7 @@ export default function DossierDetail() {
                       method: 'POST',
                       headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        subject: `RDV ${dossier.prospects?.raison_sociale || 'Client'} — RÉGIE PICPUS`,
+                        subject: `RDV ${dossier.prospects?.raison_sociale || 'Client'} — SOFT.IA`,
                         startDateTime: start.toISOString(),
                         endDateTime:   end.toISOString(),
                         emails: teamsEmails.split(',').map(e => e.trim()).filter(Boolean),

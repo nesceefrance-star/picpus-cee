@@ -44,7 +44,7 @@ export default function AppLayout({ children }) {
             sx={{ color: '#94A3B8', mr: 1 }}>
             <MenuIcon />
           </IconButton>
-          <span style={{ color: '#fff', fontWeight: 800, fontSize: 15 }}>RÉGIE PICPUS</span>
+          <span style={{ color: '#fff', fontWeight: 800, fontSize: 15 }}>SOFT.IA</span>
         </Box>
 
         {/* Page rendue */}

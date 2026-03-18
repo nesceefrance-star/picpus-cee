@@ -10,7 +10,7 @@ import AgentRelance from './pages/AgentRelance'
 import MonAssistante from './pages/MonAssistante'
 import SuiviEquipe from './pages/SuiviEquipe'
 import ResetPassword from './pages/ResetPassword'
-import PICPUSHub from './Hub'
+import AppHub from './Hub'
 import Parametres from './pages/Parametres'
 import AppLayout from './components/AppLayout'
 import { createTheme, ThemeProvider } from '@mui/material/styles'
@@ -80,7 +80,7 @@ export default function AppRouter() {
           <Route path="/login"          element={<Login />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/"               element={<WithLayout><Dashboard /></WithLayout>} />
-          <Route path="/hub"            element={<WithLayout><PICPUSHub /></WithLayout>} />
+          <Route path="/hub"            element={<WithLayout><AppHub /></WithLayout>} />
           <Route path="/dossier/:id"    element={<WithLayout><DossierDetail /></WithLayout>} />
           <Route path="/relances"       element={<WithLayout><AgentRelance /></WithLayout>} />
           <Route path="/assistante"    element={<WithLayout><MonAssistante /></WithLayout>} />
