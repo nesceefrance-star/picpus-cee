@@ -852,20 +852,16 @@ export default function DossierDetail() {
                     {meetCreating ? '⏳ Création en cours…' : '🟢 Créer la réunion Google Meet'}
                   </button>
                 ) : (
-                  <button
-                    onClick={() => {
-                      const start = new Date(`${teamsDate}T${teamsTime}:00`)
-                      const end   = new Date(start.getTime() + teamsDuration * 60000)
-                      const subject   = `RDV ${dossier.prospects?.raison_sociale || 'Client'} — RÉGIE PICPUS`
-                      const attendees = teamsEmails.split(',').map(e => e.trim()).filter(Boolean).join(',')
-                      const p = new URLSearchParams({ subject, startTime: start.toISOString(), endTime: end.toISOString() })
-                      if (attendees) p.set('attendees', attendees)
-                      window.open(`https://teams.microsoft.com/l/meeting/new?${p}`, '_blank')
-                    }}
-                    disabled={!teamsDate || !teamsTime}
-                    style={{ width: '100%', padding: '9px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: '#5B5EA6', border: 'none', color: '#fff', marginBottom: 10 }}>
-                    🟣 Ouvrir le formulaire Teams
-                  </button>
+                  <div>
+                    <button
+                      onClick={() => window.open('https://teams.live.com', '_blank')}
+                      style={{ width: '100%', padding: '9px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: '#5B5EA6', border: 'none', color: '#fff', marginBottom: 6 }}>
+                      🟣 Ouvrir Teams
+                    </button>
+                    <div style={{ fontSize: 11, color: C.textSoft, textAlign: 'center', marginBottom: 10 }}>
+                      Crée ta réunion dans Teams, puis colle le lien ci-dessous
+                    </div>
+                  </div>
                 )}
 
                 {meetError && (
