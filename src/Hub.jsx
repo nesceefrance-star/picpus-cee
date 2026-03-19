@@ -1174,7 +1174,15 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
           devis={devis}
           initTab={editConfig}
           dossiersList={dossiersList}
-          onSave={updates => { setDevis(d => ({...d, ...updates, updatedAt: Date.now()})); setEditConfig(null); }}
+          onSave={updates => {
+            setDevis(d => {
+              const next = {...d, ...updates, updatedAt: Date.now()};
+              // Auto-persist immédiatement en base (évite perte si pas de retour liste)
+              supabase.from("devis_hub").update(devisToRow(next)).eq("id", next.id);
+              return next;
+            });
+            setEditConfig(null);
+          }}
           onCancel={() => setEditConfig(null)}
         />
       )}
@@ -1588,6 +1596,30 @@ const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVent
 // ── Composant principal MargesDevis ────────────────────────────────────────
 const CACHE_KEY = "picpus_devis_cache";
 
+const devisToRow = (d) => ({
+  nom_client: d.nomClient,
+  ref_devis: d.refDevis,
+  date_devis: d.dateDevis,
+  siret: d.siret,
+  adresse_site: d.adresseSite,
+  nom_contact: d.nomContact,
+  fonction_contact: d.fonctionContact,
+  sous_traitant: d.sousTraitant,
+  rge_num: d.rgeNum,
+  rge_validite: d.rgeValidite,
+  lignes: d.lignes,
+  bat_qte: d.batQte || 0,
+  bat_pu_vente: d.batPuVente || 0,
+  prime: d.prime || 0,
+  updated_at: new Date().toISOString(),
+  adresse_siege: d.adresseSiege || "",
+  telephone_client: d.telephoneClient || "",
+  email_client: d.emailClient || "",
+  code_naf: d.codeNAF || "",
+  pdf_params: d.pdfParams || {},
+  dossier_id: d.dossierId || null,
+});
+
 const normalizeDevis = d => ({
   id: d.id,
   nomClient: d.nom_client,
@@ -1676,29 +1708,7 @@ function MargesDevis({ prefill }) {
   useEffect(() => { fetchDevis(); }, []);
 
   // ── Conversion camelCase → snake_case pour Supabase ───────────────────
-  const toRow = (d) => ({
-    nom_client: d.nomClient,
-    ref_devis: d.refDevis,
-    date_devis: d.dateDevis,
-    siret: d.siret,
-    adresse_site: d.adresseSite,
-    nom_contact: d.nomContact,
-    fonction_contact: d.fonctionContact,
-    sous_traitant: d.sousTraitant,
-    rge_num: d.rgeNum,
-    rge_validite: d.rgeValidite,
-    lignes: d.lignes,
-    bat_qte: d.batQte || 0,
-    bat_pu_vente: d.batPuVente || 0,
-    prime: d.prime || 0,
-    updated_at: new Date().toISOString(),
-    adresse_siege: d.adresseSiege || "",
-    telephone_client: d.telephoneClient || "",
-    email_client: d.emailClient || "",
-    code_naf: d.codeNAF || "",
-    pdf_params: d.pdfParams || {},
-    dossier_id: d.dossierId || null,
-  });
+  const toRow = devisToRow;
 
   // ── Créer un nouveau devis ────────────────────────────────────────────
   const creerDevis = async (infos, lignes) => {
