@@ -467,18 +467,27 @@ export default function DossierDetail() {
     if (checkedDocs.size === 0) return
     setEmailingVerificateur(true)
     try {
-      const files = [...checkedDocs].map(fn => ({
-        storagePath: `${id}/${fn}`,
-        fileName: fn.replace(/^\d+_/, ''),
-      }))
-      const r = await fetch('/api/email-document', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dossierId: id, files }),
+      const fileList = await Promise.all(
+        [...checkedDocs].map(async fn => {
+          const { data } = await supabase.storage
+            .from('dossier-documents')
+            .createSignedUrl(`${id}/${fn}`, 3600)
+          return { name: fn.replace(/^\d+_/, ''), url: data?.signedUrl }
+        })
+      )
+      const validFiles = fileList.filter(f => f.url)
+      if (validFiles.length === 0) throw new Error('Impossible de générer les liens')
+      setCheckedDocs(new Set())
+      navigate('/hub', {
+        state: {
+          module: 'verificateur',
+          prefill: {
+            ref:   dossier.ref || '',
+            fiche: dossier.fiche_cee || 'BAT-TH-142',
+            files: validFiles,
+          },
+        },
       })
-      const d = await r.json()
-      if (d.gmailUrl) { window.open(d.gmailUrl, '_blank'); setCheckedDocs(new Set()) }
-      else alert(d.error || 'Erreur création brouillon vérificateur')
     } catch (e) { alert('Erreur : ' + e.message) }
     setEmailingVerificateur(false)
   }

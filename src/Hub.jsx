@@ -146,9 +146,9 @@ function PointCard({ item, cfg, val, note, onVal, onNote, openNote, toggleNote }
   );
 }
 
-function VerificateurCEE() {
-  const [fiche,setFiche]   = useState("BAT-TH-142");
-  const [ref_,setRef_]     = useState("");
+function VerificateurCEE({ prefill }) {
+  const [fiche,setFiche]   = useState(prefill?.fiche || "BAT-TH-142");
+  const [ref_,setRef_]     = useState(prefill?.ref || "");
   const [fileAH,setFileAH] = useState(null);
   const [fileDev,setFileDev] = useState(null);
   const [step,setStep]     = useState("upload");
@@ -157,6 +157,25 @@ function VerificateurCEE() {
   const [valid,setValid]   = useState({});
   const [notes,setNotes]   = useState({});
   const [openNote,setOpenNote] = useState(null);
+  const [prefillLoading, setPrefillLoading] = useState(!!prefill?.files?.length);
+
+  // Charger les fichiers depuis les URLs signées Supabase
+  useEffect(() => {
+    if (!prefill?.files?.length) return;
+    const load = async () => {
+      try {
+        const blobs = await Promise.all(
+          prefill.files.map(f =>
+            fetch(f.url).then(r => r.blob()).then(b => new File([b], f.name, { type: b.type || 'application/pdf' }))
+          )
+        );
+        if (blobs[0]) setFileAH(blobs[0]);
+        if (blobs[1]) setFileDev(blobs[1]);
+      } catch { /* si erreur, l'utilisateur uploade manuellement */ }
+      setPrefillLoading(false);
+    };
+    load();
+  }, []);
 
   const toB64 = f => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(",")[1]); r.onerror=rej; r.readAsDataURL(f); });
   const mtype = f => f.type==="application/pdf"?"application/pdf":f.type||"image/jpeg";
@@ -197,6 +216,12 @@ Structure: {"avis_global":"CONFORME|ATTENTION|BLOQUANT","resume":"synthèse 2-3 
             <div style={{marginBottom:20}}>
               <h2 style={{...T.h2,marginBottom:4}}>Analyse de dossier CEE par IA</h2>
               <p style={{...T.sm,margin:0}}>Uploadez l'AH et le devis — Claude détecte automatiquement les incohérences entre les deux documents.</p>
+              {prefill && (
+                <div style={{marginTop:8,background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:7,padding:"7px 12px",fontSize:12,color:"#1D4ED8",display:"flex",alignItems:"center",gap:6}}>
+                  📁 Documents pré-chargés depuis le dossier {prefill.ref}
+                  {prefillLoading && <span style={{color:"#60A5FA"}}>— ⏳ chargement des fichiers…</span>}
+                </div>
+              )}
             </div>
             <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"18px",marginBottom:16,display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
               <div>
@@ -1863,9 +1888,9 @@ const MODULES = [
 ];
 
 const renderModule = (page, prefill) => {
-  if (page === "verificateur") return <VerificateurCEE />;
-  if (page === "checklist")   return <ChecklistCEE />;
-  if (page === "marges")      return <MargesDevis prefill={prefill} />;
+  if (page === "verificateur") return <VerificateurCEE prefill={prefill} />;
+  if (page === "checklist")    return <ChecklistCEE />;
+  if (page === "marges")       return <MargesDevis prefill={prefill} />;
   return null;
 };
 
