@@ -13,12 +13,13 @@ const C = {
 }
 
 const EMAIL_TYPES = [
-  { key: 'visio_creneaux', label: 'Proposition créneaux visio',    statuts: ['contacte'],         needsSlots: true  },
-  { key: 'visio_confirm',  label: 'Confirmation visio',            statuts: ['visio_planifiee'],  needsSlots: false },
-  { key: 'post_visio',     label: 'Post-visio — éléments',        statuts: ['visio_effectuee'],  needsSlots: false },
-  { key: 'visite_confirm', label: 'Confirmation visite technique', statuts: ['visite_planifiee'], needsSlots: false },
-  { key: 'envoi_devis',    label: 'Envoi de devis',                statuts: ['visite_effectuee'], needsSlots: false },
-  { key: 'relance',        label: 'Relance devis',                 statuts: ['devis'],            needsSlots: false },
+  { key: 'visio_creneaux',  label: 'Proposition créneaux visio',    statuts: ['contacte'],         needsSlots: true,  slotType: 'visio'   },
+  { key: 'visio_confirm',   label: 'Confirmation visio',            statuts: ['visio_planifiee'],  needsSlots: false  },
+  { key: 'post_visio',      label: 'Post-visio — éléments',        statuts: ['visio_effectuee'],  needsSlots: false  },
+  { key: 'visite_creneaux', label: 'Proposition créneaux visite',   statuts: ['visio_effectuee'],  needsSlots: true,  slotType: 'visite'  },
+  { key: 'visite_confirm',  label: 'Confirmation visite technique', statuts: ['visite_planifiee'], needsSlots: false  },
+  { key: 'envoi_devis',     label: 'Envoi de devis',                statuts: ['visite_effectuee'], needsSlots: false  },
+  { key: 'relance',         label: 'Relance devis',                 statuts: ['devis'],            needsSlots: false  },
 ]
 
 const ACTIVE_STATUTS = ['contacte','visio_planifiee','visio_effectuee','visite_planifiee','visite_effectuee','devis']
@@ -87,8 +88,10 @@ export default function EmailSection({ dossierId, statut }) {
   const loadSlots = async () => {
     setLoadingSlots(true)
     setSlotsError(null)
+    const typeConf = EMAIL_TYPES.find(t => t.key === selectedType)
+    const slotType = typeConf?.slotType || 'visio'
     try {
-      const r = await fetch('/api/calendar?action=slots', {
+      const r = await fetch(`/api/calendar?action=slots${slotType === 'visite' ? '&type=visite' : ''}`, {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       })
       const d = await r.json()

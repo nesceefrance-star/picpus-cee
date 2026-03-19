@@ -156,8 +156,16 @@ export default async function handler(req, res) {
     for (const e of events) {
       if (e.status === 'cancelled') continue
       if (e.start?.date && !e.start?.dateTime) {
-        if (!busyByDay[e.start.date]) busyByDay[e.start.date] = []
-        busyByDay[e.start.date].push({ allDay: true }); continue
+        // Événement multi-jours : marquer chaque jour de la plage
+        let cur = new Date(e.start.date + 'T00:00:00Z')
+        const endD = new Date(e.end.date + 'T00:00:00Z') // fin exclusive
+        while (cur < endD) {
+          const ds = cur.toISOString().split('T')[0]
+          if (!busyByDay[ds]) busyByDay[ds] = []
+          busyByDay[ds].push({ allDay: true })
+          cur.setUTCDate(cur.getUTCDate() + 1)
+        }
+        continue
       }
       if (!e.start?.dateTime) continue
       const start = new Date(e.start.dateTime); const end = new Date(e.end.dateTime)
@@ -183,24 +191,44 @@ export default async function handler(req, res) {
   }
 
   // ── GET ?action=slots — créneaux libres J+3 (EmailSection) ────────────────
+  // ?type=visite → créneaux 2h pour visite technique
   if (action === 'slots') {
-    const workDays = workingDaysFrom(3, 3)
-    const timeMin  = workDays[0].toISOString()
-    const timeMax  = new Date(workDays[workDays.length - 1]); timeMax.setHours(23, 59, 59)
-    const events   = await fetchAllEvents(accessToken, calendarIds, timeMin, timeMax.toISOString())
+    const isVisite     = req.query.type === 'visite'
+    const slotDuration = isVisite ? 120 * 60 * 1000 : 45 * 60 * 1000
+    const windows      = isVisite ? [[8,0],[10,0],[14,0],[16,0]] : WINDOWS
+    const workDays     = workingDaysFrom(3, isVisite ? 5 : 3)
 
-    const busy = events
+    const timeMin = workDays[0].toISOString()
+    const timeMax = new Date(workDays[workDays.length - 1]); timeMax.setHours(23, 59, 59)
+    const events  = await fetchAllEvents(accessToken, calendarIds, timeMin, timeMax.toISOString())
+
+    // Jours entièrement bloqués (events multi-jours allDay)
+    const allDayBusy = new Set()
+    for (const e of events) {
+      if (e.status === 'cancelled' || !e.start?.date || e.start?.dateTime) continue
+      let cur = new Date(e.start.date + 'T00:00:00Z')
+      const endD = new Date(e.end.date + 'T00:00:00Z')
+      while (cur < endD) { allDayBusy.add(cur.toISOString().split('T')[0]); cur.setUTCDate(cur.getUTCDate() + 1) }
+    }
+
+    const timedBusy = events
       .filter(e => e.status !== 'cancelled' && e.start?.dateTime)
       .map(e => ({ start: new Date(e.start.dateTime), end: new Date(e.end.dateTime) }))
 
     const slots = []
     for (const day of workDays) {
+      const dayStr = day.toISOString().split('T')[0]
+      if (allDayBusy.has(dayStr)) continue
       const dayLabel = day.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
-      for (const [h, m] of WINDOWS) {
+      for (const [h, m] of windows) {
         const slotStart = new Date(day); slotStart.setHours(h, m, 0, 0)
-        const slotEnd   = new Date(slotStart.getTime() + 45 * 60 * 1000)
-        if (!busy.some(b => slotStart < b.end && slotEnd > b.start)) {
-          slots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString(), label: dayLabel + ' à ' + slotStart.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }), day: dayLabel })
+        const slotEnd   = new Date(slotStart.getTime() + slotDuration)
+        if (!timedBusy.some(b => slotStart < b.end && slotEnd > b.start)) {
+          const endH = slotEnd.getHours(), endM = slotEnd.getMinutes()
+          const timeLabel = isVisite
+            ? `${String(h).padStart(2,'0')}h-${String(endH).padStart(2,'0')}h${endM ? endM : ''}`
+            : slotStart.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+          slots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString(), label: `${dayLabel} ${timeLabel}`, day: dayLabel })
         }
       }
     }

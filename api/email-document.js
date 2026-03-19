@@ -1,5 +1,6 @@
-// api/email-document.js — Crée un brouillon Gmail avec lien de téléchargement d'un document
-// POST body: { dossierId, storagePath, fileName }
+// api/email-document.js — Crée un brouillon Gmail avec lien(s) de téléchargement
+// POST body: { dossierId, storagePath, fileName }          ← fichier unique
+//         ou { dossierId, files: [{storagePath, fileName}] } ← multi-fichiers (vérificateur)
 
 import { createClient } from '@supabase/supabase-js'
 import { setCors } from './_cors.js'
@@ -51,9 +52,15 @@ export default async function handler(req, res) {
   const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
   if (authErr || !user) return res.status(401).json({ error: 'unauthorized' })
 
-  const { dossierId, storagePath, fileName } = req.body
-  if (!dossierId || !storagePath || !fileName)
-    return res.status(400).json({ error: 'dossierId, storagePath et fileName requis' })
+  const { dossierId, storagePath, fileName, files } = req.body
+
+  // Normaliser en tableau de fichiers
+  const fileList = Array.isArray(files) && files.length > 0
+    ? files
+    : (storagePath && fileName ? [{ storagePath, fileName }] : [])
+
+  if (!dossierId || fileList.length === 0)
+    return res.status(400).json({ error: 'dossierId et au moins un fichier requis' })
 
   // Récupérer dossier + prospect
   const { data: dossier } = await supabase
@@ -63,27 +70,42 @@ export default async function handler(req, res) {
     .single()
   if (!dossier) return res.status(404).json({ error: 'Dossier introuvable' })
 
-  // Générer un lien signé 7 jours (604800 secondes)
-  const { data: signedData, error: signedErr } = await supabase
-    .storage.from('dossier-documents')
-    .createSignedUrl(storagePath, 604800)
-  if (signedErr || !signedData?.signedUrl)
-    return res.status(500).json({ error: 'Impossible de générer le lien de téléchargement' })
-
   const { prospect, ref } = dossier
-  const to = prospect?.contact_email || ''
-  const contactNom = prospect?.contact_nom || 'Madame, Monsieur'
-  const societe = prospect?.raison_sociale || ''
+  const to          = prospect?.contact_email || ''
+  const contactNom  = prospect?.contact_nom || 'Madame, Monsieur'
+  const societe     = prospect?.raison_sociale || ''
   const expiresDate = new Date(Date.now() + 7 * 24 * 3600 * 1000).toLocaleDateString('fr-FR')
 
-  const subject = `Document — ${fileName} — Dossier ${ref}`
+  // Générer les liens signés pour chaque fichier
+  const links = []
+  for (const f of fileList) {
+    const { data: signedData } = await supabase.storage.from('dossier-documents').createSignedUrl(f.storagePath, 604800)
+    if (signedData?.signedUrl) links.push({ fileName: f.fileName, url: signedData.signedUrl })
+  }
+  if (links.length === 0)
+    return res.status(500).json({ error: 'Impossible de générer les liens de téléchargement' })
+
+  // Construire sujet + corps
+  const isMulti = links.length > 1
+  const subject = isMulti
+    ? `Documents CEE — Dossier ${ref}${societe ? ` (${societe})` : ''}`
+    : `Document — ${links[0].fileName} — Dossier ${ref}`
+
+  const intro = isMulti
+    ? `Veuillez trouver ci-dessous les liens de téléchargement des ${links.length} documents relatifs au dossier ${ref}${societe ? ` (${societe})` : ''} pour vérification CEE.`
+    : `Veuillez trouver ci-dessous le lien de téléchargement du document "${links[0].fileName}" relatif au dossier ${ref}${societe ? ` (${societe})` : ''}.`
+
+  const linksBlock = isMulti
+    ? links.map(l => `• ${l.fileName}\n  ${l.url}`).join('\n\n')
+    : links[0].url
+
   const body = [
     `${contactNom},`,
     '',
-    `Veuillez trouver ci-dessous le lien de téléchargement du document "${fileName}" relatif au dossier ${ref}${societe ? ` (${societe})` : ''}.`,
+    intro,
     '',
-    `Lien de téléchargement (valable jusqu'au ${expiresDate}) :`,
-    signedData.signedUrl,
+    `Lien${isMulti ? 's' : ''} de téléchargement (valable${isMulti ? 's' : ''} jusqu'au ${expiresDate}) :`,
+    linksBlock,
     '',
     'Cordialement,',
     "L'équipe SOFT.IA",
@@ -124,7 +146,9 @@ export default async function handler(req, res) {
     dossier_id: dossierId,
     user_id:    user.id,
     type:       'email',
-    contenu:    `Brouillon envoi document créé : ${fileName}`,
+    contenu:    isMulti
+      ? `Brouillon vérificateur CEE créé (${links.length} documents)`
+      : `Brouillon envoi document créé : ${links[0].fileName}`,
   })
 
   return res.json({

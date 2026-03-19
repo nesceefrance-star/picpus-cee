@@ -56,6 +56,14 @@ function DossierRow({ dossier, expanded, onToggleExpand }) {
   const emailTypes = EMAIL_TYPES.filter(t => t.statuts.includes(statut))
   const totalGens  = Object.keys(generations || {}).length
 
+  const [activiteHistory, setActiviteHistory] = useState([])
+  useEffect(() => {
+    if (!expanded) return
+    supabase.from('activites').select('type, contenu, created_at')
+      .eq('dossier_id', dossierId).order('created_at', { ascending: false }).limit(20)
+      .then(({ data }) => setActiviteHistory(data || []))
+  }, [expanded, dossierId])
+
   return (
     <Paper sx={{ mb: 1.5, background: '#1E293B', border: '1px solid #334155', borderRadius: 2, overflow: 'hidden' }}>
       {/* Header */}
@@ -109,6 +117,28 @@ function DossierRow({ dossier, expanded, onToggleExpand }) {
               <Typography sx={{ fontSize: 12, color: '#94A3B8' }}>📞 {prospect.contact_tel}</Typography>
             )}
           </Box>
+          {/* Historique activités */}
+          {activiteHistory.length > 0 && (
+            <Box sx={{ mt: 1.5 }}>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '.06em', mb: 1 }}>
+                Historique
+              </Typography>
+              {activiteHistory.map((a, i) => {
+                const ICON = { note: '📝', appel: '📞', email: '✉️', rdv: '📅', statut: '🔄', document: '📎', devis: '📄' }
+                return (
+                  <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', py: 0.4, borderBottom: i < activiteHistory.length - 1 ? '1px solid #1E293B' : 'none' }}>
+                    <Typography sx={{ fontSize: 12, color: a.type === 'statut' ? '#60A5FA' : '#94A3B8' }}>
+                      {ICON[a.type] || '·'} {a.contenu}
+                    </Typography>
+                    <Typography sx={{ fontSize: 10, color: '#475569', flexShrink: 0, ml: 1 }}>
+                      {new Date(a.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' })}
+                    </Typography>
+                  </Box>
+                )
+              })}
+            </Box>
+          )}
+
           {/* Emails générés */}
           {Object.keys(generations || {}).length > 0 && (
             <Box sx={{ mt: 1.5 }}>
@@ -220,30 +250,171 @@ function StyleExemplesTab({ session }) {
   )
 }
 
+// ── Onglet Dashboard ─────────────────────────────────────────────────────────
+
+function DashboardTab() {
+  const [stats, setStats]   = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      const [dossiersRes, appelsRes, activitesRes, profilesRes] = await Promise.all([
+        supabase.from('dossiers').select('statut, assigne_a, statut_date'),
+        supabase.from('appels').select('etat, created_at, dossier_id'),
+        supabase.from('activites').select('type, created_at, user_id, dossier_id'),
+        supabase.from('profiles').select('user_id, prenom, nom').eq('role', 'commercial'),
+      ])
+      setStats({
+        dossiers:  dossiersRes.data  || [],
+        appels:    appelsRes.data    || [],
+        activites: activitesRes.data || [],
+        profiles:  profilesRes.data  || [],
+      })
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  if (loading) return <Box sx={{ textAlign: 'center', py: 6 }}><CircularProgress size={24} /></Box>
+  if (!stats) return null
+
+  const { dossiers, appels, activites, profiles } = stats
+  const now = new Date()
+  const weekAgo = new Date(now - 7 * 24 * 3600 * 1000)
+  const monthAgo = new Date(now - 30 * 24 * 3600 * 1000)
+
+  const byStatut = {}
+  for (const d of dossiers) byStatut[d.statut] = (byStatut[d.statut] || 0) + 1
+
+  const appelsWeek    = appels.filter(a => new Date(a.created_at) > weekAgo)
+  const activitesWeek = activites.filter(a => new Date(a.created_at) > weekAgo)
+  const emailsWeek    = activitesWeek.filter(a => a.type === 'email').length
+  const rdvsWeek      = activitesWeek.filter(a => a.type === 'rdv').length
+  const docsWeek      = activitesWeek.filter(a => a.type === 'document').length
+
+  const PIPELINE = ['simulation','prospect','contacte','visio_planifiee','visio_effectuee','visite_planifiee','visite_effectuee','devis','ah','conforme','facture']
+
+  const kpis = [
+    { label: 'Dossiers actifs', value: dossiers.filter(d => !['facture','archive'].includes(d.statut)).length, color: '#60A5FA' },
+    { label: 'Visio planifiées', value: (byStatut['visio_planifiee'] || 0), color: '#06B6D4' },
+    { label: 'Visites planifiées', value: (byStatut['visite_planifiee'] || 0), color: '#F59E0B' },
+    { label: 'Devis envoyés', value: (byStatut['devis'] || 0), color: '#8B5CF6' },
+    { label: 'AH signés', value: (byStatut['ah'] || 0), color: '#10B981' },
+    { label: 'Facturés', value: (byStatut['facture'] || 0), color: '#047857' },
+    { label: 'Appels (7j)', value: appelsWeek.length, color: '#64748B' },
+    { label: 'Emails (7j)', value: emailsWeek, color: '#6366F1' },
+    { label: 'RDV créés (7j)', value: rdvsWeek, color: '#EC4899' },
+    { label: 'Docs uploadés (7j)', value: docsWeek, color: '#78716C' },
+  ]
+
+  // Résumé par commercial
+  const perCommercial = profiles.map(p => {
+    const myDossiers = dossiers.filter(d => d.assigne_a === p.user_id)
+    const myActifs   = myDossiers.filter(d => !['facture','archive'].includes(d.statut))
+    const myAppels   = appelsWeek.filter(a => activites.find(ac => ac.dossier_id === a.dossier_id && myDossiers.some(d => d.id === ac.dossier_id)))
+    return { ...p, total: myDossiers.length, actifs: myActifs.length,
+      visios: myDossiers.filter(d => d.statut === 'visio_planifiee').length,
+      visites: myDossiers.filter(d => d.statut === 'visite_planifiee').length,
+      devis: myDossiers.filter(d => d.statut === 'devis').length,
+    }
+  }).filter(p => p.total > 0)
+
+  return (
+    <Box>
+      {/* KPI Grid */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 1.5, mb: 3 }}>
+        {kpis.map(k => (
+          <Paper key={k.label} sx={{ p: 1.5, background: '#1E293B', border: '1px solid #334155', borderRadius: 2 }}>
+            <Typography sx={{ fontSize: 10, color: '#64748B', textTransform: 'uppercase', letterSpacing: '.06em', mb: 0.5 }}>{k.label}</Typography>
+            <Typography sx={{ fontSize: 22, fontWeight: 800, color: k.color }}>{k.value}</Typography>
+          </Paper>
+        ))}
+      </Box>
+
+      {/* Pipeline */}
+      <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '.06em', mb: 1.5 }}>
+        Pipeline
+      </Typography>
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
+        {PIPELINE.map(s => {
+          const n = byStatut[s] || 0
+          if (!n) return null
+          return (
+            <Chip key={s} size="small"
+              label={`${STATUT_LABELS[s] || s} · ${n}`}
+              sx={{ height: 24, fontSize: 11, fontWeight: 600,
+                background: (STATUT_COLORS[s] || '#334155') + '33',
+                color: STATUT_COLORS[s] || '#94A3B8',
+                border: `1px solid ${(STATUT_COLORS[s] || '#334155')}55` }}
+            />
+          )
+        })}
+      </Box>
+
+      {/* Par commercial */}
+      {perCommercial.length > 0 && (
+        <>
+          <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '.06em', mb: 1.5 }}>
+            Par commercial
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {perCommercial.map(p => (
+              <Paper key={p.user_id} sx={{ p: 1.5, background: '#1E293B', border: '1px solid #334155', borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#fff', minWidth: 120 }}>{p.prenom} {p.nom}</Typography>
+                  {[
+                    { l: 'Dossiers actifs', v: p.actifs, c: '#60A5FA' },
+                    { l: 'Visio plan.', v: p.visios, c: '#06B6D4' },
+                    { l: 'Visite plan.', v: p.visites, c: '#F59E0B' },
+                    { l: 'Devis', v: p.devis, c: '#8B5CF6' },
+                  ].map(k => (
+                    <Box key={k.l} sx={{ textAlign: 'center', minWidth: 60 }}>
+                      <Typography sx={{ fontSize: 16, fontWeight: 800, color: k.c }}>{k.v}</Typography>
+                      <Typography sx={{ fontSize: 10, color: '#475569' }}>{k.l}</Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Paper>
+            ))}
+          </Box>
+        </>
+      )}
+    </Box>
+  )
+}
+
 // ── Onglet Activité équipe ────────────────────────────────────────────────────
 
 const TYPE_ICON = { note: '📝', appel: '📞', email: '✉️', rdv: '📅', statut: '🔄', document: '📎', devis: '📄' }
 const TYPE_LABEL = { note: 'Note', appel: 'Appel', email: 'Email', rdv: 'RDV', statut: 'Statut', document: 'Document', devis: 'Devis' }
 
 function ActiviteEquipeTab() {
-  const [activites, setActivites] = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [typeFilter, setTypeFilter] = useState('all')
+  const [activites, setActivites]     = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [typeFilter, setTypeFilter]   = useState('all')
+  const [commercialFilter, setCommercialFilter] = useState('all')
+  const [profiles, setProfiles]       = useState([])
 
   const fetchActivites = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('activites')
-      .select('*, dossiers(ref, prospects(raison_sociale))')
-      .order('created_at', { ascending: false })
-      .limit(100)
-    setActivites(data || [])
+    const [actRes, profRes] = await Promise.all([
+      supabase.from('activites')
+        .select('*, dossiers(ref, prospects(raison_sociale))')
+        .order('created_at', { ascending: false })
+        .limit(200),
+      supabase.from('profiles').select('user_id, prenom, nom'),
+    ])
+    setActivites(actRes.data || [])
+    setProfiles(profRes.data || [])
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchActivites() }, [fetchActivites])
 
-  const filtered = typeFilter === 'all' ? activites : activites.filter(a => a.type === typeFilter)
+  const filtered = activites
+    .filter(a => typeFilter === 'all' || a.type === typeFilter)
+    .filter(a => commercialFilter === 'all' || a.user_id === commercialFilter)
 
   return (
     <Box>
@@ -254,6 +425,23 @@ function ActiviteEquipeTab() {
           ↻ Actualiser
         </Button>
       </Box>
+
+      {/* Filtre par commercial */}
+      {profiles.length > 0 && (
+        <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Typography sx={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>Commercial :</Typography>
+          {[{ user_id: 'all', prenom: 'Tous', nom: '' }, ...profiles].map(p => (
+            <Chip key={p.user_id} size="small"
+              label={p.user_id === 'all' ? 'Tous' : `${p.prenom} ${p.nom}`}
+              onClick={() => setCommercialFilter(p.user_id)}
+              sx={{ cursor: 'pointer', fontSize: 11, fontWeight: commercialFilter === p.user_id ? 700 : 400,
+                background: commercialFilter === p.user_id ? '#2563EB' : '#1E293B',
+                color: commercialFilter === p.user_id ? '#fff' : '#94A3B8',
+                border: `1px solid ${commercialFilter === p.user_id ? '#2563EB' : '#334155'}` }}
+            />
+          ))}
+        </Box>
+      )}
 
       {/* Filtre par type */}
       <Box sx={{ display: 'flex', gap: 1, mb: 2.5, flexWrap: 'wrap' }}>
@@ -369,12 +557,15 @@ export default function SuiviEquipe() {
       </Box>
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3, borderBottom: '1px solid #334155' }}>
+        <Tab label="📊 Dashboard" sx={{ fontSize: 13, textTransform: 'none', fontWeight: 600 }} />
         <Tab label="Dossiers actifs" sx={{ fontSize: 13, textTransform: 'none', fontWeight: 600 }} />
         <Tab label="Activité équipe" sx={{ fontSize: 13, textTransform: 'none', fontWeight: 600 }} />
         <Tab label="Style & Exemples" sx={{ fontSize: 13, textTransform: 'none', fontWeight: 600 }} />
       </Tabs>
 
-      {tab === 0 && (
+      {tab === 0 && <DashboardTab />}
+
+      {tab === 1 && (
         <>
           {/* Filtre commercial */}
           {commercials.length > 0 && (
@@ -409,8 +600,8 @@ export default function SuiviEquipe() {
         </>
       )}
 
-      {tab === 1 && <ActiviteEquipeTab />}
-      {tab === 2 && <StyleExemplesTab session={session} />}
+      {tab === 2 && <ActiviteEquipeTab />}
+      {tab === 3 && <StyleExemplesTab session={session} />}
     </Box>
   )
 }

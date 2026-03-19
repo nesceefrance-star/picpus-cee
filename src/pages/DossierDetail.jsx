@@ -215,6 +215,7 @@ export default function DossierDetail() {
   // Documents extra
   const [checkedDocs, setCheckedDocs] = useState(new Set())
   const [emailingDoc, setEmailingDoc] = useState(null)
+  const [emailingVerificateur, setEmailingVerificateur] = useState(false)
 
   // Reset complet du formulaire lors du changement de fiche
   const switchFiche = (ficheId) => {
@@ -461,6 +462,26 @@ export default function DossierDetail() {
     URL.revokeObjectURL(url)
   }
 
+  const emailDocumentsToVerificateur = async () => {
+    if (checkedDocs.size === 0) return
+    setEmailingVerificateur(true)
+    try {
+      const files = [...checkedDocs].map(fn => ({
+        storagePath: `${id}/${fn}`,
+        fileName: fn.replace(/^\d+_/, ''),
+      }))
+      const r = await fetch('/api/email-document', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dossierId: id, files }),
+      })
+      const d = await r.json()
+      if (d.gmailUrl) { window.open(d.gmailUrl, '_blank'); setCheckedDocs(new Set()) }
+      else alert(d.error || 'Erreur création brouillon vérificateur')
+    } catch (e) { alert('Erreur : ' + e.message) }
+    setEmailingVerificateur(false)
+  }
+
   const emailDocument = async (fileName) => {
     setEmailingDoc(fileName)
     try {
@@ -487,7 +508,10 @@ export default function DossierDetail() {
         body: JSON.stringify({ dossierId: id, statut: statutForm.statut, statut_date: statutForm.date }),
       })
       const d = await r.json()
-      if (d.dossier) setDossier(prev => ({ ...prev, statut: d.dossier.statut, statut_date: d.dossier.statut_date }))
+      if (d.dossier) {
+        setDossier(prev => ({ ...prev, statut: d.dossier.statut, statut_date: d.dossier.statut_date }))
+        await logActivite(id, 'statut', `Statut → ${d.dossier.statut}${statutForm.date ? ` (${new Date(statutForm.date).toLocaleDateString('fr-FR')})` : ''}`)
+      }
       setStatutSaved(true)
       setPendingStatut(null)
       setTimeout(() => setStatutSaved(false), 3000)
@@ -1622,8 +1646,10 @@ export default function DossierDetail() {
                       Désélectionner
                     </button>
                     <button
-                      style={{ background: C.accent, border: 'none', color: '#fff', borderRadius: 6, padding: '4px 12px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>
-                      ✓ Envoyer au vérificateur
+                      onClick={emailDocumentsToVerificateur}
+                      disabled={emailingVerificateur}
+                      style={{ background: C.accent, border: 'none', color: '#fff', borderRadius: 6, padding: '4px 12px', fontSize: 11, cursor: emailingVerificateur ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 700, opacity: emailingVerificateur ? .6 : 1 }}>
+                      {emailingVerificateur ? '⏳…' : '✓ Envoyer au vérificateur'}
                     </button>
                   </div>
                 </div>
