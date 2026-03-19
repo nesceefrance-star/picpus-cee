@@ -56,11 +56,13 @@ async function fetchAllEvents(accessToken, calendarIds, timeMin, timeMax) {
 }
 
 const WINDOWS = [
-  [9,0],[9,45],[10,30],[11,0],
-  [14,0],[14,45],[15,30],[16,0],[16,30],[17,0],
+  [9,30],[10,0],[10,30],[11,0],[11,30],[12,0],[12,30],
+  [13,0],[13,30],[14,0],[14,30],[15,0],[15,30],[16,0],
+  [16,30],[17,0],[17,30],[18,0],[18,30],[19,0],
 ]
 
-function freeSlots(dateStr, busy) {
+function freeSlots(dateStr, busy, durationMin = 30) {
+  const durationMs = durationMin * 60 * 1000
   // Détecter l'offset Paris pour ce jour (gère le passage heure d'été)
   const ref    = new Date(`${dateStr}T12:00:00Z`)
   const tzStr  = new Intl.DateTimeFormat('en', { timeZone: 'Europe/Paris', timeZoneName: 'shortOffset' })
@@ -69,9 +71,16 @@ function freeSlots(dateStr, busy) {
   const [Y, M, D] = dateStr.split('-').map(Number)
   return WINDOWS.reduce((acc, [h, m]) => {
     const start = new Date(Date.UTC(Y, M - 1, D, h - offsetH, m, 0))
-    const end   = new Date(start.getTime() + 45 * 60 * 1000)
+    const end   = new Date(start.getTime() + durationMs)
     if (!busy.some(b => start < b.end && end > b.start)) {
-      acc.push({ time: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`, label: `${String(h).padStart(2,'0')}h${m === 0 ? '00' : m}` })
+      const totalEndMin = h * 60 + m + durationMin
+      const endH = Math.floor(totalEndMin / 60)
+      const endM = totalEndMin % 60
+      const startStr = `${String(h).padStart(2,'0')}h${m === 0 ? '00' : String(m)}`
+      const label = durationMin > 30
+        ? `${startStr}-${String(endH).padStart(2,'0')}h${endM === 0 ? '00' : String(endM)}`
+        : startStr
+      acc.push({ time: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`, label })
     }
     return acc
   }, [])
@@ -175,6 +184,7 @@ export default async function handler(req, res) {
       busyByDay[dateStr].push({ start, end, allDay: false, summary: e.summary || '(sans titre)', startLabel: fmtTime(start), endLabel: fmtTime(end) })
     }
 
+    const durationMin = parseInt(req.query.duration, 10) || 30
     const today = new Date(); today.setHours(0,0,0,0)
     const days = {}
     for (let d = 1; d <= new Date(year, month, 0).getDate(); d++) {
@@ -185,7 +195,7 @@ export default async function handler(req, res) {
       const busy       = dayEntries.filter(b => !b.allDay)
       const hasAllDay  = dayEntries.some(b => b.allDay)
       const eventsInfo = dayEntries.filter(b => !b.allDay).map(b => ({ summary: b.summary, start: b.startLabel, end: b.endLabel }))
-      days[dateStr] = { eventCount: dayEntries.length, hasAllDay, slots: hasAllDay ? [] : freeSlots(dateStr, busy), events: eventsInfo }
+      days[dateStr] = { eventCount: dayEntries.length, hasAllDay, slots: hasAllDay ? [] : freeSlots(dateStr, busy, durationMin), events: eventsInfo }
     }
     return res.json({ days })
   }
@@ -194,8 +204,8 @@ export default async function handler(req, res) {
   // ?type=visite → créneaux 2h pour visite technique
   if (action === 'slots') {
     const isVisite     = req.query.type === 'visite'
-    const slotDuration = isVisite ? 120 * 60 * 1000 : 45 * 60 * 1000
-    const windows      = isVisite ? [[8,0],[10,0],[14,0],[16,0]] : WINDOWS
+    const slotDuration = isVisite ? 120 * 60 * 1000 : 30 * 60 * 1000
+    const windows      = WINDOWS
     const workDays     = workingDaysFrom(3, isVisite ? 5 : 3)
 
     const timeMin = workDays[0].toISOString()

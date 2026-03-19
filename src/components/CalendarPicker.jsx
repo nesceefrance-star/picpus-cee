@@ -21,7 +21,7 @@ function isSameDay(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
-export default function CalendarPicker({ session, onSelect, selectedDate, selectedTime }) {
+export default function CalendarPicker({ session, onSelect, selectedDate, selectedTime, duration = 30 }) {
   const today = new Date(); today.setHours(0,0,0,0)
 
   const [viewDate,     setViewDate]     = useState(() => { const d = new Date(); d.setDate(1); return d })
@@ -37,7 +37,7 @@ export default function CalendarPicker({ session, onSelect, selectedDate, select
     if (!session) return
     setLoading(true); setError(null)
     try {
-      const r = await fetch(`/api/calendar?action=events&year=${year}&month=${month}`, {
+      const r = await fetch(`/api/calendar?action=events&year=${year}&month=${month}&duration=${duration}`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
       const d = await r.json()
@@ -47,7 +47,7 @@ export default function CalendarPicker({ session, onSelect, selectedDate, select
       setError(e.message)
     }
     setLoading(false)
-  }, [session, year, month])
+  }, [session, year, month, duration])
 
   useEffect(() => { fetchMonth() }, [fetchMonth])
 
@@ -265,9 +265,16 @@ export default function CalendarPicker({ session, onSelect, selectedDate, select
           {!selectedDayInfo && !loading && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {/* Jour sans événements connus — affiche tous les créneaux */}
-              {['09:00','09:45','10:30','11:00','14:00','14:45','15:30','16:00','16:30','17:00'].map(t => {
-                const [h, m] = t.split(':')
-                const label = `${h}h${m === '00' ? '00' : m}`
+              {['09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00'].map(t => {
+                const [hStr, mStr] = t.split(':')
+                const h = parseInt(hStr, 10), m = parseInt(mStr, 10)
+                const startLabel = `${hStr}h${mStr === '00' ? '00' : mStr}`
+                const totalEndMin = h * 60 + m + duration
+                const endH = Math.floor(totalEndMin / 60)
+                const endM = totalEndMin % 60
+                const label = duration > 30
+                  ? `${startLabel}-${String(endH).padStart(2,'0')}h${endM === 0 ? '00' : String(endM)}`
+                  : startLabel
                 const isSelected = selectedDate === selectedDay && selectedTime === t
                 return (
                   <button key={t}

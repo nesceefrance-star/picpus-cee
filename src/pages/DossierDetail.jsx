@@ -160,10 +160,11 @@ export default function DossierDetail() {
   const [notesForm,     setNotesForm]     = useState('')
   const [savingNotes,   setSavingNotes]   = useState(false)
   const [notesSaved,    setNotesSaved]    = useState(false)
-  const [meetProvider,     setMeetProvider]     = useState('meet') // 'teams' | 'meet'
+  const [meetProvider,     setMeetProvider]     = useState('meet') // 'teams' | 'meet' | 'visite'
   const [teamsDate,        setTeamsDate]        = useState('')
   const [teamsTime,        setTeamsTime]        = useState('')
   const [teamsDuration,    setTeamsDuration]    = useState(45)
+  const [visiteDuration,   setVisiteDuration]   = useState(60)
   const [teamsEmails,      setTeamsEmails]      = useState('')
   const [reunionLinkInput, setReunionLinkInput] = useState('')
   const [reunionLink,      setReunionLink]      = useState(null)
@@ -1691,6 +1692,7 @@ export default function DossierDetail() {
                 selectedDate={teamsDate}
                 selectedTime={teamsTime}
                 onSelect={(date, time) => { setTeamsDate(date); setTeamsTime(time) }}
+                duration={meetProvider === 'visite' ? visiteDuration : 30}
               />
             </div>
 
@@ -1709,15 +1711,26 @@ export default function DossierDetail() {
             <div style={{ marginBottom: 8 }}>
               <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 3 }}>Durée</div>
               <div style={{ display: 'flex', gap: 6 }}>
-                {[30, 45, 60, 90].map(d => (
-                  <button key={d} onClick={() => setTeamsDuration(d)}
-                    style={{ flex: 1, padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: teamsDuration === d ? 700 : 400, cursor: 'pointer', fontFamily: 'inherit',
-                      border: `1px solid ${teamsDuration === d ? C.accent : C.border}`,
-                      background: teamsDuration === d ? '#EFF6FF' : C.bg,
-                      color: teamsDuration === d ? C.accent : C.textMid }}>
-                    {d < 60 ? `${d}min` : `${d / 60}h`}
-                  </button>
-                ))}
+                {meetProvider === 'visite'
+                  ? [[60,'1h'],[90,'1h30'],[120,'2h'],[180,'3h'],[240,'4h']].map(([d, lbl]) => (
+                    <button key={d} onClick={() => setVisiteDuration(d)}
+                      style={{ flex: 1, padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: visiteDuration === d ? 700 : 400, cursor: 'pointer', fontFamily: 'inherit',
+                        border: `1px solid ${visiteDuration === d ? '#D97706' : C.border}`,
+                        background: visiteDuration === d ? '#FFFBEB' : C.bg,
+                        color: visiteDuration === d ? '#92400E' : C.textMid }}>
+                      {lbl}
+                    </button>
+                  ))
+                  : [30, 45, 60, 90].map(d => (
+                    <button key={d} onClick={() => setTeamsDuration(d)}
+                      style={{ flex: 1, padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: teamsDuration === d ? 700 : 400, cursor: 'pointer', fontFamily: 'inherit',
+                        border: `1px solid ${teamsDuration === d ? C.accent : C.border}`,
+                        background: teamsDuration === d ? '#EFF6FF' : C.bg,
+                        color: teamsDuration === d ? C.accent : C.textMid }}>
+                      {d < 60 ? `${d}min` : `${d / 60}h`}
+                    </button>
+                  ))
+                }
               </div>
             </div>
 
@@ -1793,7 +1806,7 @@ export default function DossierDetail() {
                     setVisiteCreating(true); setVisiteError(null)
                     try {
                       const start = new Date(`${teamsDate}T${teamsTime}:00`)
-                      const end   = new Date(start.getTime() + teamsDuration * 60000)
+                      const end   = new Date(start.getTime() + visiteDuration * 60000)
                       const r = await fetch('/api/calendar?action=event', {
                         method: 'POST',
                         headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
