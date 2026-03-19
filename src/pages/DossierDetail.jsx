@@ -1367,7 +1367,7 @@ export default function DossierDetail() {
                 </div>
                 <button onClick={addAppel} disabled={savingAppel}
                   style={{ width: '100%', padding: '9px', background: C.accent, border: 'none', color: '#fff', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: savingAppel ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: savingAppel ? .6 : 1 }}>
-                  {savingAppel ? '…' : 'Enregistrer l'appel'}
+                  {savingAppel ? '…' : "Enregistrer l'appel"}
                 </button>
               </div>
             )}
