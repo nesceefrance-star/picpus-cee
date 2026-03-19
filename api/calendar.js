@@ -187,10 +187,11 @@ export default async function handler(req, res) {
     const durationMin = parseInt(req.query.duration, 10) || 30
     const today = new Date(); today.setHours(0,0,0,0)
     const days = {}
-    for (let d = 1; d <= new Date(year, month, 0).getDate(); d++) {
-      const date = new Date(year, month - 1, d); const dow = date.getDay()
+    const daysInMonth = new Date(year, month, 0).getDate()
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(Date.UTC(year, month - 1, d)); const dow = date.getUTCDay()
       if (dow === 0 || dow === 6 || date < today) continue
-      const dateStr = date.toISOString().split('T')[0]
+      const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`
       const dayEntries = busyByDay[dateStr] || []
       const busy       = dayEntries.filter(b => !b.allDay)
       const hasAllDay  = dayEntries.some(b => b.allDay)
@@ -205,8 +206,7 @@ export default async function handler(req, res) {
   if (action === 'slots') {
     const isVisite     = req.query.type === 'visite'
     const slotDuration = isVisite ? 120 * 60 * 1000 : 30 * 60 * 1000
-    const windows      = WINDOWS
-    const workDays     = workingDaysFrom(3, isVisite ? 5 : 3)
+    const workDays     = workingDaysFrom(3, 5)
 
     const timeMin = workDays[0].toISOString()
     const timeMax = new Date(workDays[workDays.length - 1]); timeMax.setHours(23, 59, 59)
@@ -230,7 +230,12 @@ export default async function handler(req, res) {
       const dayStr = day.toISOString().split('T')[0]
       if (allDayBusy.has(dayStr)) continue
       const dayLabel = day.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
-      for (const [h, m] of windows) {
+      let morningFound = false, afternoonFound = false
+      for (const [h, m] of WINDOWS) {
+        if (morningFound && afternoonFound) break
+        const isMorning = h < 13
+        if (isMorning && morningFound) continue
+        if (!isMorning && afternoonFound) continue
         const slotStart = new Date(day); slotStart.setHours(h, m, 0, 0)
         const slotEnd   = new Date(slotStart.getTime() + slotDuration)
         if (!timedBusy.some(b => slotStart < b.end && slotEnd > b.start)) {
@@ -239,6 +244,7 @@ export default async function handler(req, res) {
             ? `${String(h).padStart(2,'0')}h-${String(endH).padStart(2,'0')}h${endM ? endM : ''}`
             : slotStart.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
           slots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString(), label: `${dayLabel} ${timeLabel}`, day: dayLabel })
+          if (isMorning) morningFound = true; else afternoonFound = true
         }
       }
     }
