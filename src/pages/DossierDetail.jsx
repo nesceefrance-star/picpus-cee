@@ -172,6 +172,11 @@ export default function DossierDetail() {
   const [reunionCopied,    setReunionCopied]    = useState(false)
   const [meetCreating,     setMeetCreating]     = useState(false)
   const [meetError,        setMeetError]        = useState(null)
+  const [visiteAddress,    setVisiteAddress]    = useState('')
+  const [visiteCreating,   setVisiteCreating]   = useState(false)
+  const [visiteCreated,    setVisiteCreated]    = useState(false)
+  const [visiteError,      setVisiteError]      = useState(null)
+  const addressInputRef = useRef(null)
 
   const [editProspect, setEditProspect] = useState(false)
   const [pForm, setPForm] = useState({})
@@ -222,6 +227,29 @@ export default function DossierDetail() {
     loadData()
     loadDocuments()
   }, [id])
+
+  // Google Places autocomplete sur le champ adresse visite
+  useEffect(() => {
+    if (activeTab !== 'visio' || meetProvider !== 'visite' || !addressInputRef.current) return
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+    if (!apiKey) return
+    const attach = () => {
+      if (!window.google?.maps?.places || !addressInputRef.current) return
+      const ac = new window.google.maps.places.Autocomplete(addressInputRef.current, {
+        types: ['address'], componentRestrictions: { country: 'fr' },
+      })
+      ac.addListener('place_changed', () => {
+        const place = ac.getPlace()
+        if (place.formatted_address) setVisiteAddress(place.formatted_address)
+      })
+    }
+    if (window.google?.maps?.places) { attach(); return }
+    if (document.querySelector(`script[src*="maps.googleapis.com"]`)) return
+    const s = document.createElement('script')
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
+    s.async = true; s.onload = attach
+    document.head.appendChild(s)
+  }, [activeTab, meetProvider])
 
   const BUCKET = 'dossier-documents'
 
@@ -284,6 +312,8 @@ export default function DossierDetail() {
       setDossier(d)
       setNotesForm(d.notes || '')
       setTeamsEmails([user?.email, d.prospects?.contact_email].filter(Boolean).join(', '))
+      const fullAddr = [d.prospects?.adresse, d.prospects?.code_postal, d.prospects?.ville].filter(Boolean).join(', ')
+      if (fullAddr) setVisiteAddress(fullAddr)
       if (d.reunion_link) { setReunionLink(d.reunion_link); setReunionLinkInput(d.reunion_link) }
       setStatutForm({
         statut: d.statut || 'simulation',
@@ -1333,17 +1363,21 @@ export default function DossierDetail() {
             {/* Choix provider */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
               {[
-                { id: 'teams', label: '🟣 Teams' },
-                { id: 'meet',  label: '🟢 Google Meet' },
-              ].map(p => (
-                <button key={p.id} onClick={() => setMeetProvider(p.id)}
-                  style={{ flex: 1, padding: '7px 0', borderRadius: 7, fontSize: 12, fontWeight: meetProvider === p.id ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit',
-                    border: `1px solid ${meetProvider === p.id ? (p.id === 'teams' ? '#5B5EA6' : '#16A34A') : C.border}`,
-                    background: meetProvider === p.id ? (p.id === 'teams' ? '#EDEDFF' : '#F0FDF4') : C.bg,
-                    color: meetProvider === p.id ? (p.id === 'teams' ? '#5B5EA6' : '#15803D') : C.textMid }}>
-                  {p.label}
-                </button>
-              ))}
+                { id: 'meet',   label: '🟢 Google Meet',     a: '#16A34A', bg: '#F0FDF4', t: '#15803D' },
+                { id: 'teams',  label: '🟣 Teams',            a: '#5B5EA6', bg: '#EDEDFF', t: '#5B5EA6' },
+                { id: 'visite', label: '🔧 Visite technique', a: '#D97706', bg: '#FFFBEB', t: '#92400E' },
+              ].map(p => {
+                const sel = meetProvider === p.id
+                return (
+                  <button key={p.id} onClick={() => setMeetProvider(p.id)}
+                    style={{ flex: 1, padding: '7px 0', borderRadius: 7, fontSize: 12, fontWeight: sel ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit',
+                      border: `1px solid ${sel ? p.a : C.border}`,
+                      background: sel ? p.bg : C.bg,
+                      color: sel ? p.t : C.textMid }}>
+                    {p.label}
+                  </button>
+                )
+              })}
             </div>
 
             {/* Calendrier dispo */}
@@ -1392,7 +1426,7 @@ export default function DossierDetail() {
             </div>
 
             {/* Action principale selon provider */}
-            {meetProvider === 'meet' ? (
+            {meetProvider === 'meet' && (
               <button
                 onClick={async () => {
                   setMeetCreating(true); setMeetError(null)
@@ -1424,7 +1458,9 @@ export default function DossierDetail() {
                 style={{ width: '100%', padding: '9px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: '#16A34A', border: 'none', color: '#fff', marginBottom: meetError ? 8 : 10, opacity: meetCreating ? .7 : 1 }}>
                 {meetCreating ? '⏳ Création en cours…' : '🟢 Créer la réunion Google Meet'}
               </button>
-            ) : (
+            )}
+
+            {meetProvider === 'teams' && (
               <div>
                 <button
                   onClick={() => window.open('https://teams.live.com', '_blank')}
@@ -1434,6 +1470,49 @@ export default function DossierDetail() {
                 <div style={{ fontSize: 11, color: C.textSoft, textAlign: 'center', marginBottom: 10 }}>
                   Crée ta réunion dans Teams, puis colle le lien ci-dessous
                 </div>
+              </div>
+            )}
+
+            {meetProvider === 'visite' && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 3 }}>Adresse de la visite</div>
+                <input
+                  ref={addressInputRef}
+                  value={visiteAddress}
+                  onChange={e => setVisiteAddress(e.target.value)}
+                  placeholder="12 rue de la Paix, 75001 Paris"
+                  style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 10px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit', marginBottom: 8 }}
+                />
+                <button
+                  onClick={async () => {
+                    setVisiteCreating(true); setVisiteError(null)
+                    try {
+                      const start = new Date(`${teamsDate}T${teamsTime}:00`)
+                      const end   = new Date(start.getTime() + teamsDuration * 60000)
+                      const r = await fetch('/api/calendar?action=event', {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          subject: `Visite technique — ${dossier.prospects?.raison_sociale || 'Client'}`,
+                          startDateTime: start.toISOString(),
+                          endDateTime:   end.toISOString(),
+                          location: visiteAddress,
+                          emails: teamsEmails.split(',').map(e => e.trim()).filter(Boolean),
+                        }),
+                      })
+                      const d = await r.json()
+                      if (d.error) throw new Error(d.error)
+                      setVisiteCreated(true)
+                      setTimeout(() => setVisiteCreated(false), 4000)
+                    } catch (e) { setVisiteError(e.message) }
+                    setVisiteCreating(false)
+                  }}
+                  disabled={visiteCreating || !teamsDate || !teamsTime}
+                  style={{ width: '100%', padding: '9px', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', border: 'none', color: '#fff', marginBottom: 6,
+                    background: visiteCreated ? '#16A34A' : '#D97706', opacity: visiteCreating ? .7 : 1 }}>
+                  {visiteCreating ? '⏳ Envoi…' : visiteCreated ? '✓ Invitation envoyée !' : '🔧 Créer la visite technique'}
+                </button>
+                {visiteError && <div style={{ fontSize: 12, color: '#DC2626' }}>⚠️ {visiteError}</div>}
               </div>
             )}
 

@@ -233,5 +233,29 @@ export default async function handler(req, res) {
     return res.json({ meetLink: calEvent.hangoutLink, eventLink: calEvent.htmlLink })
   }
 
+  // ── POST ?action=event — créer événement Google Calendar sans Meet ────────
+  if (req.method === 'POST' && action === 'event') {
+    const { subject, startDateTime, endDateTime, emails = [], location = '' } = req.body
+    if (!subject || !startDateTime || !endDateTime) return res.status(400).json({ error: 'subject, startDateTime et endDateTime requis' })
+
+    const calRes = await fetch(
+      'https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          summary: subject,
+          ...(location ? { location } : {}),
+          start: { dateTime: startDateTime, timeZone: 'Europe/Paris' },
+          end:   { dateTime: endDateTime,   timeZone: 'Europe/Paris' },
+          ...(emails.length > 0 ? { attendees: emails.map(email => ({ email })) } : {}),
+        }),
+      }
+    )
+    const calEvent = await calRes.json()
+    if (calEvent.error) return res.status(500).json({ error: calEvent.error.message || 'Erreur création événement' })
+    return res.json({ eventLink: calEvent.htmlLink })
+  }
+
   return res.status(400).json({ error: 'action inconnue' })
 }
