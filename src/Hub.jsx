@@ -791,7 +791,7 @@ Exemple : [{"designation":"Rail acier","qte":30,"puAchat":62.47,"unite":"U"}]`,
 }
 
 // ── Éditeur d'un devis ─────────────────────────────────────────────────────
-function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
+function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = [] }) {
   const [devis, setDevis] = useState(devisInit);
   const [tab, setTab]     = useState("marges");
   const [editConfig, setEditConfig] = useState(null); // null | "client"|"prestataire"|"devis"|"societe"
@@ -848,6 +848,8 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
   const delLigne = id => setLignes(ls => ls.filter(l => l.id !== id));
 
   const [exporting, setExporting] = useState(false);
+  const [savingToDossier, setSavingToDossier] = useState(false);
+  const [savedToDossier, setSavedToDossier] = useState(false);
 
   const loadScript = src => new Promise((res, rej) => {
     if (document.querySelector(`script[src="${src}"]`)) return res();
@@ -884,6 +886,41 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
     setExporting(false);
   };
 
+  const saveToDossier = async () => {
+    if (!devis.dossierId) return;
+    setSavingToDossier(true);
+    try {
+      const doc = (
+        <DevisPDFDoc
+          devis={devis}
+          lignes={actives}
+          cats={cats}
+          batPuVente={batPuVente}
+          batQte={batQte}
+          primeFaciale={stats.effectivePrimeFaciale}
+          primeCEESimu={primeCEESimu}
+          stats={stats}
+          params={devis.pdfParams || {}}
+        />
+      );
+      const blob = await pdf(doc).toBlob();
+      // Chercher les versions existantes
+      const { data: existing } = await supabase.storage.from("dossier-documents").list(devis.dossierId);
+      const prefix = `Devis_${(devis.refDevis || "ref").replace(/[^a-zA-Z0-9_-]/g, "_")}_v`;
+      const maxVer = (existing || [])
+        .filter(f => f.name.startsWith(prefix))
+        .map(f => { const m = f.name.match(/_v(\d+)\.pdf$/); return m ? parseInt(m[1]) : 0; })
+        .reduce((a, b) => Math.max(a, b), 0);
+      const fileName = `${prefix}${maxVer + 1}.pdf`;
+      await supabase.storage.from("dossier-documents").upload(`${devis.dossierId}/${fileName}`, blob, { contentType: "application/pdf", upsert: false });
+      setSavedToDossier(true);
+      setTimeout(() => setSavedToDossier(false), 3000);
+    } catch(e) {
+      alert("Erreur enregistrement dossier : " + e.message);
+    }
+    setSavingToDossier(false);
+  };
+
   const TH  = {padding:"9px 8px",fontSize:12,fontWeight:700,textAlign:"right",color:C.navText,whiteSpace:"nowrap"};
   const TD  = {padding:"6px 8px",borderBottom:`1px solid ${C.border}`,verticalAlign:"middle"};
   const INP = {border:`1px solid ${C.border}`,borderRadius:5,padding:"3px 6px",fontSize:12,background:C.surface,outline:"none",fontFamily:"inherit",color:C.text};
@@ -912,6 +949,12 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
               {l}
             </button>
           ))}
+          {devis.dossierId && (
+            <button onClick={saveToDossier} disabled={savingToDossier}
+              style={{background:savedToDossier?"#16A34A":savingToDossier?"#94A3B8":"#0F172A",color:"#fff",border:`1px solid ${savedToDossier?"#16A34A":"#334155"}`,borderRadius:7,padding:"6px 14px",fontSize:13,fontWeight:600,cursor:savingToDossier?"not-allowed":"pointer"}}>
+              {savedToDossier ? "✓ Enregistré" : savingToDossier ? "⏳…" : "💾 Dossier"}
+            </button>
+          )}
           <button onClick={() => setEditConfig("client")}
             style={{background:C.bg,color:C.textMid,border:`1px solid ${C.border}`,borderRadius:7,padding:"6px 14px",fontSize:13,cursor:"pointer"}}>
             ⚙ Paramètres
@@ -1130,6 +1173,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
         <ModalDevisConfig
           devis={devis}
           initTab={editConfig}
+          dossiersList={dossiersList}
           onSave={updates => { setDevis(d => ({...d, ...updates, updatedAt: Date.now()})); setEditConfig(null); }}
           onCancel={() => setEditConfig(null)}
         />
@@ -1139,7 +1183,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
 }
 
 // ── Modal paramètres devis — 4 onglets fusionnés ────────────────────────────
-function ModalDevisConfig({ devis, initTab = "client", onSave, onCancel }) {
+function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave, onCancel }) {
   const p = devis.pdfParams || {};
   const [activeTab, setActiveTab] = useState(initTab);
   const [form, setForm] = useState({
@@ -1166,6 +1210,8 @@ function ModalDevisConfig({ devis, initTab = "client", onSave, onCancel }) {
     mentionCEE:           p.mentionCEE                || "",
     cgv:                  p.cgv                       || "",
     mentionLegale:        p.mentionLegale             || "",
+    // Dossier lié
+    dossierId: devis.dossierId || "",
     // Onglet Société
     societeNom:     p.societeNom     || "AF2E",
     societeAdresse: p.societeAdresse || "2 Rue de la Darse — 94600 Choisy le Roi",
@@ -1182,6 +1228,7 @@ function ModalDevisConfig({ devis, initTab = "client", onSave, onCancel }) {
 
   const handleSave = () => {
     onSave({
+      dossierId:       form.dossierId || null,
       nomClient:       form.nomClient,
       siret:           form.siret,
       codeNAF:         form.codeNAF,
@@ -1288,6 +1335,16 @@ function ModalDevisConfig({ devis, initTab = "client", onSave, onCancel }) {
           {/* ── Devis ── */}
           {activeTab === "devis" && (
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div>
+                <label style={L}>Dossier associé</label>
+                <select value={form.dossierId || ""} onChange={e => set("dossierId", e.target.value || null)} style={{...F, appearance:"auto"}}>
+                  <option value="">— Aucun —</option>
+                  {dossiersList.map(d => (
+                    <option key={d.id} value={d.id}>{d.ref}{d.prospects?.raison_sociale ? ` — ${d.prospects.raison_sociale}` : ""}</option>
+                  ))}
+                </select>
+                {form.dossierId && <div style={{fontSize:11,color:"#22C55E",marginTop:4}}>✓ Le bouton "💾 Dossier" sera disponible dans l'éditeur pour sauvegarder le PDF dans ce dossier.</div>}
+              </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
                 {[
                   {l:"Référence devis",       k:"refDevis",            ph:"2025-0001"},
@@ -1555,6 +1612,7 @@ const normalizeDevis = d => ({
   emailClient: d.email_client || "",
   codeNAF: d.code_naf || "",
   pdfParams: d.pdf_params || {},
+  dossierId: d.dossier_id || null,
 });
 
 function MargesDevis({ prefill }) {
@@ -1568,6 +1626,12 @@ function MargesDevis({ prefill }) {
   const [step, setStep]           = useState(null);
   const [infosEnCours, setInfosEnCours] = useState(null);
   const [reuploadId, setReuploadId] = useState(null);
+  const [dossiersList, setDossiersList] = useState([]);
+
+  useEffect(() => {
+    supabase.from("dossiers").select("id, ref, prospects(raison_sociale)").order("updated_at", { ascending: false }).limit(150)
+      .then(({ data }) => { if (data) setDossiersList(data); });
+  }, []);
 
   // Si on arrive depuis DossierDetail avec un prefill, sauter ModalNouveauDevis
   // et auto-fetch NAF + adresse siège depuis le SIRET
@@ -1633,6 +1697,7 @@ function MargesDevis({ prefill }) {
     email_client: d.emailClient || "",
     code_naf: d.codeNAF || "",
     pdf_params: d.pdfParams || {},
+    dossier_id: d.dossierId || null,
   });
 
   // ── Créer un nouveau devis ────────────────────────────────────────────
@@ -1717,6 +1782,7 @@ function MargesDevis({ prefill }) {
       onBack={() => setVue("liste")}
       onSave={handleSave}
       onReupload={() => { setReuploadId(devisEnCours.id); setVue("liste"); setStep("reupload"); }}
+      dossiersList={dossiersList}
     />;
   }
 

@@ -2,9 +2,10 @@
 // Vue admin — suivi de tous les dossiers actifs par commercial.
 // Accessible uniquement aux admins.
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useStore from '../store/useStore'
+import { supabase } from '../lib/supabase'
 
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -219,6 +220,95 @@ function StyleExemplesTab({ session }) {
   )
 }
 
+// ── Onglet Activité équipe ────────────────────────────────────────────────────
+
+const TYPE_ICON = { note: '📝', appel: '📞', email: '✉️', rdv: '📅', statut: '🔄', document: '📎', devis: '📄' }
+const TYPE_LABEL = { note: 'Note', appel: 'Appel', email: 'Email', rdv: 'RDV', statut: 'Statut', document: 'Document', devis: 'Devis' }
+
+function ActiviteEquipeTab() {
+  const [activites, setActivites] = useState([])
+  const [loading, setLoading]     = useState(true)
+  const [typeFilter, setTypeFilter] = useState('all')
+
+  const fetchActivites = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('activites')
+      .select('*, dossiers(ref, prospects(raison_sociale))')
+      .order('created_at', { ascending: false })
+      .limit(100)
+    setActivites(data || [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchActivites() }, [fetchActivites])
+
+  const filtered = typeFilter === 'all' ? activites : activites.filter(a => a.type === typeFilter)
+
+  return (
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography sx={{ fontSize: 13, color: '#94A3B8' }}>100 dernières activités de l'équipe</Typography>
+        <Button variant="outlined" size="small" onClick={fetchActivites} disabled={loading}
+          sx={{ fontSize: 12, textTransform: 'none', borderColor: '#334155', color: '#94A3B8' }}>
+          ↻ Actualiser
+        </Button>
+      </Box>
+
+      {/* Filtre par type */}
+      <Box sx={{ display: 'flex', gap: 1, mb: 2.5, flexWrap: 'wrap' }}>
+        {['all', 'appel', 'rdv', 'email', 'document', 'devis', 'note', 'statut'].map(t => (
+          <Chip
+            key={t}
+            label={t === 'all' ? 'Tout' : (TYPE_LABEL[t] || t)}
+            size="small"
+            onClick={() => setTypeFilter(t)}
+            sx={{
+              cursor: 'pointer',
+              background: typeFilter === t ? '#3B82F6' : '#1E293B',
+              color: typeFilter === t ? '#fff' : '#94A3B8',
+              border: `1px solid ${typeFilter === t ? '#3B82F6' : '#334155'}`,
+              fontSize: 11,
+              fontWeight: typeFilter === t ? 700 : 400,
+            }}
+          />
+        ))}
+      </Box>
+
+      {loading ? (
+        <Box sx={{ textAlign: 'center', py: 6 }}><CircularProgress size={24} /></Box>
+      ) : filtered.length === 0 ? (
+        <Box sx={{ textAlign: 'center', py: 6 }}>
+          <Typography sx={{ fontSize: 14, color: '#64748B' }}>Aucune activité.</Typography>
+        </Box>
+      ) : (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {filtered.map(a => {
+            const dossierRef = a.dossiers?.ref || '—'
+            const societe = a.dossiers?.prospects?.raison_sociale || ''
+            return (
+              <Paper key={a.id} sx={{ p: 1.5, background: '#1E293B', border: '1px solid #334155', borderRadius: 2, display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                <Typography sx={{ fontSize: 16, lineHeight: '20px', flexShrink: 0 }}>{TYPE_ICON[a.type] || '·'}</Typography>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.3, flexWrap: 'wrap' }}>
+                    <Chip label={dossierRef} size="small" sx={{ height: 18, fontSize: 10, background: '#0F172A', color: '#60A5FA', border: '1px solid #1E3A5F' }} />
+                    {societe && <Typography sx={{ fontSize: 11, color: '#64748B' }}>{societe}</Typography>}
+                    <Chip label={TYPE_LABEL[a.type] || a.type} size="small" sx={{ height: 18, fontSize: 10, background: '#0F172A', color: '#94A3B8', border: '1px solid #334155' }} />
+                  </Box>
+                  <Typography sx={{ fontSize: 12, color: '#CBD5E1' }}>{a.contenu}</Typography>
+                  <Typography sx={{ fontSize: 11, color: '#475569', mt: 0.3 }}>
+                    {new Date(a.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </Typography>
+                </Box>
+              </Paper>
+            )
+          })}
+        </Box>
+      )}
+    </Box>
+  )
+}
+
 // ── Page principale ──────────────────────────────────────────────────────────
 
 export default function SuiviEquipe() {
@@ -280,6 +370,7 @@ export default function SuiviEquipe() {
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3, borderBottom: '1px solid #334155' }}>
         <Tab label="Dossiers actifs" sx={{ fontSize: 13, textTransform: 'none', fontWeight: 600 }} />
+        <Tab label="Activité équipe" sx={{ fontSize: 13, textTransform: 'none', fontWeight: 600 }} />
         <Tab label="Style & Exemples" sx={{ fontSize: 13, textTransform: 'none', fontWeight: 600 }} />
       </Tabs>
 
@@ -318,7 +409,8 @@ export default function SuiviEquipe() {
         </>
       )}
 
-      {tab === 1 && <StyleExemplesTab session={session} />}
+      {tab === 1 && <ActiviteEquipeTab />}
+      {tab === 2 && <StyleExemplesTab session={session} />}
     </Box>
   )
 }
