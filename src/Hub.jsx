@@ -887,7 +887,10 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
   };
 
   const saveToDossier = async () => {
-    if (!devis.dossierId) return;
+    if (!devis.dossierId) {
+      alert("Aucun dossier associé. Ouvrez Paramètres → onglet Devis pour en associer un.");
+      return;
+    }
     setSavingToDossier(true);
     try {
       const doc = (
@@ -904,7 +907,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
         />
       );
       const blob = await pdf(doc).toBlob();
-      // Chercher les versions existantes
+      // Chercher les versions existantes dans le dossier
       const { data: existing } = await supabase.storage.from("dossier-documents").list(devis.dossierId);
       const prefix = `Devis_${(devis.refDevis || "ref").replace(/[^a-zA-Z0-9_-]/g, "_")}_v`;
       const maxVer = (existing || [])
@@ -912,11 +915,14 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
         .map(f => { const m = f.name.match(/_v(\d+)\.pdf$/); return m ? parseInt(m[1]) : 0; })
         .reduce((a, b) => Math.max(a, b), 0);
       const fileName = `${prefix}${maxVer + 1}.pdf`;
-      await supabase.storage.from("dossier-documents").upload(`${devis.dossierId}/${fileName}`, blob, { contentType: "application/pdf", upsert: false });
+      const { error: uploadError } = await supabase.storage
+        .from("dossier-documents")
+        .upload(`${devis.dossierId}/${fileName}`, blob, { contentType: "application/pdf" });
+      if (uploadError) throw new Error(uploadError.message);
       setSavedToDossier(true);
       setTimeout(() => setSavedToDossier(false), 3000);
     } catch(e) {
-      alert("Erreur enregistrement dossier : " + e.message);
+      alert("Erreur enregistrement dans le dossier : " + e.message);
     }
     setSavingToDossier(false);
   };
@@ -1175,12 +1181,11 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
           initTab={editConfig}
           dossiersList={dossiersList}
           onSave={updates => {
-            setDevis(d => {
-              const next = {...d, ...updates, updatedAt: Date.now()};
-              // Auto-persist immédiatement en base (évite perte si pas de retour liste)
-              supabase.from("devis_hub").update(devisToRow(next)).eq("id", next.id);
-              return next;
-            });
+            const next = {...devis, ...updates, updatedAt: Date.now()};
+            setDevis(next);
+            // Persist immédiatement en base (évite perte si l'user ne clique pas "← Mes devis")
+            supabase.from("devis_hub").update(devisToRow(next)).eq("id", next.id)
+              .then(({ error }) => { if (error) console.error("[Config save]", error.message); });
             setEditConfig(null);
           }}
           onCancel={() => setEditConfig(null)}
