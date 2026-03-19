@@ -199,6 +199,19 @@ export default function DossierDetail() {
   const [simuResult, setSimuResult] = useState(null)
   const [savingSimu, setSavingSimu] = useState(false)
 
+  // Appels
+  const [appels, setAppels] = useState([])
+  const [appelsLoading, setAppelsLoading] = useState(false)
+  const [showAppelForm, setShowAppelForm] = useState(false)
+  const [appelEtat, setAppelEtat] = useState('nrp')
+  const [appelRappelAt, setAppelRappelAt] = useState('')
+  const [appelNote, setAppelNote] = useState('')
+  const [savingAppel, setSavingAppel] = useState(false)
+
+  // Documents extra
+  const [checkedDocs, setCheckedDocs] = useState(new Set())
+  const [emailingDoc, setEmailingDoc] = useState(null)
+
   // Reset complet du formulaire lors du changement de fiche
   const switchFiche = (ficheId) => {
     setSimuResult(null)
@@ -226,6 +239,7 @@ export default function DossierDetail() {
     fetchProfiles()
     loadData()
     loadDocuments()
+    loadAppels()
   }, [id])
 
   // Google Places autocomplete sur le champ adresse visite
@@ -375,6 +389,67 @@ export default function DossierDetail() {
       }
     }
     setLoading(false)
+  }
+
+  const loadAppels = async () => {
+    setAppelsLoading(true)
+    const { data } = await supabase
+      .from('appels')
+      .select('*')
+      .eq('dossier_id', id)
+      .order('created_at', { ascending: false })
+    setAppels(data || [])
+    setAppelsLoading(false)
+  }
+
+  const addAppel = async () => {
+    setSavingAppel(true)
+    await supabase.from('appels').insert({
+      dossier_id: id,
+      user_id: user?.id,
+      etat: appelEtat,
+      rappel_at: appelRappelAt || null,
+      note: appelNote || null,
+    })
+    setShowAppelForm(false)
+    setAppelEtat('nrp')
+    setAppelRappelAt('')
+    setAppelNote('')
+    setSavingAppel(false)
+    loadAppels()
+  }
+
+  const deleteAppel = async (appelId) => {
+    await supabase.from('appels').delete().eq('id', appelId)
+    setAppels(a => a.filter(x => x.id !== appelId))
+  }
+
+  const forceDownloadDocument = async (fileName) => {
+    const { data } = await supabase.storage.from(BUCKET).download(`${id}/${fileName}`)
+    if (!data) return
+    const url = URL.createObjectURL(data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName.replace(/^\d+_/, '')
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const emailDocument = async (fileName) => {
+    setEmailingDoc(fileName)
+    try {
+      const r = await fetch('/api/email-document', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dossierId: id, storagePath: `${id}/${fileName}`, fileName: fileName.replace(/^\d+_/, '') }),
+      })
+      const d = await r.json()
+      if (d.gmailUrl) window.open(d.gmailUrl, '_blank')
+      else alert(d.error || 'Erreur création brouillon')
+    } catch { /* ignore */ }
+    setEmailingDoc(null)
   }
 
   const changeStatut = async () => {
@@ -789,6 +864,103 @@ export default function DossierDetail() {
                   placeholder="Ajoute des notes sur ce dossier…" rows={6}
                   style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, lineHeight: 1.6, outline: 'none', fontFamily: 'inherit', resize: 'vertical' }}
                 />
+              </div>
+
+              {/* ── Suivi des appels ── */}
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
+                    📞 Suivi des appels
+                    {appels.length > 0 && (
+                      <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, background: C.border, borderRadius: 10, padding: '1px 6px', color: C.textMid }}>{appels.length}</span>
+                    )}
+                  </span>
+                  <button onClick={() => setShowAppelForm(s => !s)}
+                    style={{ background: showAppelForm ? C.bg : C.accent, border: `1px solid ${showAppelForm ? C.border : C.accent}`, color: showAppelForm ? C.textMid : '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                    {showAppelForm ? 'Annuler' : '+ Appel'}
+                  </button>
+                </div>
+
+                {showAppelForm && (
+                  <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px', marginBottom: 12 }}>
+                    <div style={{ marginBottom: 8 }}>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .4 }}>Résultat</label>
+                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                        {[
+                          { v: 'nrp',            l: 'NRP',            col: '#DC2626', bg: '#FEE2E2' },
+                          { v: 'message_laisse', l: 'Message laissé', col: '#D97706', bg: '#FEF3C7' },
+                          { v: 'rappel',         l: 'À rappeler',     col: '#0891B2', bg: '#CFFAFE' },
+                          { v: 'joint',          l: 'Contacté',       col: '#16A34A', bg: '#DCFCE7' },
+                        ].map(o => (
+                          <button key={o.v} onClick={() => setAppelEtat(o.v)}
+                            style={{ padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: appelEtat === o.v ? 700 : 400, cursor: 'pointer', fontFamily: 'inherit',
+                              border: `1px solid ${appelEtat === o.v ? o.col : C.border}`,
+                              background: appelEtat === o.v ? o.bg : C.surface,
+                              color: appelEtat === o.v ? o.col : C.textMid }}>
+                            {o.l}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {appelEtat === 'rappel' && (
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .4 }}>Rappeler le</label>
+                        <input type="datetime-local" value={appelRappelAt} onChange={e => setAppelRappelAt(e.target.value)}
+                          style={{ width: '100%', boxSizing: 'border-box', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px', fontSize: 12, color: C.text, outline: 'none', fontFamily: 'inherit' }} />
+                      </div>
+                    )}
+                    <div style={{ marginBottom: 10 }}>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .4 }}>Note (optionnel)</label>
+                      <input type="text" value={appelNote} onChange={e => setAppelNote(e.target.value)} placeholder="Ex : répondeur, secrétaire…"
+                        style={{ width: '100%', boxSizing: 'border-box', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px', fontSize: 12, color: C.text, outline: 'none', fontFamily: 'inherit' }} />
+                    </div>
+                    <button onClick={addAppel} disabled={savingAppel}
+                      style={{ width: '100%', padding: '8px', background: C.accent, border: 'none', color: '#fff', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: savingAppel ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: savingAppel ? .6 : 1 }}>
+                      {savingAppel ? '…' : 'Enregistrer'}
+                    </button>
+                  </div>
+                )}
+
+                {appels.length > 0 && (() => {
+                  const last = appels[0]
+                  const days = Math.floor((Date.now() - new Date(last.created_at).getTime()) / 86400000)
+                  const ETATS = { nrp: 'NRP', message_laisse: 'Message laissé', rappel: 'À rappeler', joint: 'Contacté' }
+                  return (
+                    <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 7, padding: '7px 12px', marginBottom: 10, fontSize: 11, color: '#15803D', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 700 }}>Dernier appel :</span>
+                      <span>{days === 0 ? "Aujourd'hui" : days === 1 ? 'Hier' : `il y a ${days}j`}</span>
+                      <span>—</span>
+                      <span>{ETATS[last.etat] || last.etat}</span>
+                      {last.rappel_at && <span style={{ color: '#0891B2' }}>· Rappel {new Date(last.rappel_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} {new Date(last.rappel_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
+                    </div>
+                  )
+                })()}
+
+                {appelsLoading ? (
+                  <div style={{ textAlign: 'center', color: C.textSoft, fontSize: 12, padding: '6px 0' }}>Chargement…</div>
+                ) : appels.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: C.textSoft, fontSize: 12, padding: '6px 0' }}>Aucun appel enregistré</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {appels.map(a => {
+                      const ETATS = { nrp: { l: 'NRP', col: '#DC2626', bg: '#FEE2E2' }, message_laisse: { l: 'Message laissé', col: '#D97706', bg: '#FEF3C7' }, rappel: { l: 'À rappeler', col: '#0891B2', bg: '#CFFAFE' }, joint: { l: 'Contacté', col: '#16A34A', bg: '#DCFCE7' } }
+                      const et = ETATS[a.etat] || { l: a.etat, col: C.textMid, bg: C.bg }
+                      const dateStr = new Date(a.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+                      return (
+                        <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px' }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: et.bg, color: et.col, flexShrink: 0, marginTop: 1 }}>{et.l}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 11, color: C.textMid }}>{dateStr}</div>
+                            {a.rappel_at && <div style={{ fontSize: 10, color: '#0891B2', marginTop: 1 }}>📅 {new Date(a.rappel_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} à {new Date(a.rappel_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>}
+                            {a.note && <div style={{ fontSize: 11, color: C.text, marginTop: 2, fontStyle: 'italic' }}>"{a.note}"</div>}
+                          </div>
+                          <button onClick={() => deleteAppel(a.id)}
+                            style={{ background: 'transparent', border: 'none', color: C.textSoft, cursor: 'pointer', fontSize: 15, lineHeight: 1, flexShrink: 0, padding: '0 2px' }}>×</button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
             </div>
@@ -1304,8 +1476,12 @@ export default function DossierDetail() {
                 const date = doc.created_at ? new Date(doc.created_at).toLocaleDateString('fr-FR') : null
                 // Retirer le préfixe timestamp ajouté lors de l'upload
                 const displayName = doc.name.replace(/^\d+_/, '')
+                const isChecked = checkedDocs.has(doc.name)
                 return (
-                  <div key={doc.name} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.bg, border: `1px solid ${renamingDoc === doc.name ? C.accent : C.border}`, borderRadius: 8, padding: '9px 12px', transition: 'border-color .15s' }}>
+                  <div key={doc.name} style={{ display: 'flex', alignItems: 'center', gap: 10, background: isChecked ? '#EFF6FF' : C.bg, border: `1px solid ${renamingDoc === doc.name ? C.accent : isChecked ? C.accent : C.border}`, borderRadius: 8, padding: '9px 12px', transition: 'all .15s' }}>
+                    <input type="checkbox" checked={isChecked}
+                      onChange={() => setCheckedDocs(s => { const n = new Set(s); isChecked ? n.delete(doc.name) : n.add(doc.name); return n })}
+                      style={{ flexShrink: 0, cursor: 'pointer', width: 14, height: 14, accentColor: C.accent }} />
                     <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
                     {renamingDoc === doc.name ? (
                       <>
@@ -1337,9 +1513,17 @@ export default function DossierDetail() {
                           style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }} title="Renommer">
                           ✏️
                         </button>
-                        <button onClick={() => downloadDocument(doc.name)}
+                        <button onClick={() => downloadDocument(doc.name)} title="Ouvrir"
+                          style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.accent, borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+                          👁
+                        </button>
+                        <button onClick={() => forceDownloadDocument(doc.name)} title="Télécharger"
                           style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.accent, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, flexShrink: 0 }}>
-                          ↓ Ouvrir
+                          ⬇
+                        </button>
+                        <button onClick={() => emailDocument(doc.name)} disabled={emailingDoc === doc.name} title="Brouillon Gmail"
+                          style={{ background: 'transparent', border: `1px solid ${C.border}`, color: '#16A34A', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: emailingDoc === doc.name ? 'not-allowed' : 'pointer', fontFamily: 'inherit', flexShrink: 0, opacity: emailingDoc === doc.name ? .5 : 1 }}>
+                          {emailingDoc === doc.name ? '⏳' : '📧'}
                         </button>
                         <button onClick={() => deleteDocument(doc.name)}
                           style={{ background: 'transparent', border: `1px solid #FECACA`, color: '#DC2626', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
@@ -1350,6 +1534,23 @@ export default function DossierDetail() {
                   </div>
                 )
               })}
+              {checkedDocs.size > 0 && (
+                <div style={{ marginTop: 8, background: '#EFF6FF', border: `1px solid ${C.accent}`, borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12, color: C.accent, fontWeight: 600 }}>
+                    {checkedDocs.size} document{checkedDocs.size > 1 ? 's' : ''} sélectionné{checkedDocs.size > 1 ? 's' : ''} pour le vérificateur
+                  </span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => setCheckedDocs(new Set())}
+                      style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      Désélectionner
+                    </button>
+                    <button
+                      style={{ background: C.accent, border: 'none', color: '#fff', borderRadius: 6, padding: '4px 12px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>
+                      ✓ Envoyer au vérificateur
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

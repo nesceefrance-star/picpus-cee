@@ -46,7 +46,14 @@ const s = StyleSheet.create({
   condTitle: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: DARK, marginBottom: 2, textDecoration: 'underline' },
   condText:  { fontSize: 7, color: GRAY, lineHeight: 1.65, marginBottom: 6 },
   // Footer
-  footer:    { borderTopWidth: 0.5, borderTopColor: BORDER, marginTop: 'auto', paddingTop: 5, textAlign: 'center', fontSize: 6.5, color: '#aaa' },
+  footer:    { borderTopWidth: 0.5, borderTopColor: BORDER, marginTop: 'auto', paddingTop: 5 },
+  footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  footerTxt: { fontSize: 6.5, color: '#aaa', flex: 1 },
+  footerPage:{ fontSize: 6.5, color: '#aaa', textAlign: 'right', flexShrink: 0, marginLeft: 8 },
+  // Paraphe
+  parapheBox:{ width: 80, borderWidth: 0.5, borderColor: BORDER, borderRadius: 2, padding: '3pt 5pt', marginLeft: 8, flexShrink: 0 },
+  parapheLbl:{ fontSize: 5.5, color: '#bbb', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 2 },
+  parapheArea:{ height: 18 },
   // Récap signature
   recapBox:  { backgroundColor: LGRAY, borderWidth: 0.5, borderColor: BORDER, padding: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginBottom: 12 },
   recapItem: { minWidth: 90 },
@@ -111,8 +118,22 @@ function Header({ devis, params }) {
 
 function Footer({ params }) {
   return (
-    <View style={s.footer}>
-      <Text>{params.societeNom || 'AF2E'} — {params.societeAdresse || '2 RUE DE LA DARSE — 94600 CHOISY LE ROI'} — SIRET {params.societeSiret || '881 279 665 00023'} — TVA {params.societeTVA || 'FR 238 812 796 65'}</Text>
+    <View style={s.footer} fixed>
+      <View style={s.footerRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.footerTxt}>
+            {params.societeNom || 'AF2E'} — {params.societeAdresse || '2 RUE DE LA DARSE — 94600 CHOISY LE ROI'} — SIRET {params.societeSiret || '881 279 665 00023'} — TVA {params.societeTVA || 'FR 238 812 796 65'}
+          </Text>
+          <Text style={[s.footerTxt, { marginTop: 1 }]}>
+            {params.rcs ? `RCS ${params.rcs} — ` : ''}{params.capital ? `Capital ${params.capital} — ` : ''}Assurance décennale {params.assuranceNum || ''}
+          </Text>
+        </View>
+        <View style={s.parapheBox}>
+          <Text style={s.parapheLbl}>Paraphe</Text>
+          <View style={s.parapheArea} />
+        </View>
+        <Text style={s.footerPage} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
+      </View>
     </View>
   )
 }
