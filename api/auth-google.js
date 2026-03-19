@@ -13,7 +13,8 @@ export default function handler(req, res) {
     redirect_uri:  process.env.GOOGLE_REDIRECT_URI,
     response_type: 'code',
     scope: [
-      'https://mail.google.com/',
+      'https://www.googleapis.com/auth/gmail.compose',
+      'https://www.googleapis.com/auth/gmail.send',
       'https://www.googleapis.com/auth/userinfo.email',
       'https://www.googleapis.com/auth/calendar',
     ].join(' '),

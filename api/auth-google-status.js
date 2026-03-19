@@ -1,6 +1,7 @@
 // api/auth-google-status.js — Vérifie si le compte Gmail est connecté pour l'utilisateur courant
 
 import { createClient } from '@supabase/supabase-js'
+import { setCors } from './_cors.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
@@ -8,8 +9,7 @@ const supabase = createClient(
 )
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type')
+  setCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
 
   const token = req.headers.authorization?.replace('Bearer ', '')

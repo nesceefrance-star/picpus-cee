@@ -44,20 +44,25 @@ const useStore = create((set, get) => ({
   },
 
   inviteUser: async (email, nom, prenom, role) => {
-    // Invitation via Supabase Auth
+    if (get().profile?.role !== 'admin') throw new Error('Action réservée aux administrateurs')
+    const session = (await supabase.auth.getSession()).data.session
+    if (!session) throw new Error('Session expirée')
     const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/invite`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        'Authorization': `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({ email }),
     })
-    const invited = await res.json()
-    if (invited.id) {
-      await supabase.from('profiles').upsert({ id: invited.id, email, nom, prenom, role })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.msg || err.error || `Erreur invitation (${res.status})`)
     }
+    const invited = await res.json()
+    if (!invited.id) throw new Error('Invitation échouée — utilisateur peut-être déjà existant')
+    await supabase.from('profiles').upsert({ id: invited.id, email, nom, prenom, role })
     return invited
   },
 

@@ -1,12 +1,11 @@
+import { setCors } from './_cors.js'
 // api/claude.js — Proxy Vercel pour l'API Anthropic
 // Place ce fichier à la racine du repo dans /api/claude.js
 // Vercel le déploie automatiquement comme endpoint serverless sur /api/claude
 
 export default async function handler(req, res) {
   // CORS
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, anthropic-beta");
+  setCors(req, res)
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });

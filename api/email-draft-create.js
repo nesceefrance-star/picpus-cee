@@ -3,6 +3,7 @@
 // Le commercial voit le brouillon dans son Gmail et l'envoie quand il veut.
 
 import { createClient } from '@supabase/supabase-js'
+import { setCors } from './_cors.js'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 
@@ -104,9 +105,7 @@ function fmt(n) {
 
 // ─── Handler principal ────────────────────────────────────────────────────────
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type')
+  setCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).end()
 

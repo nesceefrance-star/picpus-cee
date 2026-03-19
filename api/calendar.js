@@ -7,6 +7,7 @@
 //   POST ?action=meet                      → créer réunion Google Meet
 
 import { createClient } from '@supabase/supabase-js'
+import { setCors } from './_cors.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
@@ -85,8 +86,7 @@ function workingDaysFrom(startOffset, count) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type')
+  setCors(req, res)
   if (req.method === 'OPTIONS') return res.status(200).end()
 
   const token = req.headers.authorization?.replace('Bearer ', '')
@@ -136,9 +136,10 @@ export default async function handler(req, res) {
 
   // ── GET ?action=events&year=YYYY&month=M — events du mois ─────────────────
   if (action === 'events') {
-    const year  = parseInt(req.query.year)
-    const month = parseInt(req.query.month)
-    if (!year || !month) return res.status(400).json({ error: 'year et month requis' })
+    const year  = parseInt(req.query.year,  10)
+    const month = parseInt(req.query.month, 10)
+    if (!year || !month || year < 2020 || year > 2099 || month < 1 || month > 12)
+      return res.status(400).json({ error: 'year et month invalides' })
 
     // Étendre de 2h de chaque côté pour couvrir les events à cheval sur minuit Paris (UTC+1/+2)
     const tMin = new Date(Date.UTC(year, month - 1, 1) - 2 * 60 * 60 * 1000).toISOString()
