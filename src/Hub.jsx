@@ -794,8 +794,7 @@ Exemple : [{"designation":"Rail acier","qte":30,"puAchat":62.47,"unite":"U"}]`,
 function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
   const [devis, setDevis] = useState(devisInit);
   const [tab, setTab]     = useState("marges");
-  const [editInfo, setEditInfo] = useState(false);
-  const [editParams, setEditParams] = useState(false);
+  const [editConfig, setEditConfig] = useState(null); // null | "client"|"prestataire"|"devis"|"societe"
   const printRef = useRef();
 
   const lignes   = devis.lignes;
@@ -899,10 +898,6 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
         </button>
         <div style={{fontWeight:700,color:C.text,fontSize:14}}>{devis.nomClient}</div>
         <div style={{fontSize:11,color:C.textSoft,marginLeft:4}}>{devis.refDevis}</div>
-        <button onClick={() => setEditInfo(true)}
-          style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:C.textMid,marginLeft:4}}>
-          ✏️ Infos
-        </button>
         {onReupload && (
           <button onClick={onReupload}
             style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:C.textMid,marginLeft:4}}>
@@ -917,9 +912,9 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
               {l}
             </button>
           ))}
-          <button onClick={() => setEditParams(true)}
+          <button onClick={() => setEditConfig("client")}
             style={{background:C.bg,color:C.textMid,border:`1px solid ${C.border}`,borderRadius:7,padding:"6px 14px",fontSize:13,cursor:"pointer"}}>
-            ⚙ Paramètres PDF
+            ⚙ Paramètres
           </button>
           <button onClick={exportPDF} disabled={exporting}
             style={{background:exporting?"#94A3B8":"#16A34A",color:"#fff",border:"none",borderRadius:7,padding:"6px 16px",fontSize:13,fontWeight:700,cursor:exporting?"not-allowed":"pointer"}}>
@@ -1130,173 +1125,230 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload }) {
         </div>
       </div>
 
-      {/* Modal edit infos */}
-      {editInfo && (
-        <ModalEditInfo devis={devis} onSave={updates => { setDevis(d => ({...d,...updates,updatedAt:Date.now()})); setEditInfo(false); }} onCancel={() => setEditInfo(false)}/>
-      )}
-
-      {/* Modal paramètres PDF */}
-      {editParams && (
-        <ModalPDFParams
-          params={devis.pdfParams || {}}
-          onSave={p => { setDevis(d => ({...d, pdfParams: p, updatedAt: Date.now()})); setEditParams(false); }}
-          onCancel={() => setEditParams(false)}
+      {/* Modal paramètres fusionné */}
+      {editConfig && (
+        <ModalDevisConfig
+          devis={devis}
+          initTab={editConfig}
+          onSave={updates => { setDevis(d => ({...d, ...updates, updatedAt: Date.now()})); setEditConfig(null); }}
+          onCancel={() => setEditConfig(null)}
         />
       )}
     </div>
   );
 }
 
-// ── Modal édition infos devis ──────────────────────────────────────────────
-function ModalEditInfo({ devis, onSave, onCancel }) {
+// ── Modal paramètres devis — 4 onglets fusionnés ────────────────────────────
+function ModalDevisConfig({ devis, initTab = "client", onSave, onCancel }) {
+  const p = devis.pdfParams || {};
+  const [activeTab, setActiveTab] = useState(initTab);
   const [form, setForm] = useState({
-    nomClient: devis.nomClient||"",
-    siret: devis.siret||"",
-    adresseSite: devis.adresseSite||"",
-    refDevis: devis.refDevis||"",
-    dateDevis: devis.dateDevis||"",
-    nomContact: devis.nomContact||"",
-    fonctionContact: devis.fonctionContact||"",
-    sousTraitant: devis.sousTraitant||"DC LINK",
-    rgeNum: devis.rgeNum||"AU 084 742",
-    rgeValidite: devis.rgeValidite||"31/12/2026",
-    adresseSiege: devis.adresseSiege||"",
-    telephoneClient: devis.telephoneClient||"",
-    emailClient: devis.emailClient||"",
-    codeNAF: devis.codeNAF||"",
-  });
-  const set = (k, v) => setForm(f => ({...f, [k]: v}));
-
-  return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={onCancel}>
-      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"28px 32px",width:560,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 25px 60px rgba(0,0,0,.4)"}} onClick={e=>e.stopPropagation()}>
-        <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:20}}>✏️ Informations du devis</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:20}}>
-          {[
-            {l:"Client *",k:"nomClient",ph:"KIABI LOGISTIQUE",full:true},
-            {l:"SIRET",k:"siret",ph:"347 727 950 00094"},
-            {l:"Adresse site",k:"adresseSite",ph:"771 Rue de la Plaine, 59553...",full:true},
-            {l:"Référence devis",k:"refDevis",ph:"2025-0001"},
-            {l:"Date devis",k:"dateDevis",ph:"22/07/2025"},
-            {l:"Contact (nom)",k:"nomContact",ph:"M. Dupont"},
-            {l:"Fonction",k:"fonctionContact",ph:"Responsable Technique"},
-            {l:"Sous-traitant",k:"sousTraitant",ph:"DC LINK"},
-            {l:"N° RGE",k:"rgeNum",ph:"AU 084 742"},
-            {l:"RGE valable jusqu'au",k:"rgeValidite",ph:"31/12/2026"},
-            {l:"Adresse siège social",k:"adresseSiege",ph:"12 Rue de..., 75001 Paris",full:true},
-            {l:"Code NAF",k:"codeNAF",ph:"4690Z"},
-            {l:"Téléphone client",k:"telephoneClient",ph:"01 23 45 67 89"},
-            {l:"Email client",k:"emailClient",ph:"contact@societe.fr"},
-          ].map(f => (
-            <div key={f.k} style={{gridColumn:f.full?"1/-1":"auto"}}>
-              <label style={{display:"block",fontSize:11,fontWeight:600,color:C.textMid,marginBottom:4,textTransform:"uppercase",letterSpacing:.4}}>{f.l}</label>
-              <input value={form[f.k]} onChange={e=>set(f.k,e.target.value)} placeholder={f.ph}
-                style={{width:"100%",boxSizing:"border-box",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
-            </div>
-          ))}
-        </div>
-        <div style={{display:"flex",gap:10}}>
-          <button onClick={onCancel} style={{flex:1,padding:"11px",background:"transparent",border:`1px solid ${C.border}`,color:C.textMid,borderRadius:8,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
-          <button onClick={() => onSave(form)} style={{flex:2,padding:"11px",background:C.accent,border:"none",color:"#fff",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Enregistrer</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Modal paramètres PDF ────────────────────────────────────────────────────
-function ModalPDFParams({ params, onSave, onCancel }) {
-  const [form, setForm] = useState({
-    societeNom:      params.societeNom      || "AF2E",
-    societeAdresse:  params.societeAdresse  || "2 Rue de la Darse — 94600 Choisy le Roi",
-    societeSiret:    params.societeSiret    || "881 279 665 00023",
-    societeTVA:      params.societeTVA      || "FR 238 812 796 65",
-    numeroRGE:       params.numeroRGE       || "",
-    validiteJours:   params.validiteJours   || 30,
-    condPaiement:    params.condPaiement    || "Règlement comptant à réception de facture. Pénalités au taux légal + 5 points (art. L.441-10 Code de commerce). Indemnité forfaitaire 40 €.",
-    mentionCEE:      params.mentionCEE      || "",
-    cgv:             params.cgv             || "",
-    mentionLegale:   params.mentionLegale   || "",
-    dateVisiteTechnique: params.dateVisiteTechnique || "",
-    dateDevis:           params.dateDevis           || "",
+    // Onglet Client
+    nomClient:        devis.nomClient        || "",
+    siret:            devis.siret            || "",
+    codeNAF:          devis.codeNAF          || "",
+    telephoneClient:  devis.telephoneClient  || "",
+    emailClient:      devis.emailClient      || "",
+    adresseSiege:     devis.adresseSiege     || "",
+    nomContact:       devis.nomContact       || "",
+    fonctionContact:  devis.fonctionContact  || "",
+    // Onglet Prestataire
+    sousTraitant:     devis.sousTraitant     || "DC LINK",
+    rgeNum:           devis.rgeNum           || "AU 084 742",
+    rgeValidite:      devis.rgeValidite      || "31/12/2026",
+    adresseSite:      devis.adresseSite      || "",
+    // Onglet Devis
+    refDevis:             devis.refDevis             || "",
+    dateDevis:            devis.dateDevis             || p.dateDevis            || "",
+    dateVisiteTechnique:  p.dateVisiteTechnique       || "",
+    validiteJours:        p.validiteJours             || 30,
+    condPaiement:         p.condPaiement              || "Règlement comptant à réception de facture. Pénalités au taux légal + 5 points (art. L.441-10 Code de commerce). Indemnité forfaitaire 40 €.",
+    mentionCEE:           p.mentionCEE                || "",
+    cgv:                  p.cgv                       || "",
+    mentionLegale:        p.mentionLegale             || "",
+    // Onglet Société
+    societeNom:     p.societeNom     || "AF2E",
+    societeAdresse: p.societeAdresse || "2 Rue de la Darse — 94600 Choisy le Roi",
+    societeSiret:   p.societeSiret   || "881 279 665 00023",
+    societeTVA:     p.societeTVA     || "FR 238 812 796 65",
+    rcs:            p.rcs            || "",
+    capital:        p.capital        || "",
+    assuranceLabel: p.assuranceLabel || "",
+    numeroRGE:      p.numeroRGE      || "",
   });
   const set = (k, v) => setForm(f => ({...f, [k]: v}));
   const F = {width:"100%",boxSizing:"border-box",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit"};
   const L = {display:"block",fontSize:11,fontWeight:600,color:C.textMid,marginBottom:4,textTransform:"uppercase",letterSpacing:.4};
 
+  const handleSave = () => {
+    onSave({
+      nomClient:       form.nomClient,
+      siret:           form.siret,
+      codeNAF:         form.codeNAF,
+      telephoneClient: form.telephoneClient,
+      emailClient:     form.emailClient,
+      adresseSiege:    form.adresseSiege,
+      nomContact:      form.nomContact,
+      fonctionContact: form.fonctionContact,
+      sousTraitant:    form.sousTraitant,
+      rgeNum:          form.rgeNum,
+      rgeValidite:     form.rgeValidite,
+      adresseSite:     form.adresseSite,
+      refDevis:        form.refDevis,
+      dateDevis:       form.dateDevis,
+      pdfParams: {
+        ...p,
+        dateDevis:           form.dateDevis,
+        dateVisiteTechnique: form.dateVisiteTechnique,
+        validiteJours:       Number(form.validiteJours),
+        condPaiement:        form.condPaiement,
+        mentionCEE:          form.mentionCEE,
+        cgv:                 form.cgv,
+        mentionLegale:       form.mentionLegale,
+        societeNom:          form.societeNom,
+        societeAdresse:      form.societeAdresse,
+        societeSiret:        form.societeSiret,
+        societeTVA:          form.societeTVA,
+        rcs:                 form.rcs,
+        capital:             form.capital,
+        assuranceLabel:      form.assuranceLabel,
+        numeroRGE:           form.numeroRGE,
+      },
+    });
+  };
+
+  const TABS = [
+    { id: "client",       label: "👤 Client" },
+    { id: "prestataire",  label: "🔧 Prestataire" },
+    { id: "devis",        label: "📄 Devis" },
+    { id: "societe",      label: "🏢 Société" },
+  ];
+
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={onCancel}>
-      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"28px 32px",width:620,maxHeight:"88vh",overflowY:"auto",boxShadow:"0 25px 60px rgba(0,0,0,.4)"}} onClick={e=>e.stopPropagation()}>
-        <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:6}}>⚙️ Paramètres du PDF</div>
-        <div style={{fontSize:12,color:C.textSoft,marginBottom:20}}>Ces réglages s'appliquent à l'aperçu et à l'export — ils sont sauvegardés avec le devis.</div>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,width:600,maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 25px 60px rgba(0,0,0,.4)"}} onClick={e=>e.stopPropagation()}>
 
-        <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:10,borderBottom:`2px solid ${C.accent}`,paddingBottom:4}}>Société émettrice</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
-          {[
-            {l:"Nom société",k:"societeNom",ph:"AF2E"},
-            {l:"N° document / RGE",k:"numeroRGE",ph:"000114876"},
-            {l:"Adresse",k:"societeAdresse",ph:"2 Rue de la Darse...",full:true},
-            {l:"SIRET",k:"societeSiret",ph:"881 279 665 00023"},
-            {l:"N° TVA intracommunautaire",k:"societeTVA",ph:"FR 238 812 796 65"},
-          ].map(f=>(
-            <div key={f.k} style={{gridColumn:f.full?"1/-1":"auto"}}>
-              <label style={L}>{f.l}</label>
-              <input value={form[f.k]} onChange={e=>set(f.k,e.target.value)} placeholder={f.ph} style={F}/>
+        {/* Header */}
+        <div style={{padding:"22px 28px 0",flexShrink:0}}>
+          <div style={{fontSize:17,fontWeight:800,color:C.text,marginBottom:16}}>⚙️ Paramètres du devis</div>
+          {/* Onglets */}
+          <div style={{display:"flex",gap:0,borderBottom:`2px solid ${C.border}`}}>
+            {TABS.map(t => (
+              <button key={t.id} onClick={() => setActiveTab(t.id)}
+                style={{padding:"8px 18px",fontSize:12,fontWeight:activeTab===t.id?700:500,cursor:"pointer",fontFamily:"inherit",background:"transparent",border:"none",
+                  borderBottom:`2px solid ${activeTab===t.id?C.accent:"transparent"}`,
+                  marginBottom:-2,color:activeTab===t.id?C.accent:C.textMid,transition:"all .15s"}}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Contenu scrollable */}
+        <div style={{flex:1,overflowY:"auto",padding:"20px 28px"}}>
+
+          {/* ── Client ── */}
+          {activeTab === "client" && (
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+              {[
+                {l:"Client *",             k:"nomClient",       ph:"KIABI LOGISTIQUE",       full:true},
+                {l:"SIRET",                k:"siret",           ph:"347 727 950 00094"},
+                {l:"Code NAF",             k:"codeNAF",         ph:"4690Z"},
+                {l:"Téléphone",            k:"telephoneClient", ph:"01 23 45 67 89"},
+                {l:"Email",                k:"emailClient",     ph:"contact@societe.fr"},
+                {l:"Adresse siège social", k:"adresseSiege",    ph:"12 Rue de..., 75001 Paris", full:true},
+                {l:"Contact (nom)",        k:"nomContact",      ph:"M. Dupont"},
+                {l:"Fonction",             k:"fonctionContact", ph:"Responsable Technique"},
+              ].map(f => (
+                <div key={f.k} style={{gridColumn:f.full?"1/-1":"auto"}}>
+                  <label style={L}>{f.l}</label>
+                  <input value={form[f.k]} onChange={e=>set(f.k,e.target.value)} placeholder={f.ph} style={F}/>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
 
-        <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:10,borderBottom:`2px solid ${C.accent}`,paddingBottom:4}}>Conditions commerciales</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
-          <div>
-            <label style={L}>Validité (jours)</label>
-            <input type="number" value={form.validiteJours} onChange={e=>set("validiteJours",Number(e.target.value))} style={F}/>
-          </div>
-          <div style={{gridColumn:"1/-1"}}>
-            <label style={L}>Conditions de paiement</label>
-            <textarea value={form.condPaiement} onChange={e=>set("condPaiement",e.target.value)} rows={2}
-              style={{...F,resize:"vertical"}}/>
-          </div>
-        </div>
-
-        <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:10,borderBottom:`2px solid ${C.accent}`,paddingBottom:4}}>Intervention</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
-          {[
-            {l:"Date du devis",k:"dateDevis",ph:"18/12/2023"},
-            {l:"Date visite technique",k:"dateVisiteTechnique",ph:"15/03/2026"},
-          ].map(f=>(
-            <div key={f.k} style={{gridColumn:f.full?"1/-1":"auto"}}>
-              <label style={L}>{f.l}</label>
-              <input value={form[f.k]} onChange={e=>set(f.k,e.target.value)} placeholder={f.ph} style={F}/>
+          {/* ── Prestataire ── */}
+          {activeTab === "prestataire" && (
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+              {[
+                {l:"Sous-traitant / Poseur",  k:"sousTraitant", ph:"DC LINK",       full:true},
+                {l:"N° RGE",                  k:"rgeNum",       ph:"AU 084 742"},
+                {l:"RGE valable jusqu'au",    k:"rgeValidite",  ph:"31/12/2026"},
+                {l:"Adresse du site (travaux)",k:"adresseSite",  ph:"771 Rue de la Plaine…", full:true},
+              ].map(f => (
+                <div key={f.k} style={{gridColumn:f.full?"1/-1":"auto"}}>
+                  <label style={L}>{f.l}</label>
+                  <input value={form[f.k]} onChange={e=>set(f.k,e.target.value)} placeholder={f.ph} style={F}/>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
+
+          {/* ── Devis ── */}
+          {activeTab === "devis" && (
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+                {[
+                  {l:"Référence devis",       k:"refDevis",            ph:"2025-0001"},
+                  {l:"Date du devis",         k:"dateDevis",           ph:"22/07/2025"},
+                  {l:"Date visite technique", k:"dateVisiteTechnique", ph:"15/03/2026"},
+                  {l:"Validité (jours)",      k:"validiteJours",       ph:"30", type:"number"},
+                ].map(f => (
+                  <div key={f.k}>
+                    <label style={L}>{f.l}</label>
+                    <input type={f.type||"text"} value={form[f.k]} onChange={e=>set(f.k,e.target.value)} placeholder={f.ph} style={F}/>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <label style={L}>Conditions de paiement</label>
+                <textarea value={form.condPaiement} onChange={e=>set("condPaiement",e.target.value)} rows={2} style={{...F,resize:"vertical"}}/>
+              </div>
+              <div>
+                <label style={L}>Mention CEE (page 2) — vide = mention par défaut</label>
+                <textarea value={form.mentionCEE} onChange={e=>set("mentionCEE",e.target.value)} rows={3}
+                  placeholder="Les travaux objet du présent document donneront lieu..." style={{...F,resize:"vertical"}}/>
+              </div>
+              <div>
+                <label style={L}>Conditions Générales de Vente (optionnel)</label>
+                <textarea value={form.cgv} onChange={e=>set("cgv",e.target.value)} rows={4}
+                  placeholder="Article 1 — Objet..." style={{...F,resize:"vertical"}}/>
+              </div>
+              <div>
+                <label style={L}>Mentions légales supplémentaires (optionnel)</label>
+                <textarea value={form.mentionLegale} onChange={e=>set("mentionLegale",e.target.value)} rows={3}
+                  placeholder="Assurance décennale n°..." style={{...F,resize:"vertical"}}/>
+              </div>
+            </div>
+          )}
+
+          {/* ── Société ── */}
+          {activeTab === "societe" && (
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+              {[
+                {l:"Nom société",               k:"societeNom",     ph:"AF2E"},
+                {l:"N° document / RGE",         k:"numeroRGE",      ph:"000114876"},
+                {l:"Adresse",                   k:"societeAdresse", ph:"2 Rue de la Darse…", full:true},
+                {l:"SIRET",                     k:"societeSiret",   ph:"881 279 665 00023"},
+                {l:"N° TVA intracommunautaire", k:"societeTVA",     ph:"FR 238 812 796 65"},
+                {l:"RCS",                       k:"rcs",            ph:"Créteil B 881 279 665"},
+                {l:"Capital social",            k:"capital",        ph:"10 000 €"},
+                {l:"Assurance décennale",       k:"assuranceLabel", ph:"AXA n° 12345 valable 31/12/2026", full:true},
+              ].map(f => (
+                <div key={f.k} style={{gridColumn:f.full?"1/-1":"auto"}}>
+                  <label style={L}>{f.l}</label>
+                  <input value={form[f.k]} onChange={e=>set(f.k,e.target.value)} placeholder={f.ph} style={F}/>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:10,borderBottom:`2px solid ${C.accent}`,paddingBottom:4}}>Mentions &amp; CGV</div>
-        <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:20}}>
-          <div>
-            <label style={L}>Mention CEE (page 2) — laisser vide pour la mention par défaut</label>
-            <textarea value={form.mentionCEE} onChange={e=>set("mentionCEE",e.target.value)} rows={3}
-              placeholder="Les travaux objet du présent document donneront lieu..."
-              style={{...F,resize:"vertical"}}/>
-          </div>
-          <div>
-            <label style={L}>Conditions Générales de Vente (optionnel)</label>
-            <textarea value={form.cgv} onChange={e=>set("cgv",e.target.value)} rows={4}
-              placeholder="Article 1 — Objet..."
-              style={{...F,resize:"vertical"}}/>
-          </div>
-          <div>
-            <label style={L}>Mentions légales supplémentaires (optionnel)</label>
-            <textarea value={form.mentionLegale} onChange={e=>set("mentionLegale",e.target.value)} rows={3}
-              placeholder="Assurance décennale n°..."
-              style={{...F,resize:"vertical"}}/>
-          </div>
-        </div>
-
-        <div style={{display:"flex",gap:10}}>
+        {/* Footer */}
+        <div style={{padding:"16px 28px",borderTop:`1px solid ${C.border}`,display:"flex",gap:10,flexShrink:0}}>
           <button onClick={onCancel} style={{flex:1,padding:"11px",background:"transparent",border:`1px solid ${C.border}`,color:C.textMid,borderRadius:8,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
-          <button onClick={() => onSave(form)} style={{flex:2,padding:"11px",background:C.accent,border:"none",color:"#fff",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Appliquer</button>
+          <button onClick={handleSave} style={{flex:2,padding:"11px",background:C.accent,border:"none",color:"#fff",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Enregistrer</button>
         </div>
       </div>
     </div>
