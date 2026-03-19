@@ -178,10 +178,21 @@ export default async function handler(req, res) {
       }
       if (!e.start?.dateTime) continue
       const start = new Date(e.start.dateTime); const end = new Date(e.end.dateTime)
-      const dateStr = parisDateStr(start)
-      if (!busyByDay[dateStr]) busyByDay[dateStr] = []
+      const startDateStr = parisDateStr(start)
+      if (!busyByDay[startDateStr]) busyByDay[startDateStr] = []
       const fmtTime = (dt) => new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }).format(dt)
-      busyByDay[dateStr].push({ start, end, allDay: false, summary: e.summary || '(sans titre)', startLabel: fmtTime(start), endLabel: fmtTime(end) })
+      busyByDay[startDateStr].push({ start, end, allDay: false, summary: e.summary || '(sans titre)', startLabel: fmtTime(start), endLabel: fmtTime(end) })
+      // Event multi-jours (dateTime) : bloquer aussi les jours suivants
+      let dayCur = new Date(startDateStr + 'T12:00:00Z')
+      dayCur.setUTCDate(dayCur.getUTCDate() + 1)
+      for (let i = 0; i < 60; i++) {
+        const dayStart = new Date(dayCur.toISOString().split('T')[0] + 'T00:00:00Z')
+        if (end <= dayStart) break
+        const ds = parisDateStr(dayCur)
+        if (!busyByDay[ds]) busyByDay[ds] = []
+        busyByDay[ds].push({ allDay: true })
+        dayCur.setUTCDate(dayCur.getUTCDate() + 1)
+      }
     }
 
     const durationMin = parseInt(req.query.duration, 10) || 30
