@@ -782,6 +782,7 @@ export default function DossierDetail() {
         <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: `2px solid ${C.border}` }}>
           {[
             { id: 'dossier',   label: '📋 Dossier',    badge: null },
+            { id: 'appels',    label: '📞 Appels',     badge: appels.length > 0 ? String(appels.length) : null },
             { id: 'visio',     label: '📹 Visio / VT', badge: null },
             { id: 'documents', label: '📎 Documents',  badge: documents.length > 0 ? String(documents.length) : null },
             ...(['contacte','visio_planifiee','visio_effectuee','visite_planifiee','visite_effectuee','devis'].includes(dossier.statut) ? [{ id: 'email', label: '✉️ Email', badge: null }] : []),
@@ -864,103 +865,6 @@ export default function DossierDetail() {
                   placeholder="Ajoute des notes sur ce dossier…" rows={6}
                   style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, lineHeight: 1.6, outline: 'none', fontFamily: 'inherit', resize: 'vertical' }}
                 />
-              </div>
-
-              {/* ── Suivi des appels ── */}
-              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
-                    📞 Suivi des appels
-                    {appels.length > 0 && (
-                      <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, background: C.border, borderRadius: 10, padding: '1px 6px', color: C.textMid }}>{appels.length}</span>
-                    )}
-                  </span>
-                  <button onClick={() => setShowAppelForm(s => !s)}
-                    style={{ background: showAppelForm ? C.bg : C.accent, border: `1px solid ${showAppelForm ? C.border : C.accent}`, color: showAppelForm ? C.textMid : '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
-                    {showAppelForm ? 'Annuler' : '+ Appel'}
-                  </button>
-                </div>
-
-                {showAppelForm && (
-                  <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px', marginBottom: 12 }}>
-                    <div style={{ marginBottom: 8 }}>
-                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .4 }}>Résultat</label>
-                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                        {[
-                          { v: 'nrp',            l: 'NRP',            col: '#DC2626', bg: '#FEE2E2' },
-                          { v: 'message_laisse', l: 'Message laissé', col: '#D97706', bg: '#FEF3C7' },
-                          { v: 'rappel',         l: 'À rappeler',     col: '#0891B2', bg: '#CFFAFE' },
-                          { v: 'joint',          l: 'Contacté',       col: '#16A34A', bg: '#DCFCE7' },
-                        ].map(o => (
-                          <button key={o.v} onClick={() => setAppelEtat(o.v)}
-                            style={{ padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: appelEtat === o.v ? 700 : 400, cursor: 'pointer', fontFamily: 'inherit',
-                              border: `1px solid ${appelEtat === o.v ? o.col : C.border}`,
-                              background: appelEtat === o.v ? o.bg : C.surface,
-                              color: appelEtat === o.v ? o.col : C.textMid }}>
-                            {o.l}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {appelEtat === 'rappel' && (
-                      <div style={{ marginBottom: 8 }}>
-                        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .4 }}>Rappeler le</label>
-                        <input type="datetime-local" value={appelRappelAt} onChange={e => setAppelRappelAt(e.target.value)}
-                          style={{ width: '100%', boxSizing: 'border-box', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px', fontSize: 12, color: C.text, outline: 'none', fontFamily: 'inherit' }} />
-                      </div>
-                    )}
-                    <div style={{ marginBottom: 10 }}>
-                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .4 }}>Note (optionnel)</label>
-                      <input type="text" value={appelNote} onChange={e => setAppelNote(e.target.value)} placeholder="Ex : répondeur, secrétaire…"
-                        style={{ width: '100%', boxSizing: 'border-box', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px', fontSize: 12, color: C.text, outline: 'none', fontFamily: 'inherit' }} />
-                    </div>
-                    <button onClick={addAppel} disabled={savingAppel}
-                      style={{ width: '100%', padding: '8px', background: C.accent, border: 'none', color: '#fff', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: savingAppel ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: savingAppel ? .6 : 1 }}>
-                      {savingAppel ? '…' : 'Enregistrer'}
-                    </button>
-                  </div>
-                )}
-
-                {appels.length > 0 && (() => {
-                  const last = appels[0]
-                  const days = Math.floor((Date.now() - new Date(last.created_at).getTime()) / 86400000)
-                  const ETATS = { nrp: 'NRP', message_laisse: 'Message laissé', rappel: 'À rappeler', joint: 'Contacté' }
-                  return (
-                    <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 7, padding: '7px 12px', marginBottom: 10, fontSize: 11, color: '#15803D', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 700 }}>Dernier appel :</span>
-                      <span>{days === 0 ? "Aujourd'hui" : days === 1 ? 'Hier' : `il y a ${days}j`}</span>
-                      <span>—</span>
-                      <span>{ETATS[last.etat] || last.etat}</span>
-                      {last.rappel_at && <span style={{ color: '#0891B2' }}>· Rappel {new Date(last.rappel_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} {new Date(last.rappel_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
-                    </div>
-                  )
-                })()}
-
-                {appelsLoading ? (
-                  <div style={{ textAlign: 'center', color: C.textSoft, fontSize: 12, padding: '6px 0' }}>Chargement…</div>
-                ) : appels.length === 0 ? (
-                  <div style={{ textAlign: 'center', color: C.textSoft, fontSize: 12, padding: '6px 0' }}>Aucun appel enregistré</div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                    {appels.map(a => {
-                      const ETATS = { nrp: { l: 'NRP', col: '#DC2626', bg: '#FEE2E2' }, message_laisse: { l: 'Message laissé', col: '#D97706', bg: '#FEF3C7' }, rappel: { l: 'À rappeler', col: '#0891B2', bg: '#CFFAFE' }, joint: { l: 'Contacté', col: '#16A34A', bg: '#DCFCE7' } }
-                      const et = ETATS[a.etat] || { l: a.etat, col: C.textMid, bg: C.bg }
-                      const dateStr = new Date(a.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
-                      return (
-                        <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px' }}>
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 5, background: et.bg, color: et.col, flexShrink: 0, marginTop: 1 }}>{et.l}</span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 11, color: C.textMid }}>{dateStr}</div>
-                            {a.rappel_at && <div style={{ fontSize: 10, color: '#0891B2', marginTop: 1 }}>📅 {new Date(a.rappel_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} à {new Date(a.rappel_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>}
-                            {a.note && <div style={{ fontSize: 11, color: C.text, marginTop: 2, fontStyle: 'italic' }}>"{a.note}"</div>}
-                          </div>
-                          <button onClick={() => deleteAppel(a.id)}
-                            style={{ background: 'transparent', border: 'none', color: C.textSoft, cursor: 'pointer', fontSize: 15, lineHeight: 1, flexShrink: 0, padding: '0 2px' }}>×</button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
               </div>
 
             </div>
@@ -1414,6 +1318,119 @@ export default function DossierDetail() {
             )}
           </div>
             </div>
+          </div>
+        )}
+
+        {/* ── Tab: Appels ── */}
+        {activeTab === 'appels' && (
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px', maxWidth: 640 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>📞 Suivi des appels</span>
+              <button onClick={() => setShowAppelForm(s => !s)}
+                style={{ background: showAppelForm ? C.bg : C.accent, border: `1px solid ${showAppelForm ? C.border : C.accent}`, color: showAppelForm ? C.textMid : '#fff', borderRadius: 6, padding: '5px 14px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                {showAppelForm ? 'Annuler' : '+ Nouvel appel'}
+              </button>
+            </div>
+
+            {showAppelForm && (
+              <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px', marginBottom: 16 }}>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .4 }}>Résultat de l'appel</label>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {[
+                      { v: 'nrp',            l: 'NRP',            col: '#DC2626', bg: '#FEE2E2' },
+                      { v: 'message_laisse', l: 'Message laissé', col: '#D97706', bg: '#FEF3C7' },
+                      { v: 'rappel',         l: 'À rappeler',     col: '#0891B2', bg: '#CFFAFE' },
+                      { v: 'joint',          l: 'Contacté',       col: '#16A34A', bg: '#DCFCE7' },
+                    ].map(o => (
+                      <button key={o.v} onClick={() => setAppelEtat(o.v)}
+                        style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: appelEtat === o.v ? 700 : 400, cursor: 'pointer', fontFamily: 'inherit',
+                          border: `1px solid ${appelEtat === o.v ? o.col : C.border}`,
+                          background: appelEtat === o.v ? o.bg : C.surface,
+                          color: appelEtat === o.v ? o.col : C.textMid }}>
+                        {o.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {appelEtat === 'rappel' && (
+                  <div style={{ marginBottom: 10 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .4 }}>Date & heure de rappel</label>
+                    <input type="datetime-local" value={appelRappelAt} onChange={e => setAppelRappelAt(e.target.value)}
+                      style={{ width: '100%', boxSizing: 'border-box', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 10px', fontSize: 13, color: C.text, outline: 'none', fontFamily: 'inherit' }} />
+                  </div>
+                )}
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 4, textTransform: 'uppercase', letterSpacing: .4 }}>Note (optionnel)</label>
+                  <input type="text" value={appelNote} onChange={e => setAppelNote(e.target.value)} placeholder="Ex : répondeur, message laissé à la secrétaire…"
+                    style={{ width: '100%', boxSizing: 'border-box', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 10px', fontSize: 13, color: C.text, outline: 'none', fontFamily: 'inherit' }} />
+                </div>
+                <button onClick={addAppel} disabled={savingAppel}
+                  style={{ width: '100%', padding: '9px', background: C.accent, border: 'none', color: '#fff', borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: savingAppel ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: savingAppel ? .6 : 1 }}>
+                  {savingAppel ? '…' : 'Enregistrer l'appel'}
+                </button>
+              </div>
+            )}
+
+            {appels.length > 0 && (() => {
+              const last = appels[0]
+              const days = Math.floor((Date.now() - new Date(last.created_at).getTime()) / 86400000)
+              const ETATS = { nrp: 'NRP', message_laisse: 'Message laissé', rappel: 'À rappeler', joint: 'Contacté' }
+              return (
+                <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 7, padding: '9px 14px', marginBottom: 14, fontSize: 12, color: '#15803D', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700 }}>Dernier appel :</span>
+                  <span>{days === 0 ? "Aujourd'hui" : days === 1 ? 'Hier' : `il y a ${days} jour${days > 1 ? 's' : ''}`}</span>
+                  <span>—</span>
+                  <span>{ETATS[last.etat] || last.etat}</span>
+                  {last.rappel_at && (
+                    <span style={{ color: '#0891B2', fontWeight: 600 }}>
+                      · Rappel le {new Date(last.rappel_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à {new Date(last.rappel_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+              )
+            })()}
+
+            {appelsLoading ? (
+              <div style={{ textAlign: 'center', color: C.textSoft, fontSize: 13, padding: '20px 0' }}>Chargement…</div>
+            ) : appels.length === 0 ? (
+              <div style={{ textAlign: 'center', color: C.textSoft, fontSize: 13, padding: '20px 0' }}>Aucun appel enregistré pour ce dossier.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {appels.map((a, idx) => {
+                  const ETATS = {
+                    nrp:            { l: 'NRP',            col: '#DC2626', bg: '#FEE2E2' },
+                    message_laisse: { l: 'Message laissé', col: '#D97706', bg: '#FEF3C7' },
+                    rappel:         { l: 'À rappeler',     col: '#0891B2', bg: '#CFFAFE' },
+                    joint:          { l: 'Contacté',       col: '#16A34A', bg: '#DCFCE7' },
+                  }
+                  const et = ETATS[a.etat] || { l: a.etat, col: C.textMid, bg: C.bg }
+                  const dateStr = new Date(a.created_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+                  const daysAgo = Math.floor((Date.now() - new Date(a.created_at).getTime()) / 86400000)
+                  return (
+                    <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: idx === 0 ? C.surface : C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, background: et.bg, color: et.col, flexShrink: 0, marginTop: 1 }}>{et.l}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, color: C.textMid }}>
+                          {dateStr}
+                          <span style={{ fontSize: 10, color: C.textSoft, marginLeft: 8 }}>
+                            ({daysAgo === 0 ? "aujourd'hui" : daysAgo === 1 ? 'hier' : `il y a ${daysAgo}j`})
+                          </span>
+                        </div>
+                        {a.rappel_at && (
+                          <div style={{ fontSize: 12, color: '#0891B2', marginTop: 3, fontWeight: 600 }}>
+                            📅 Rappeler le {new Date(a.rappel_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })} à {new Date(a.rappel_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        )}
+                        {a.note && <div style={{ fontSize: 12, color: C.text, marginTop: 3, fontStyle: 'italic' }}>"{a.note}"</div>}
+                      </div>
+                      <button onClick={() => deleteAppel(a.id)}
+                        style={{ background: 'transparent', border: 'none', color: C.textSoft, cursor: 'pointer', fontSize: 16, lineHeight: 1, flexShrink: 0, padding: '0 2px' }}>×</button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 

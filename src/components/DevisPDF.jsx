@@ -117,22 +117,34 @@ function Header({ devis, params }) {
 }
 
 function Footer({ params }) {
+  const line1 = [
+    params.societeNom || 'AF2E',
+    params.societeAdresse || '2 RUE DE LA DARSE — 94600 CHOISY LE ROI',
+    `SIRET ${params.societeSiret || '881 279 665 00023'}`,
+    `TVA ${params.societeTVA || 'FR 238 812 796 65'}`,
+    params.rcs ? `RCS ${params.rcs}` : null,
+    params.capital ? `Capital ${params.capital}` : null,
+  ].filter(Boolean).join(' — ')
+
+  const line2 = [
+    params.assuranceLabel ? `Assurance décennale : ${params.assuranceLabel}` : null,
+    params.rgeNum ? `RGE n° ${params.rgeNum}` : null,
+  ].filter(Boolean).join(' — ')
+
   return (
     <View style={s.footer} fixed>
       <View style={s.footerRow}>
         <View style={{ flex: 1 }}>
-          <Text style={s.footerTxt}>
-            {params.societeNom || 'AF2E'} — {params.societeAdresse || '2 RUE DE LA DARSE — 94600 CHOISY LE ROI'} — SIRET {params.societeSiret || '881 279 665 00023'} — TVA {params.societeTVA || 'FR 238 812 796 65'}
-          </Text>
-          <Text style={[s.footerTxt, { marginTop: 1 }]}>
-            {params.rcs ? `RCS ${params.rcs} — ` : ''}{params.capital ? `Capital ${params.capital} — ` : ''}Assurance décennale {params.assuranceNum || ''}
-          </Text>
+          <Text style={s.footerTxt}>{line1}</Text>
+          {line2 ? <Text style={[s.footerTxt, { marginTop: 1 }]}>{line2}</Text> : null}
         </View>
-        <View style={s.parapheBox}>
-          <Text style={s.parapheLbl}>Paraphe</Text>
-          <View style={s.parapheArea} />
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, flexShrink: 0, marginLeft: 8 }}>
+          <View style={s.parapheBox}>
+            <Text style={s.parapheLbl}>Paraphe</Text>
+            <View style={s.parapheArea} />
+          </View>
+          <Text style={s.footerPage} render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`} />
         </View>
-        <Text style={s.footerPage} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
       </View>
     </View>
   )
