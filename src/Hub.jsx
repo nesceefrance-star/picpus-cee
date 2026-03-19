@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, forwardRef, useCallback, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { supabase } from "./lib/supabase";
+import useStore from "./store/useStore";
 import { refDefault, nextRef } from "./lib/genRef";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { DevisPDFDoc } from "./components/DevisPDF";
@@ -147,6 +148,7 @@ function PointCard({ item, cfg, val, note, onVal, onNote, openNote, toggleNote }
 }
 
 function VerificateurCEE({ prefill }) {
+  const { session } = useStore();
   const [fiche,setFiche]   = useState(prefill?.fiche || "BAT-TH-142");
   const [ref_,setRef_]     = useState(prefill?.ref || "");
   const [fileAH,setFileAH] = useState(null);
@@ -158,6 +160,10 @@ function VerificateurCEE({ prefill }) {
   const [notes,setNotes]   = useState({});
   const [openNote,setOpenNote] = useState(null);
   const [prefillLoading, setPrefillLoading] = useState(!!prefill?.files?.length);
+  const [analysisId, setAnalysisId] = useState(null);
+  const [savedAnalyses, setSavedAnalyses] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [saveOk, setSaveOk] = useState(false);
 
   // Charger les fichiers depuis les URLs signées Supabase
   useEffect(() => {
@@ -177,6 +183,33 @@ function VerificateurCEE({ prefill }) {
     load();
   }, []);
 
+  // Charger l'historique des analyses
+  useEffect(() => {
+    if (!session) return;
+    let q = supabase.from('cee_analyses')
+      .select('id, ref, fiche, result, valid_state, notes_state, created_at, updated_at')
+      .eq('user_id', session.user.id)
+      .order('updated_at', { ascending: false })
+      .limit(20);
+    if (prefill?.dossierId) q = q.eq('dossier_id', prefill.dossierId);
+    q.then(({ data }) => setSavedAnalyses(data || []));
+  }, [session]);
+
+  const loadAnalysis = (a) => {
+    setRef_(a.ref || ''); setFiche(a.fiche || 'BAT-TH-142');
+    setResult(a.result); setAnalysisId(a.id);
+    const v = { ...(a.valid_state || {}) };
+    [...(a.result?.incoherences||[]),...(a.result?.points_conformes||[]),...(a.result?.alertes_ah||[])].forEach(i => { if (!v[i.id]) v[i.id] = 'pending'; });
+    setValid(v); setNotes(a.notes_state || {}); setStep('rapport');
+  };
+
+  const saveProgress = async () => {
+    if (!analysisId || !session) return;
+    setSaving(true);
+    await supabase.from('cee_analyses').update({ valid_state: valid, notes_state: notes, updated_at: new Date().toISOString() }).eq('id', analysisId);
+    setSaving(false); setSaveOk(true); setTimeout(() => setSaveOk(false), 2000);
+  };
+
   const toB64 = f => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(",")[1]); r.onerror=rej; r.readAsDataURL(f); });
   const mtype = f => f.type==="application/pdf"?"application/pdf":f.type||"image/jpeg";
   const bc    = (b64,mt) => mt==="application/pdf"
@@ -194,7 +227,7 @@ function VerificateurCEE({ prefill }) {
       const prompt = `RÉPONDS UNIQUEMENT AVEC LE JSON, aucun texte avant ou après, pas de backticks.
 Expert CEE. Titres/descriptions max 80 caractères.
 {"avis_global":"CONFORME|ATTENTION|BLOQUANT","resume":"1 phrase","donnees_ah":{"beneficiaire":"","siren":"","adresse_site":"","signataire":"","date_engagement":"","date_realisation":"","nb_equipements":"","marque":"","reference_eq":"","professionnel":"","siret_pro":""},"donnees_devis":{"beneficiaire":"","adresse_site":"","date_document":"","ref_document":"","nb_equipements":"","marque":"","reference_eq":"","montant_ht":"","emetteur":""},"incoherences":[{"id":"inc_1","niveau":"CRITIQUE|ATTENTION|INFO","categorie":"Bénéficiaire|Adresse|Dates|Équipements|Références|Professionnel|Autre","titre":"","description":"","valeur_ah":"","valeur_devis":""}],"points_conformes":[{"id":"ok_1","categorie":"","titre":""}],"alertes_ah":[{"id":"al_1","niveau":"CRITIQUE|ATTENTION","titre":"","description":""}]}`;
-      const resp = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:4096,messages:[{role:"user",content:[bc(b64AH,mtype(fileAH)),{type:"text",text:"[AH CEE, fiche "+fiche+"]"},bc(b64Dev,mtype(fileDev)),{type:"text",text:"[Devis/Facture]"},{type:"text",text:prompt}]}]})});
+      const resp = await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json","anthropic-beta":"pdfs-2024-09-25"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:4096,messages:[{role:"user",content:[bc(b64AH,mtype(fileAH)),{type:"text",text:"[AH CEE, fiche "+fiche+"]"},bc(b64Dev,mtype(fileDev)),{type:"text",text:"[Devis/Facture]"},{type:"text",text:prompt}]}]})});
       const data = await resp.json();
       if (data.error || !data.content) throw new Error(data.error?.message || data.error || "Réponse API invalide");
       const raw = data.content.map(b=>b.text||"").join("");
@@ -205,6 +238,15 @@ Expert CEE. Titres/descriptions max 80 caractères.
       const v={};
       [...(parsed.incoherences||[]),...(parsed.points_conformes||[]),...(parsed.alertes_ah||[])].forEach(i=>{v[i.id]="pending";});
       setValid(v); setStep("rapport");
+      // Auto-save
+      if (session) {
+        const { data: saved } = await supabase.from('cee_analyses').insert({
+          user_id: session.user.id,
+          dossier_id: prefill?.dossierId || null,
+          ref: ref_, fiche, result: parsed, valid_state: v, notes_state: {},
+        }).select('id').single();
+        if (saved?.id) { setAnalysisId(saved.id); setSavedAnalyses(prev => [{ id: saved.id, ref: ref_, fiche, result: parsed, valid_state: v, notes_state: {}, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }, ...prev]); }
+      }
     } catch(e) { setResult({error:e.message}); setStep("rapport"); }
     clearInterval(iv);
   };
@@ -228,6 +270,31 @@ Expert CEE. Titres/descriptions max 80 caractères.
                 </div>
               )}
             </div>
+            {savedAnalyses.length > 0 && (
+              <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"14px 18px",marginBottom:16}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.text,marginBottom:10}}>📂 Analyses sauvegardées</div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {savedAnalyses.map(a => {
+                    const avis = a.result?.avis_global;
+                    const avisColor = avis==="CONFORME"?"#16A34A":avis==="BLOQUANT"?"#DC2626":"#D97706";
+                    const allItems = [...(a.result?.incoherences||[]),...(a.result?.points_conformes||[]),...(a.result?.alertes_ah||[])];
+                    const done = allItems.filter(i => (a.valid_state||{})[i.id] !== 'pending').length;
+                    return (
+                      <div key={a.id} onClick={() => loadAnalysis(a)} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:7,border:`1px solid ${C.border}`,cursor:"pointer",background:C.bg,transition:"background .1s"}}
+                        onMouseEnter={e=>e.currentTarget.style.background="#EFF6FF"} onMouseLeave={e=>e.currentTarget.style.background=C.bg}>
+                        <span style={{fontSize:18}}>{avis==="CONFORME"?"✅":avis==="BLOQUANT"?"🚫":"⚠️"}</span>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:12,fontWeight:700,color:C.text}}>{a.ref || "(sans référence)"} <span style={{fontWeight:400,color:C.textMid}}>— {a.fiche}</span></div>
+                          <div style={{fontSize:11,color:C.textSoft}}>{new Date(a.updated_at).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})} · {done}/{allItems.length} items traités</div>
+                        </div>
+                        <span style={{fontSize:11,fontWeight:700,color:avisColor,background:avisColor+"18",border:`1px solid ${avisColor}44`,borderRadius:20,padding:"2px 8px",flexShrink:0}}>{avis||"—"}</span>
+                        <span style={{fontSize:11,color:C.accent,flexShrink:0}}>Charger →</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"18px",marginBottom:16,display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
               <div>
                 <label style={{display:"block",fontSize:12,fontWeight:600,color:C.text,marginBottom:5}}>Référence dossier</label>
@@ -264,12 +331,24 @@ Expert CEE. Titres/descriptions max 80 caractères.
           const avis = AVIS[result.avis_global]||AVIS.ATTENTION;
           return (
             <>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                <button onClick={()=>{setStep("upload");setResult(null);setValid({});setFileAH(null);setFileDev(null);}}
-                  style={{background:C.surface,border:`1px solid ${C.border}`,color:C.textMid,padding:"6px 14px",borderRadius:7,cursor:"pointer",fontSize:13}}>
-                  ↺ Nouveau dossier
-                </button>
-                <span style={{fontSize:13,color:C.textMid,background:C.surface,border:`1px solid ${C.border}`,borderRadius:7,padding:"5px 12px"}}>{pct}% traité</span>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={()=>{setStep("upload");setResult(null);setValid({});setFileAH(null);setFileDev(null);setAnalysisId(null);}}
+                    style={{background:C.surface,border:`1px solid ${C.border}`,color:C.textMid,padding:"6px 14px",borderRadius:7,cursor:"pointer",fontSize:13}}>
+                    + Nouvelle analyse
+                  </button>
+                  <button onClick={()=>{setStep("upload");setFileAH(null);setFileDev(null);}}
+                    style={{background:C.surface,border:`1px solid ${C.border}`,color:C.accent,padding:"6px 14px",borderRadius:7,cursor:"pointer",fontSize:13,fontWeight:600}}>
+                    ↺ Régénérer
+                  </button>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <button onClick={saveProgress} disabled={saving||!analysisId}
+                    style={{background:saveOk?"#F0FDF4":C.accent,border:`1px solid ${saveOk?"#86EFAC":C.accent}`,color:saveOk?"#16A34A":"#fff",padding:"6px 16px",borderRadius:7,cursor:(!analysisId||saving)?"not-allowed":"pointer",fontSize:13,fontWeight:700,opacity:(!analysisId||saving)?.6:1}}>
+                    {saving?"⏳…":saveOk?"✓ Sauvegardé":"💾 Sauvegarder la revue"}
+                  </button>
+                  <span style={{fontSize:13,color:C.textMid,background:C.surface,border:`1px solid ${C.border}`,borderRadius:7,padding:"5px 12px"}}>{pct}% traité</span>
+                </div>
               </div>
               <div style={{background:avis.bg,border:`1.5px solid ${avis.border}`,borderRadius:10,padding:"16px 20px",marginBottom:18,display:"flex",alignItems:"center",gap:14}}>
                 <div style={{fontSize:32}}>{avis.icon}</div>

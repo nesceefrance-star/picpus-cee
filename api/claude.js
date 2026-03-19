@@ -1,7 +1,6 @@
 import { setCors } from './_cors.js'
-// api/claude.js — Proxy Vercel pour l'API Anthropic
-// Place ce fichier à la racine du repo dans /api/claude.js
-// Vercel le déploie automatiquement comme endpoint serverless sur /api/claude
+
+export const config = { api: { bodyParser: { sizeLimit: '20mb' } } }
 
 export default async function handler(req, res) {
   // CORS

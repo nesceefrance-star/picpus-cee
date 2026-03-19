@@ -482,9 +482,10 @@ export default function DossierDetail() {
         state: {
           module: 'verificateur',
           prefill: {
-            ref:   dossier.ref || '',
-            fiche: dossier.fiche_cee || 'BAT-TH-142',
-            files: validFiles,
+            ref:       dossier.ref || '',
+            fiche:     dossier.fiche_cee || 'BAT-TH-142',
+            dossierId: id,
+            files:     validFiles,
           },
         },
       })
