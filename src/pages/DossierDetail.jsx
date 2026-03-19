@@ -707,7 +707,7 @@ export default function DossierDetail() {
         <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: `2px solid ${C.border}` }}>
           {[
             { id: 'dossier',   label: '📋 Dossier',    badge: null },
-            { id: 'visio',     label: '📹 Visio',      badge: null },
+            { id: 'visio',     label: '📹 Visio / VT', badge: null },
             { id: 'documents', label: '📎 Documents',  badge: documents.length > 0 ? String(documents.length) : null },
             ...(['contacte','visio_planifiee','visio_effectuee','visite_planifiee','visite_effectuee','devis'].includes(dossier.statut) ? [{ id: 'email', label: '✉️ Email', badge: null }] : []),
           ].map(t => (
