@@ -44,6 +44,7 @@ export default function EmailSection({ dossierId, statut }) {
   const [selectedSlots, setSelectedSlots] = useState([])
   const [slotsLoaded,   setSlotsLoaded]   = useState(false)
   const [slotsError,    setSlotsError]    = useState(null)
+  const [weekOffset,    setWeekOffset]    = useState(0)
 
   const availableTypes = getTypesForStatut(statut)
   const isActive = ACTIVE_STATUTS.includes(statut)
@@ -79,19 +80,20 @@ export default function EmailSection({ dossierId, statut }) {
     setSlots([])
     setSelectedSlots([])
     setSlotsLoaded(false)
+    setWeekOffset(0)
     const gen = generations[typeKey]
     setSubject(gen?.subject || '')
     setBody(gen?.body || '')
   }
 
   // Charger créneaux Calendar
-  const loadSlots = async () => {
+  const loadSlots = async (week = weekOffset) => {
     setLoadingSlots(true)
     setSlotsError(null)
     const typeConf = EMAIL_TYPES.find(t => t.key === selectedType)
     const slotType = typeConf?.slotType || 'visio'
     try {
-      const r = await fetch(`/api/calendar?action=slots${slotType === 'visite' ? '&type=visite' : ''}`, {
+      const r = await fetch(`/api/calendar?action=slots${slotType === 'visite' ? '&type=visite' : ''}&week=${week}`, {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       })
       const d = await r.json()
@@ -102,6 +104,14 @@ export default function EmailSection({ dossierId, statut }) {
       setSlotsError(e.message)
     }
     setLoadingSlots(false)
+  }
+
+  const changeWeek = async (delta) => {
+    const next = Math.max(0, Math.min(weekOffset + delta, 4))
+    if (next === weekOffset) return
+    setWeekOffset(next)
+    setSelectedSlots([])
+    await loadSlots(next)
   }
 
   // Générer
@@ -197,8 +207,29 @@ export default function EmailSection({ dossierId, statut }) {
                 </button>
               ) : (
                 <div>
-                  <div style={{ fontSize: 12, color: C.textMid, marginBottom: 6 }}>Sélectionne les créneaux à proposer :</div>
+                  {/* Navigation semaine */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, color: C.textMid }}>Sélectionne les créneaux à proposer :</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <button
+                        onClick={() => changeWeek(-1)}
+                        disabled={weekOffset === 0 || loadingSlots}
+                        style={{ padding: '3px 8px', borderRadius: 5, fontSize: 11, cursor: weekOffset === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: `1px solid ${C.border}`, background: C.bg, color: weekOffset === 0 ? C.textSoft : C.textMid, opacity: weekOffset === 0 ? .5 : 1 }}
+                      >‹ Préc.</button>
+                      <span style={{ fontSize: 11, color: C.textMid, minWidth: 60, textAlign: 'center' }}>
+                        {loadingSlots ? '⏳' : weekOffset === 0 ? 'Sem. J+3' : `Sem. +${weekOffset + 1}`}
+                      </span>
+                      <button
+                        onClick={() => changeWeek(+1)}
+                        disabled={weekOffset === 4 || loadingSlots}
+                        style={{ padding: '3px 8px', borderRadius: 5, fontSize: 11, cursor: weekOffset === 4 ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: `1px solid ${C.border}`, background: C.bg, color: weekOffset === 4 ? C.textSoft : C.textMid, opacity: weekOffset === 4 ? .5 : 1 }}
+                      >Suiv. ›</button>
+                    </div>
+                  </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {slots.length === 0 && !loadingSlots && (
+                      <div style={{ fontSize: 12, color: C.textSoft, fontStyle: 'italic' }}>Aucun créneau libre cette semaine.</div>
+                    )}
                     {slots.map((slot, i) => {
                       const isSel = selectedSlots.some(s => s.start === slot.start)
                       return (

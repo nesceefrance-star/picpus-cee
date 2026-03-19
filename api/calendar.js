@@ -216,8 +216,9 @@ export default async function handler(req, res) {
   // ?type=visite → créneaux 2h pour visite technique
   if (action === 'slots') {
     const isVisite     = req.query.type === 'visite'
+    const weekOffset   = Math.max(0, Math.min(parseInt(req.query.week, 10) || 0, 4)) // 0–4 (max ~1 mois)
     const slotDuration = isVisite ? 120 * 60 * 1000 : 30 * 60 * 1000
-    const workDays     = workingDaysFrom(3, 5)
+    const workDays     = workingDaysFrom(3 + weekOffset * 5, 5)
 
     const timeMin = workDays[0].toISOString()
     const timeMax = new Date(workDays[workDays.length - 1]); timeMax.setHours(23, 59, 59)
