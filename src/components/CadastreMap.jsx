@@ -31,25 +31,34 @@ function FitBounds({ geojson }) {
   return null
 }
 
-export default function CadastreMap({ adresse, codePostal, ville, siret, raisonSociale }) {
-  const [state, setState]         = useState('idle') // idle | loading | done | error
-  const [parcelles, setParcelles] = useState(null)   // GeoJSON FeatureCollection
-  const [center, setCenter]       = useState(null)   // [lat, lng]
+export default function CadastreMap({ adresse, codePostal, ville, siret, raisonSociale, dossierId }) {
+  const CACHE_KEY = dossierId ? `cadastre_${dossierId}` : null
+
+  // Restaure depuis le cache localStorage si disponible
+  const cached = (() => {
+    if (!CACHE_KEY) return null
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY)) } catch { return null }
+  })()
+
+  const [state, setState]         = useState(cached ? 'done' : 'idle')
+  const [parcelles, setParcelles] = useState(cached?.parcelles || null)
+  const [center, setCenter]       = useState(cached?.center    || null)
   const [errorMsg, setErrorMsg]   = useState('')
+  const [sourceLabel, setSourceLabel] = useState(cached?.sourceLabel || '')
 
   // adresse peut être une chaîne complète (adresse_site) ou être complétée par codePostal/ville
   const fullAddress = adresse && !codePostal && !ville
     ? adresse
     : [adresse, codePostal, ville].filter(Boolean).join(' ')
 
-  const [sourceLabel, setSourceLabel] = useState('')
-
   const rechercher = async () => {
     if (!fullAddress && !siret && !raisonSociale) return
+    if (CACHE_KEY) try { localStorage.removeItem(CACHE_KEY) } catch {}
     setState('loading')
     setErrorMsg('')
     try {
       let lon, lat
+      let newSourceLabel = ''
 
       // 1a. Priorité : SIRET ou raison sociale → coordonnées précises au bâtiment (base SIRENE)
       const sireneQ = siret?.replace(/\s/g,'') || raisonSociale
@@ -62,7 +71,7 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
         if (etab?.latitude && etab?.longitude) {
           lat = parseFloat(etab.latitude)
           lon = parseFloat(etab.longitude)
-          setSourceLabel('📍 Localisation SIRENE (précision bâtiment)')
+          newSourceLabel = '📍 Localisation SIRENE (précision bâtiment)'
         }
       }
 
@@ -76,9 +85,10 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
         const feat = geoData?.features?.[0]
         if (!feat) throw new Error("Adresse introuvable")
         ;[lon, lat] = feat.geometry.coordinates
-        setSourceLabel('📍 Géocodage adresse')
+        newSourceLabel = '📍 Géocodage adresse'
       }
 
+      setSourceLabel(newSourceLabel)
       setCenter([lat, lon])
 
       // 2. Parcelle cadastrale : point précis via apicarto IGN
@@ -103,6 +113,10 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
 
       setParcelles(cadData)
       setState('done')
+      // Sauvegarde dans le cache localStorage
+      if (CACHE_KEY) {
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify({ parcelles: cadData, center: [lat, lon], sourceLabel: newSourceLabel })) } catch {}
+      }
     } catch (e) {
       setErrorMsg(e.message || "Erreur lors de la recherche cadastrale")
       setState('error')

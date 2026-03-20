@@ -991,6 +991,7 @@ export default function DossierDetail() {
 
               {/* Parcelle cadastrale — SIRET prioritaire pour précision bâtiment */}
               <CadastreMap
+                dossierId={id}
                 adresse={adresseSite || [dossier.prospects?.adresse, dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(', ')}
                 siret={dossier.prospects?.siret}
                 raisonSociale={dossier.prospects?.raison_sociale}
