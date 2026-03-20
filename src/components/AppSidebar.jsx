@@ -21,7 +21,6 @@ import DashboardIcon from '@mui/icons-material/Dashboard'
 import FolderIcon from '@mui/icons-material/Folder'
 import BuildIcon from '@mui/icons-material/Build'
 import SearchIcon from '@mui/icons-material/Search'
-import ChecklistIcon from '@mui/icons-material/Checklist'
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import ForwardToInboxIcon from '@mui/icons-material/ForwardToInbox'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
@@ -187,7 +186,6 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
           />
           <Collapse in={open ? outilsOpen : true} timeout="auto" unmountOnExit>
             <Item icon={<SearchIcon fontSize="small" />}      label="Vérificateur CEE"     path="/hub" module="verificateur" indent />
-            <Item icon={<ChecklistIcon fontSize="small" />}   label="Checklist CEE"        path="/hub" module="checklist"    indent />
             <Item icon={<ReceiptLongIcon fontSize="small" />} label="Générateur de devis"  path="/hub" module="marges"       indent />
           </Collapse>
 

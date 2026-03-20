@@ -112,8 +112,8 @@ const puissanceTotale = (equipements) =>
   equipements.reduce((s, e) => s + (parseInt(e.quantite) || 0) * (parseFloat(e.puissance_unitaire_kw) || 0), 0)
 
 const C = {
-  bg: '#0F172A', surface: '#1E293B', border: '#334155',
-  text: '#F1F5F9', textMid: '#94A3B8', textSoft: '#475569',
+  bg: '#F1F5F9', surface: '#FFFFFF', border: '#E2E8F0',
+  text: '#0F172A', textMid: '#475569', textSoft: '#94A3B8',
   accent: '#2563EB', green: '#16A34A',
 }
 
@@ -126,7 +126,7 @@ function Field({ label, value, onChange, type = 'text', placeholder, required, s
       <div style={{ position: 'relative' }}>
         <input type={type} value={value ?? ''} onChange={e => onChange(e.target.value)}
           placeholder={placeholder} required={required} disabled={disabled}
-          style={{ width: '100%', boxSizing: 'border-box', background: disabled ? '#0a1120' : C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: suffix ? '9px 44px 9px 12px' : '9px 12px', color: disabled ? C.textSoft : C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
+          style={{ width: '100%', boxSizing: 'border-box', background: disabled ? '#F8FAFC' : C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: suffix ? '9px 44px 9px 12px' : '9px 12px', color: disabled ? C.textSoft : C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
         />
         {suffix && <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: C.textMid }}>{suffix}</span>}
       </div>
@@ -169,17 +169,17 @@ function RaisonSocialeAutocomplete({ value, onChange, onSelect }) {
     <div style={{ position: 'relative', marginBottom: 14 }}>
       <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>
         Raison sociale <span style={{ color: '#EF4444' }}>*</span>
-        <span style={{ marginLeft: 6, fontSize: 10, color: '#60A5FA', fontWeight: 400, textTransform: 'none' }}>autocomplétion SIRET</span>
+        <span style={{ marginLeft: 6, fontSize: 10, color: '#2563EB', fontWeight: 400, textTransform: 'none' }}>autocomplétion SIRET</span>
       </label>
       <input value={value} onChange={e => search(e.target.value)} onBlur={() => setTimeout(() => setOpen(false), 200)}
         placeholder="KIABI LOGISTIQUE…"
         style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
       />
       {open && suggestions.length > 0 && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#0F172A', border: `1px solid ${C.border}`, borderRadius: 8, zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,.5)', maxHeight: 220, overflowY: 'auto' }}>
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#FFFFFF', border: `1px solid ${C.border}`, borderRadius: 8, zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,.12)', maxHeight: 220, overflowY: 'auto' }}>
           {suggestions.map((s, i) => (
             <div key={i} onClick={() => select(s)} style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.border}` }}
-              onMouseEnter={e => e.currentTarget.style.background = C.surface}
+              onMouseEnter={e => e.currentTarget.style.background = C.bg}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
               <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{s.nom_complet || s.nom_raison_sociale}</div>
               <div style={{ fontSize: 11, color: C.textMid, marginTop: 2 }}>SIRET {s.siege?.siret || '—'} · {s.siege?.libelle_commune || ''} ({s.siege?.code_postal || ''})</div>
@@ -221,17 +221,17 @@ function AdresseAutocomplete({ label, value, onChange, onSelect }) {
     <div style={{ position: 'relative', marginBottom: 14, gridColumn: '1/-1' }}>
       <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>
         {label}
-        <span style={{ marginLeft: 6, fontSize: 10, color: '#60A5FA', fontWeight: 400, textTransform: 'none' }}>autocomplétion adresse</span>
+        <span style={{ marginLeft: 6, fontSize: 10, color: '#2563EB', fontWeight: 400, textTransform: 'none' }}>autocomplétion adresse</span>
       </label>
       <input value={value} onChange={e => search(e.target.value)} onBlur={() => setTimeout(() => setOpen(false), 200)}
         placeholder="771 Rue de la Plaine, Lauwin-Planque…"
         style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
       />
       {open && suggestions.length > 0 && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#0F172A', border: `1px solid ${C.border}`, borderRadius: 8, zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,.5)' }}>
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#FFFFFF', border: `1px solid ${C.border}`, borderRadius: 8, zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,.12)' }}>
           {suggestions.map((f, i) => (
             <div key={i} onClick={() => select(f)} style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.border}`, fontSize: 13, color: C.text }}
-              onMouseEnter={e => e.currentTarget.style.background = C.surface}
+              onMouseEnter={e => e.currentTarget.style.background = C.bg}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
               {f.properties.label}
             </div>
@@ -261,12 +261,12 @@ function LigneEquipement({ eq, onChange, onRemove, canRemove }) {
           style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 28px 8px 8px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
         <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: C.textMid }}>kW</span>
       </div>
-      <div style={{ width: 72, textAlign: 'right', fontSize: 12, fontWeight: 700, color: total > 0 ? '#60A5FA' : C.textSoft }}>
+      <div style={{ width: 72, textAlign: 'right', fontSize: 12, fontWeight: 700, color: total > 0 ? '#2563EB' : C.textSoft }}>
         {total > 0 ? `= ${total} kW` : '—'}
       </div>
       {canRemove && (
         <button type="button" onClick={onRemove}
-          style={{ background: 'transparent', border: `1px solid #450a0a`, color: '#EF4444', borderRadius: 6, padding: '5px 7px', fontSize: 11, cursor: 'pointer' }}>✕</button>
+          style={{ background: 'transparent', border: `1px solid #FECACA`, color: '#DC2626', borderRadius: 6, padding: '5px 7px', fontSize: 11, cursor: 'pointer' }}>✕</button>
       )}
     </div>
   )
@@ -539,7 +539,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
-      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, width: 640, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 30px 70px rgba(0,0,0,.7)' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, width: 640, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(15,23,42,.18)' }} onClick={e => e.stopPropagation()}>
 
         {/* Header stepper */}
         <div style={{ padding: '22px 28px 16px', position: 'sticky', top: 0, background: C.surface, zIndex: 10, borderBottom: `1px solid ${C.border}` }}>
@@ -576,10 +576,10 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                 {FICHES.map(f => (
                   <button key={f.id} type="button" onClick={() => switchFiche(f.id)}
                     style={{ flex: 1, padding: '16px 8px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
-                      background: tech.fiche_cee === f.id ? '#172033' : C.bg,
+                      background: tech.fiche_cee === f.id ? '#EFF6FF' : C.bg,
                       border: `2px solid ${tech.fiche_cee === f.id ? C.accent : C.border}` }}>
                     <div style={{ fontSize: 22, marginBottom: 6 }}>{f.icon}</div>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: tech.fiche_cee === f.id ? '#60A5FA' : C.text }}>{f.label}</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: tech.fiche_cee === f.id ? '#2563EB' : C.text }}>{f.label}</div>
                     <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>{f.desc}</div>
                   </button>
                 ))}
@@ -619,9 +619,9 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
           {step === 3 && (
             <>
               {/* Badge fiche active avec lien retour */}
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#172033', border: `1px solid ${C.accent}`, borderRadius: 6, padding: '4px 10px', marginBottom: 16 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#EFF6FF', border: `1px solid ${C.accent}`, borderRadius: 6, padding: '4px 10px', marginBottom: 16 }}>
                 <span style={{ fontSize: 14 }}>{FICHES.find(f => f.id === tech.fiche_cee)?.icon}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#60A5FA' }}>{tech.fiche_cee}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#2563EB' }}>{tech.fiche_cee}</span>
                 <button type="button" onClick={() => setStep(1)} style={{ background: 'transparent', border: 'none', color: C.textSoft, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit', marginLeft: 4 }}>changer</button>
               </div>
 
@@ -636,9 +636,9 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                     ].map(t => (
                       <button key={t.id} type="button" onClick={() => setT('type_local', t.id)}
                         style={{ flex: 1, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-                          background: tech.type_local === t.id ? '#172033' : C.bg,
+                          background: tech.type_local === t.id ? '#EFF6FF' : C.bg,
                           border: `1px solid ${tech.type_local === t.id ? C.accent : C.border}` }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: tech.type_local === t.id ? '#60A5FA' : C.text }}>{t.label}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: tech.type_local === t.id ? '#2563EB' : C.text }}>{t.label}</div>
                         <div style={{ fontSize: 10, color: C.textSoft, marginTop: 2 }}>{t.desc}</div>
                       </button>
                     ))}
@@ -662,14 +662,14 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                     {['H1', 'H2', 'H3'].map(z => (
                       <button key={z} type="button" onClick={() => setT('zone_climatique', z)}
                         style={{ flex: 1, padding: '9px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700,
-                          background: tech.zone_climatique === z ? '#1e3a5f' : C.bg,
+                          background: tech.zone_climatique === z ? '#BFDBFE' : C.bg,
                           border: `1px solid ${tech.zone_climatique === z ? C.accent : C.border}`,
-                          color: tech.zone_climatique === z ? '#60A5FA' : C.textMid }}>
+                          color: tech.zone_climatique === z ? '#2563EB' : C.textMid }}>
                         {z}
                       </button>
                     ))}
                   </div>
-                  {tech.zone_climatique && <div style={{ fontSize: 10, color: '#60A5FA', marginTop: 4 }}>✓ Zone {tech.zone_climatique} détectée</div>}
+                  {tech.zone_climatique && <div style={{ fontSize: 10, color: '#2563EB', marginTop: 4 }}>✓ Zone {tech.zone_climatique} détectée</div>}
                 </div>
                 <Field label="Surface du site" value={tech.surface_m2} onChange={v => setT('surface_m2', v)} type="number" placeholder="5000" suffix="m²" />
                 <Field label="Hauteur sous plafond" value={tech.hauteur_m} onChange={v => setT('hauteur_m', v)} type="number" placeholder="12" suffix="m" required={tech.fiche_cee !== 'IND-BA-110'} />
@@ -677,8 +677,8 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
 
               {/* ── Section spécifique BAT-TH-163 ── */}
               {tech.fiche_cee === 'BAT-TH-163' && (
-                <div style={{ background: '#0a1a2e', border: '1px solid #1e3a5f', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#60A5FA', marginBottom: 14 }}>♨️ PAC air/eau tertiaire</div>
+                <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', marginBottom: 14 }}>♨️ PAC air/eau tertiaire</div>
 
                   {/* Type PAC */}
                   <div style={{ marginBottom: 14 }}>
@@ -690,9 +690,9 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                       ].map(t => (
                         <button key={t.id} type="button" onClick={() => setT('puissance_pac', t.id)}
                           style={{ flex: 1, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
-                            background: tech.puissance_pac === t.id ? '#172033' : C.bg,
+                            background: tech.puissance_pac === t.id ? '#EFF6FF' : C.bg,
                             border: `1px solid ${tech.puissance_pac === t.id ? C.accent : C.border}` }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: tech.puissance_pac === t.id ? '#60A5FA' : C.text }}>{t.label}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: tech.puissance_pac === t.id ? '#2563EB' : C.text }}>{t.label}</div>
                           <div style={{ fontSize: 10, color: C.textSoft, marginTop: 2 }}>{t.desc}</div>
                         </button>
                       ))}
@@ -711,9 +711,9 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                         ].map(b => (
                           <button key={b.id} type="button" onClick={() => setT('etas_bracket', b.id)}
                             style={{ flex: 1, padding: '8px 6px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 700,
-                              background: tech.etas_bracket === b.id ? '#1e3a5f' : C.bg,
+                              background: tech.etas_bracket === b.id ? '#BFDBFE' : C.bg,
                               border: `1px solid ${tech.etas_bracket === b.id ? C.accent : C.border}`,
-                              color: tech.etas_bracket === b.id ? '#60A5FA' : C.textMid }}>
+                              color: tech.etas_bracket === b.id ? '#2563EB' : C.textMid }}>
                             {b.label}
                           </button>
                         ))}
@@ -732,9 +732,9 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                         ].map(b => (
                           <button key={b.id} type="button" onClick={() => setT('cop_bracket', b.id)}
                             style={{ flex: 1, padding: '8px 6px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 700,
-                              background: tech.cop_bracket === b.id ? '#1e3a5f' : C.bg,
+                              background: tech.cop_bracket === b.id ? '#BFDBFE' : C.bg,
                               border: `1px solid ${tech.cop_bracket === b.id ? C.accent : C.border}`,
-                              color: tech.cop_bracket === b.id ? '#60A5FA' : C.textMid }}>
+                              color: tech.cop_bracket === b.id ? '#2563EB' : C.textMid }}>
                             {b.label}
                           </button>
                         ))}
@@ -756,10 +756,10 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                       ].map(s => (
                         <button key={s.id} type="button" onClick={() => setT('secteur_163', s.id)}
                           style={{ padding: '8px 6px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
-                            background: tech.secteur_163 === s.id ? '#172033' : C.bg,
+                            background: tech.secteur_163 === s.id ? '#EFF6FF' : C.bg,
                             border: `1px solid ${tech.secteur_163 === s.id ? C.accent : C.border}` }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: tech.secteur_163 === s.id ? '#60A5FA' : C.text }}>{s.label}</div>
-                          <div style={{ fontSize: 10, color: tech.secteur_163 === s.id ? '#93c5fd' : C.textSoft }}>{s.facteur}</div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: tech.secteur_163 === s.id ? '#2563EB' : C.text }}>{s.label}</div>
+                          <div style={{ fontSize: 10, color: tech.secteur_163 === s.id ? '#2563EB' : C.textSoft }}>{s.facteur}</div>
                         </button>
                       ))}
                     </div>
@@ -778,10 +778,10 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
               {/* ── Section déstratificateurs (BAT-TH-142 + IND-BA-110) ── */}
               {tech.fiche_cee !== 'BAT-TH-163' && (<>
               {/* Équipements convectifs */}
-              <div style={{ background: '#0a1a2e', border: '1px solid #1e3a5f', borderRadius: 10, padding: '14px 16px', marginBottom: 12 }}>
+              <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <div>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#60A5FA' }}>🌀 Chauffage convectif</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#2563EB' }}>🌀 Chauffage convectif</span>
                     <span style={{ fontSize: 10, color: C.textSoft, marginLeft: 8 }}>chaudière, aérotherme, rooftop, CTA…</span>
                   </div>
                   <button type="button" onClick={addEquipConv}
@@ -801,17 +801,17 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                     canRemove={tech.eqs_conv.length > 1} />
                 ))}
                 {pConvectif > 0 && (
-                  <div style={{ fontSize: 11, color: '#60A5FA', marginTop: 4, textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, color: '#2563EB', marginTop: 4, textAlign: 'right' }}>
                     P convectif total : <strong>{pConvectif.toLocaleString('fr')} kW</strong>
                   </div>
                 )}
               </div>
 
               {/* Équipements radiatifs */}
-              <div style={{ background: '#0a1a2e', border: '1px solid #1e3a5f', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+              <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <div>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#fb923c' }}>☀️ Chauffage radiatif</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#D97706' }}>☀️ Chauffage radiatif</span>
                     <span style={{ fontSize: 10, color: C.textSoft, marginLeft: 8 }}>cassettes, panneaux radiants… (optionnel)</span>
                   </div>
                   <button type="button" onClick={addEquipRad}
@@ -836,15 +836,15 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                     canRemove={true} />
                 ))}
                 {pRadiatif > 0 && (
-                  <div style={{ fontSize: 11, color: '#fb923c', marginTop: 4, textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, color: '#D97706', marginTop: 4, textAlign: 'right' }}>
                     P radiatif total : <strong>{pRadiatif.toLocaleString('fr')} kW</strong>
                   </div>
                 )}
               </div>
 
               {/* Déstratificateurs */}
-              <div style={{ background: '#0a1a2e', border: '1px solid #1e3a5f', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#60A5FA', marginBottom: 12 }}>🌀 Déstratificateurs</div>
+              <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', marginBottom: 12 }}>🌀 Déstratificateurs</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px', marginBottom: 10 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>Débit unitaire</label>
@@ -852,9 +852,9 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                       {['14000', '8500'].map(d => (
                         <button key={d} type="button" onClick={() => setT('debit_unitaire', d)}
                           style={{ flex: 1, padding: '8px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700,
-                            background: tech.debit_unitaire === d ? '#1e3a5f' : C.bg,
+                            background: tech.debit_unitaire === d ? '#BFDBFE' : C.bg,
                             border: `1px solid ${tech.debit_unitaire === d ? C.accent : C.border}`,
-                            color: tech.debit_unitaire === d ? '#60A5FA' : C.textMid }}>
+                            color: tech.debit_unitaire === d ? '#2563EB' : C.textMid }}>
                           {parseInt(d).toLocaleString('fr')} m³/h
                         </button>
                       ))}
@@ -862,7 +862,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>Nb calculé auto</label>
-                    <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', fontSize: 13, fontWeight: 700, color: '#60A5FA', minHeight: 38 }}>
+                    <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', fontSize: 13, fontWeight: 700, color: '#2563EB', minHeight: 38 }}>
                       {tech.nb_destrat_calcule > 0 ? (
                         <>
                           {tech.nb_destrat_calcule}
@@ -892,8 +892,8 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                   </div>
                 </div>
                 {nbDestratEffectif > 0 && tech.cout_unitaire_destrat && (
-                  <div style={{ padding: '8px 12px', background: '#0F172A', borderRadius: 7, fontSize: 12, color: C.textMid }}>
-                    Coût total prestation : <strong style={{ color: '#fb923c' }}>{(nbDestratEffectif * parseFloat(tech.cout_unitaire_destrat || 0)).toLocaleString('fr')} €</strong>
+                  <div style={{ padding: '8px 12px', background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 7, fontSize: 12, color: C.textMid }}>
+                    Coût total prestation : <strong style={{ color: '#D97706' }}>{(nbDestratEffectif * parseFloat(tech.cout_unitaire_destrat || 0)).toLocaleString('fr')} €</strong>
                     <span style={{ marginLeft: 8 }}>({nbDestratEffectif} × {parseFloat(tech.cout_unitaire_destrat || 0).toLocaleString('fr')} €)</span>
                   </div>
                 )}
@@ -913,11 +913,11 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
           {/* ── Étape 4 : Simulation ── */}
           {step === 4 && simulation && (
             <>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, background: '#0a1a2e', border: '1px solid #1e3a5f', borderRadius: 8, padding: '12px 16px' }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 16px' }}>
                 <div style={{ fontSize: 12, color: C.textMid, flex: 1 }}>💰 Prix de valorisation MWh cumac</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <input type="number" value={prixMwh} onChange={e => setPrixMwh(e.target.value)} step="0.1" min="1"
-                    style={{ width: 75, background: C.bg, border: `1px solid ${C.accent}`, borderRadius: 6, padding: '6px 8px', color: '#60A5FA', fontSize: 14, fontWeight: 700, outline: 'none', fontFamily: 'inherit', textAlign: 'right' }} />
+                    style={{ width: 75, background: C.bg, border: `1px solid ${C.accent}`, borderRadius: 6, padding: '6px 8px', color: '#2563EB', fontSize: 14, fontWeight: 700, outline: 'none', fontFamily: 'inherit', textAlign: 'right' }} />
                   <span style={{ fontSize: 12, color: C.textMid }}>€/MWh</span>
                   <button onClick={calculerSimulation} style={{ background: C.accent, border: 'none', color: '#fff', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Recalculer</button>
                 </div>
@@ -926,35 +926,35 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
               {/* Bonification ×3 — BAT-TH-163 uniquement */}
               {tech.fiche_cee === 'BAT-TH-163' && (
                 <div onClick={() => toggleBonification(!bonification163)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 12, background: bonification163 ? '#1a2e1a' : '#0a1a2e', border: `1px solid ${bonification163 ? '#16A34A' : '#1e3a5f'}`, borderRadius: 8, padding: '11px 16px', marginBottom: 14, cursor: 'pointer', userSelect: 'none' }}>
-                  <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${bonification163 ? '#16A34A' : C.border}`, background: bonification163 ? '#16A34A' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, background: bonification163 ? '#F0FDF4' : '#F8FAFC', border: `1px solid ${bonification163 ? '#86EFAC' : C.border}`, borderRadius: 8, padding: '11px 16px', marginBottom: 14, cursor: 'pointer', userSelect: 'none' }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${bonification163 ? '#16A34A' : C.border}`, transition: 'all .15s', background: bonification163 ? '#16A34A' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
                     {bonification163 && <span style={{ color: '#fff', fontSize: 13, fontWeight: 900, lineHeight: 1 }}>✓</span>}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: bonification163 ? '#4ade80' : C.text }}>Activer la bonification ×3</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: bonification163 ? '#16A34A' : C.text }}>Activer la bonification ×3</div>
                     <div style={{ fontSize: 11, color: C.textSoft, marginTop: 2 }}>Multiplie le volume cumac par 3 — prime et rentabilité recalculées</div>
                   </div>
-                  {bonification163 && <span style={{ fontSize: 11, fontWeight: 700, color: '#4ade80', background: '#14532d', borderRadius: 5, padding: '3px 8px' }}>×3 ACTIF</span>}
+                  {bonification163 && <span style={{ fontSize: 11, fontWeight: 700, color: '#16A34A', background: '#DCFCE7', borderRadius: 5, padding: '3px 8px' }}>×3 ACTIF</span>}
                 </div>
               )}
 
               {/* Résumé technique */}
-              <div style={{ background: '#0a1120', border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: C.textMid, lineHeight: 1.7 }}>
-                <strong style={{ color: '#60A5FA' }}>{tech.fiche_cee}</strong>
+              <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: C.textMid, lineHeight: 1.7 }}>
+                <strong style={{ color: '#2563EB' }}>{tech.fiche_cee}</strong>
                 {' · '}Zone <strong style={{ color: C.text }}>{tech.zone_climatique}</strong>
                 {tech.hauteur_m && tech.fiche_cee !== 'BAT-TH-163' && <>{' · '}h = <strong style={{ color: C.text }}>{tech.hauteur_m} m</strong></>}
                 {tech.surface_m2 && <>{' · '}{tech.surface_m2} m²</>}
                 {tech.fiche_cee === 'BAT-TH-142' && <>{' · '}{tech.type_local === 'sport_transport' ? 'Sport/Transport' : 'Commerce/Spectacles'}</>}
                 {tech.fiche_cee === 'BAT-TH-163' && <>
                   {' · '}{tech.puissance_pac === 'small' ? '≤400 kW' : '>400 kW'}
-                  {' · '}<span style={{ color: '#60A5FA' }}>
+                  {' · '}<span style={{ color: '#2563EB' }}>
                     {tech.puissance_pac === 'small' ? tech.etas_bracket.replace(/_/g, ' ') : tech.cop_bracket.replace(/_/g, ' ')}
                   </span>
                   {' · '}{tech.secteur_163} (×{FACTEURS_SECTEUR_163[tech.secteur_163]})
                   {' · '}forfait = <strong style={{ color: C.text }}>{simulation.forfait} kWh/m²</strong>
                 </>}
-                {tech.fiche_cee !== 'BAT-TH-163' && pConvectif > 0 && <> · <span style={{ color: '#60A5FA' }}>P_conv = {pConvectif} kW</span></>}
-                {tech.fiche_cee !== 'BAT-TH-163' && pRadiatif > 0  && <> · <span style={{ color: '#fb923c' }}>P_rad = {pRadiatif} kW</span></>}
+                {tech.fiche_cee !== 'BAT-TH-163' && pConvectif > 0 && <> · <span style={{ color: '#2563EB' }}>P_conv = {pConvectif} kW</span></>}
+                {tech.fiche_cee !== 'BAT-TH-163' && pRadiatif > 0  && <> · <span style={{ color: '#D97706' }}>P_rad = {pRadiatif} kW</span></>}
                 {tech.fiche_cee !== 'BAT-TH-163' && simulation.coeffConv > 0 && <> · coeff = <strong style={{ color: C.text }}>{simulation.coeffConv}</strong> kWh/kW{simulation.bracket ? ` (${simulation.bracket})` : ''}</>}
               </div>
 
@@ -973,36 +973,36 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                 {/* Prime CEE brute */}
                 <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
                   <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 4 }}>💶 Prime CEE brute</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: '#a78bfa' }}>{simulation.prime?.toLocaleString('fr')} €</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#7C3AED' }}>{simulation.prime?.toLocaleString('fr')} €</div>
                   <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>{simulation.kwhCumac?.toLocaleString('fr')} kWh × {simulation.prixMwh}/1000</div>
                 </div>
 
                 {/* Prime CEE nette */}
                 <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
                   <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 4 }}>💵 Prime CEE nette <span style={{ color: '#475569' }}>(hors TVA 10%)</span></div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: '#818cf8' }}>{simulation.primeNette?.toLocaleString('fr')} €</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#6366F1' }}>{simulation.primeNette?.toLocaleString('fr')} €</div>
                   <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>{simulation.prime?.toLocaleString('fr')} € × 0,9</div>
                 </div>
 
                 {/* Coût prestation */}
                 <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
                   <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 4 }}>🔧 Coût prestation</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: '#fb923c' }}>{simulation.coutTotal?.toLocaleString('fr')} €</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#D97706' }}>{simulation.coutTotal?.toLocaleString('fr')} €</div>
                   <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>
                     {tech.fiche_cee === 'BAT-TH-163' ? 'Coût installation PAC' : `${simulation.nbDestrat} destrats × ${parseFloat(tech.cout_unitaire_destrat).toLocaleString('fr')} €`}
                   </div>
                 </div>
 
                 {/* Marge nette — pleine largeur */}
-                <div style={{ gridColumn: '1/-1', background: simulation.margeNette > 0 ? '#052e16' : '#1c0a00', border: `1px solid ${simulation.margeNette > 0 ? '#166534' : '#7f1d1d'}`, borderRadius: 10, padding: '14px 16px' }}>
+                <div style={{ gridColumn: '1/-1', background: simulation.margeNette > 0 ? '#F0FDF4' : '#FEF2F2', border: `1px solid ${simulation.margeNette > 0 ? '#86EFAC' : '#FECACA'}`, borderRadius: 10, padding: '14px 16px' }}>
                   <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 4 }}>{simulation.margeNette > 0 ? '✅' : '❌'} Marge nette</div>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: simulation.margeNette > 0 ? '#4ade80' : '#ef4444' }}>{simulation.margeNette?.toLocaleString('fr')} €</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: simulation.margeNette > 0 ? '#16A34A' : '#DC2626' }}>{simulation.margeNette?.toLocaleString('fr')} €</div>
                   <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>Prime nette ({simulation.primeNette?.toLocaleString('fr')} €) − Coût prestation ({simulation.coutTotal?.toLocaleString('fr')} €)</div>
                 </div>
               </div>
 
-              <div style={{ background: simulation.margeNette > 0 ? '#052e16' : '#1c0a00', border: `1px solid ${simulation.margeNette > 0 ? '#166534' : '#92400e'}`, borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12 }}>
-                <strong style={{ color: simulation.margeNette > 0 ? '#4ade80' : '#fb923c' }}>{simulation.margeNette > 0 ? '✅ Opération rentable' : '⚠️ Opération déficitaire'}</strong>
+              <div style={{ background: simulation.margeNette > 0 ? '#F0FDF4' : '#FFF7ED', border: `1px solid ${simulation.margeNette > 0 ? '#86EFAC' : '#FED7AA'}`, borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12 }}>
+                <strong style={{ color: simulation.margeNette > 0 ? '#16A34A' : '#D97706' }}>{simulation.margeNette > 0 ? '✅ Opération rentable' : '⚠️ Opération déficitaire'}</strong>
                 <span style={{ color: C.textMid, marginLeft: 8 }}>{client.raison_sociale} · Zone {tech.zone_climatique}{tech.hauteur_m ? ` · h=${tech.hauteur_m}m` : ''}</span>
               </div>
 
@@ -1016,7 +1016,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                 </div>
               )}
 
-              {error && <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', color: '#fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 14 }}>{error}</div>}
+              {error && <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 14 }}>{error}</div>}
 
               <div style={{ display: 'flex', gap: 10 }}>
                 <button onClick={() => setStep(3)} style={{ flex: 1, padding: '11px', background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← Retour</button>

@@ -404,123 +404,7 @@ Expert CEE. Titres/descriptions max 80 caractères.
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// MODULE 2 — CHECKLIST CEE
-// ════════════════════════════════════════════════════════════════════════════
-const FICHES_C = {"BAT-TH-142":{label:"BAT-TH-142",sections:[
-  {id:"b",title:"Bénéficiaire",icon:"🏢",items:[{id:"b1",label:"Raison sociale renseignée"},{id:"b2",label:"Numéro SIREN (9 chiffres)"},{id:"b3",label:"Nom et prénom du signataire"},{id:"b4",label:"Fonction du signataire"},{id:"b5",label:"Adresse complète (rue, CP, ville)"},{id:"b6",label:"Email renseigné"},{id:"b7",label:"Case propriétaire/locataire cochée"},{id:"b8",label:"Signature et cachet présents"}]},
-  {id:"site",title:"Site & Vérification",icon:"📍",items:[{id:"s1",label:"Adresse du site renseignée"},{id:"s2",label:"Adresse vérifiée sur Google Maps"},{id:"s3",label:"SIREN vérifié sur Pappers"},{id:"s4",label:"Raison sociale correspond au SIREN"},{id:"s5",label:"Type de local coché"}]},
-  {id:"d",title:"Dates & Références",icon:"📅",items:[{id:"d1",label:"Date d'engagement renseignée (date devis)"},{id:"d2",label:"Date de réalisation renseignée (date facture)"},{id:"d3",label:"Réalisation postérieure à l'engagement"},{id:"d4",label:"Référence facture renseignée"},{id:"d5",label:"Référence dossier PICPUS présente"}]},
-  {id:"t",title:"Technique",icon:"⚙️",items:[{id:"t1",label:"Hauteur sous plafond (h) ≥ 5 m renseignée"},{id:"t2",label:"Type d'écoulement coché (vertical/horizontal)"},{id:"t3",label:"Vitesse au sol conforme (0,1 à 0,3 m/s)"},{id:"t4",label:"Asservissement à mesure de température coché OUI"},{id:"t5",label:"Bruit < 45 dB au sol coché OUI"},{id:"t6",label:"Puissance chauffage convectif renseignée"},{id:"t7",label:"Nombre de déstratificateurs renseigné"},{id:"t8",label:"Marque et référence équipements renseignées"}]},
-  {id:"p",title:"Professionnel installateur",icon:"👷",items:[{id:"p1",label:"Raison sociale de l'installateur renseignée"},{id:"p2",label:"SIRET installateur renseigné"},{id:"p3",label:"Certification RGE valide à la date des travaux"},{id:"p4",label:"N° certification RGE renseigné"},{id:"p5",label:"Signature et cachet installateur présents"}]},
-]}};
-
-function ChecklistCEE() {
-  const [fiche,setFiche] = useState("BAT-TH-142");
-  const [ref_,setRef_]   = useState("");
-  const [checks,setChecks] = useState({});
-  const def = FICHES_C[fiche];
-  const allItems = def.sections.flatMap(s=>s.items);
-  const ok  = allItems.filter(i=>checks[i.id]==="ok").length;
-  const nok = allItems.filter(i=>checks[i.id]==="nok").length;
-  const na  = allItems.filter(i=>checks[i.id]==="na").length;
-  const done = ok+nok+na;
-  const pct  = allItems.length>0 ? Math.round(done/allItems.length*100) : 0;
-  const toggle = (id,st) => setChecks(p=>({...p,[id]:p[id]===st?undefined:st}));
-
-  return (
-    <div style={{height:"100%",overflowY:"auto",background:C.bg,padding:"24px 28px"}}>
-      <div style={{maxWidth:820,margin:"0 auto"}}>
-        {/* Header */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:12}}>
-          <div>
-            <h2 style={{...T.h2,margin:0,marginBottom:4}}>Checklist de conformité</h2>
-            <p style={{...T.sm,margin:0}}>Vérification manuelle point par point</p>
-          </div>
-          <div style={{display:"flex",gap:10,alignItems:"center"}}>
-            <input value={ref_} onChange={e=>setRef_(e.target.value)} placeholder="Réf. dossier…"
-              style={{border:`1px solid ${C.border}`,borderRadius:7,padding:"8px 12px",color:C.text,fontSize:13,outline:"none",width:180}}/>
-            <select value={fiche} onChange={e=>{setFiche(e.target.value);setChecks({});}}
-              style={{border:`1px solid ${C.border}`,borderRadius:7,padding:"8px 12px",color:C.text,fontSize:13,outline:"none",background:C.surface}}>
-              {Object.keys(FICHES_C).map(k=><option key={k} value={k}>{k}</option>)}
-            </select>
-            <button onClick={()=>setChecks({})} style={{border:`1px solid ${C.border}`,borderRadius:7,padding:"8px 12px",color:C.textMid,fontSize:13,background:C.surface,cursor:"pointer"}}>Réinitialiser</button>
-          </div>
-        </div>
-
-        {/* Barre de progression */}
-        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"16px 20px",marginBottom:20,display:"flex",alignItems:"center",gap:20}}>
-          <div style={{flex:1}}>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.textMid,marginBottom:6}}>
-              <span>Progression</span>
-              <span style={{fontWeight:700,color:C.text}}>{pct}% — {done}/{allItems.length} points</span>
-            </div>
-            <div style={{background:C.bg,borderRadius:999,height:8}}>
-              <div style={{height:"100%",borderRadius:999,width:`${pct}%`,background:nok>0?"#DC2626":pct===100?"#16A34A":C.accent,transition:"width .3s"}}/>
-            </div>
-          </div>
-          <div style={{display:"flex",gap:16}}>
-            {[{l:"Conforme",v:ok,c:"#16A34A"},{l:"Non conf.",v:nok,c:"#DC2626"},{l:"N/A",v:na,c:"#94A3B8"}].map(s=>(
-              <div key={s.l} style={{textAlign:"center"}}>
-                <div style={{fontSize:20,fontWeight:800,color:s.c,lineHeight:1}}>{s.v}</div>
-                <div style={{fontSize:11,color:C.textSoft,marginTop:2}}>{s.l}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Sections */}
-        {def.sections.map(sec=>{
-          const secOk  = sec.items.filter(i=>checks[i.id]==="ok").length;
-          const secNok = sec.items.filter(i=>checks[i.id]==="nok").length;
-          return (
-            <div key={sec.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,marginBottom:12,overflow:"hidden"}}>
-              <div style={{padding:"12px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10}}>
-                <span style={{fontSize:18}}>{sec.icon}</span>
-                <span style={{fontSize:15,fontWeight:700,color:C.text}}>{sec.title}</span>
-                <div style={{marginLeft:"auto",display:"flex",gap:8}}>
-                  {secNok>0 && <span style={{fontSize:12,color:"#DC2626",fontWeight:600}}>{secNok} NOK</span>}
-                  <span style={{fontSize:12,color:"#16A34A",fontWeight:600}}>{secOk}/{sec.items.length} OK</span>
-                </div>
-              </div>
-              {sec.items.map((item,idx)=>{
-                const st = checks[item.id];
-                return (
-                  <div key={item.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 18px",background:idx%2===0?C.surface:C.bg,borderBottom:idx<sec.items.length-1?`1px solid ${C.border}`:"none"}}>
-                    <div style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:st==="ok"?"#16A34A":st==="nok"?"#DC2626":st==="na"?"#94A3B8":"#E2E8F0",border:`2px solid ${st==="ok"?"#16A34A":st==="nok"?"#DC2626":st==="na"?"#94A3B8":"#CBD5E1"}`}}/>
-                    <span style={{flex:1,fontSize:13,color:st==="nok"?"#DC2626":st==="ok"?"#16A34A":C.text,lineHeight:1.4}}>{item.label}</span>
-                    <div style={{display:"flex",gap:6,flexShrink:0}}>
-                      {[{s:"ok",l:"✓ Conforme"},{s:"nok",l:"✗ Non conf."},{s:"na",l:"N/A"}].map(btn=>(
-                        <button key={btn.s} onClick={()=>toggle(item.id,btn.s)}
-                          style={{padding:"5px 10px",borderRadius:6,fontSize:12,fontWeight:st===btn.s?700:400,cursor:"pointer",
-                            border:`1.5px solid ${st===btn.s?(btn.s==="ok"?"#16A34A":btn.s==="nok"?"#DC2626":"#94A3B8"):C.border}`,
-                            background:st===btn.s?(btn.s==="ok"?"#F0FDF4":btn.s==="nok"?"#FEF2F2":"#F8FAFC"):C.surface,
-                            color:st===btn.s?(btn.s==="ok"?"#16A34A":btn.s==="nok"?"#DC2626":"#64748B"):C.textSoft}}>
-                          {btn.l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-
-        {/* Résultat final */}
-        {done===allItems.length && allItems.length>0 && (
-          <div style={{marginTop:8,background:nok===0?"#F0FDF4":"#FEF2F2",border:`1.5px solid ${nok===0?"#86EFAC":"#FCA5A5"}`,borderRadius:10,padding:"20px 24px",textAlign:"center"}}>
-            <div style={{fontSize:28,marginBottom:6}}>{nok===0?"✅":"⚠️"}</div>
-            <div style={{fontSize:16,fontWeight:700,color:nok===0?"#16A34A":"#DC2626",marginBottom:4}}>{nok===0?"Dossier conforme !":`${nok} point(s) non conforme(s)`}</div>
-            <div style={{fontSize:13,color:C.textMid}}>{ref_&&`${ref_} — `}{ok} conformes · {nok} non conformes · {na} N/A</div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// MODULE 3 — MARGES + DEVIS (multi-devis)
+// MODULE 2 — MARGES + DEVIS (multi-devis)
 // ════════════════════════════════════════════════════════════════════════════
 
 const LIGNES_DEFAUT = [
@@ -1964,7 +1848,6 @@ function MargesDevis({ prefill }) {
 // ════════════════════════════════════════════════════════════════════════════
 const MODULES = [
   {id:"verificateur",icon:"🔍",titre:"Vérificateur CEE",sousTitre:"Analyse IA de dossier",desc:"Uploadez l'AH et le devis, Claude détecte automatiquement toutes les incohérences et génère un rapport de conformité.",tags:["AH","Devis","IA","Rapport"],couleur:"#6366F1",actif:true},
-  {id:"checklist",   icon:"✅",titre:"Checklist CEE",    sousTitre:"Vérification manuelle",   desc:"Contrôle point par point de l'AH : bénéficiaire, site, dates, technique, professionnel. Progression en temps réel.",tags:["Conformité","BAT-TH-142","Manuel"],couleur:"#16A34A",actif:true},
   {id:"marges",      icon:"📊",titre:"Générateur de devis",sousTitre:"Marges + export PDF",      desc:"Calculez vos marges sur le devis prestataire et générez le devis client AF2E (3 pages) en temps réel.",tags:["Marge","Devis AF2E","3 pages","PDF"],couleur:"#2563EB",actif:true},
   {id:"dimensionnement",icon:"📐",titre:"Dimensionnement",sousTitre:"Calcul déstratificateurs",desc:"Calcul automatique du nombre de déstratificateurs selon BAT-TH-142 : surface, hauteur, puissance → PDF.",tags:["Calcul","BAT-TH-142","PDF"],couleur:"#7C3AED",actif:false},
   {id:"rentabilite", icon:"📈",titre:"Rentabilité",      sousTitre:"Coût / CEE / Marge",       desc:"Volume CEE généré, coût acquisition, prime PICPUS estimée, ROI et analyse de rentabilité complète.",tags:["CEE","MWh cumac","ROI"],couleur:"#DB2777",actif:false},
@@ -1973,7 +1856,6 @@ const MODULES = [
 
 const renderModule = (page, prefill) => {
   if (page === "verificateur") return <VerificateurCEE prefill={prefill} />;
-  if (page === "checklist")    return <ChecklistCEE />;
   if (page === "marges")       return <MargesDevis prefill={prefill} />;
   return null;
 };

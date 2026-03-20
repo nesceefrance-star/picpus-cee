@@ -25,6 +25,18 @@ import CheckIcon from '@mui/icons-material/Check'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 
+// ── Palette claire ────────────────────────────────────────────────────────────
+const C = {
+  bg:       '#F1F5F9',
+  surface:  '#FFFFFF',
+  border:   '#E2E8F0',
+  borderMid:'#CBD5E1',
+  text:     '#0F172A',
+  textMid:  '#475569',
+  textSoft: '#94A3B8',
+  hover:    '#F8FAFC',
+}
+
 const STATUT_LABELS = {
   simulation: 'Simulation', prospect: 'Prospect', contacte: 'Contacté',
   visio_planifiee: 'Visio planifiée', visio_effectuee: 'Visio effectuée',
@@ -64,73 +76,80 @@ function DossierRow({ dossier, expanded, onToggleExpand }) {
       .then(({ data }) => setActiviteHistory(data || []))
   }, [expanded, dossierId])
 
+  const statutColor = STATUT_COLORS[statut] || C.textSoft
+
   return (
-    <Paper sx={{ mb: 1.5, background: '#1E293B', border: '1px solid #334155', borderRadius: 2, overflow: 'hidden' }}>
+    <Paper elevation={0} sx={{ mb: 1.5, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 2, overflow: 'hidden', transition: 'box-shadow .15s', '&:hover': { boxShadow: '0 2px 8px rgba(0,0,0,.07)' } }}>
       {/* Header */}
       <Box
         onClick={() => onToggleExpand(dossierId)}
-        sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.2, cursor: 'pointer', '&:hover': { background: '#273549' }, transition: 'background .15s' }}
+        sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2.5, py: 1.5, cursor: 'pointer', '&:hover': { background: C.hover }, transition: 'background .12s' }}
       >
+        {/* Barre couleur statut */}
+        <Box sx={{ width: 3, height: 36, borderRadius: 2, background: statutColor, flexShrink: 0 }} />
+
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{dossierRef}</Typography>
-            <Typography sx={{ fontSize: 13, color: '#94A3B8' }}>{prospect?.raison_sociale}</Typography>
+            <Typography sx={{ fontSize: 13, fontWeight: 700, color: C.text }}>{dossierRef}</Typography>
+            <Typography sx={{ fontSize: 13, color: C.textMid }}>{prospect?.raison_sociale}</Typography>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1, mt: 0.2, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', gap: 1, mt: 0.2, flexWrap: 'wrap', alignItems: 'center' }}>
             {commercial && (
-              <Typography sx={{ fontSize: 11, color: '#64748B' }}>
+              <Typography sx={{ fontSize: 11, color: C.textSoft }}>
                 {commercial.prenom} {commercial.nom} ·
               </Typography>
             )}
-            <Typography sx={{ fontSize: 11, color: '#64748B' }}>{ficheCee}</Typography>
+            <Typography sx={{ fontSize: 11, color: C.textSoft }}>{ficheCee}</Typography>
           </Box>
         </Box>
 
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexShrink: 0 }}>
           {relanceBucket && (
             <Chip label={relanceBucket} size="small" sx={{ height: 20, fontSize: 10, fontWeight: 700,
-              background: relanceBucket === 'J+7' ? '#1d4ed8' : relanceBucket === 'J+14' ? '#6d28d9' : '#991b1b', color: '#fff' }} />
+              background: relanceBucket === 'J+7' ? '#DBEAFE' : relanceBucket === 'J+14' ? '#EDE9FE' : '#FEE2E2',
+              color:      relanceBucket === 'J+7' ? '#1D4ED8' : relanceBucket === 'J+14' ? '#6D28D9' : '#991B1B',
+            }} />
           )}
           <Chip
             label={STATUT_LABELS[statut] || statut}
             size="small"
             sx={{ height: 22, fontSize: 11, fontWeight: 600,
-              background: (STATUT_COLORS[statut] || '#334155') + '33',
-              color: STATUT_COLORS[statut] || '#94A3B8',
-              border: `1px solid ${(STATUT_COLORS[statut] || '#334155')}55` }}
+              background: statutColor + '18',
+              color: statutColor,
+              border: `1px solid ${statutColor}44` }}
           />
-          {daysSince > 0 && <Typography sx={{ fontSize: 11, color: '#64748B' }}>J+{daysSince}</Typography>}
-          {totalGens > 0 && <Chip label={`${totalGens} email${totalGens > 1 ? 's' : ''}`} size="small" sx={{ height: 20, fontSize: 10, background: '#064e3b', color: '#6ee7b7' }} />}
-          {expanded ? <ExpandLessIcon sx={{ color: '#64748B', fontSize: 18 }} /> : <ExpandMoreIcon sx={{ color: '#64748B', fontSize: 18 }} />}
+          {daysSince > 0 && <Typography sx={{ fontSize: 11, color: C.textSoft }}>J+{daysSince}</Typography>}
+          {totalGens > 0 && <Chip label={`${totalGens} email${totalGens > 1 ? 's' : ''}`} size="small" sx={{ height: 20, fontSize: 10, background: '#ECFDF5', color: '#059669', border: '1px solid #A7F3D0' }} />}
+          {expanded ? <ExpandLessIcon sx={{ color: C.textSoft, fontSize: 18 }} /> : <ExpandMoreIcon sx={{ color: C.textSoft, fontSize: 18 }} />}
         </Box>
       </Box>
 
       {/* Détail */}
       <Collapse in={expanded}>
-        <Box sx={{ px: 2, pb: 2, pt: 0.5 }}>
-          <Divider sx={{ borderColor: '#334155', mb: 1.5 }} />
+        <Box sx={{ px: 3, pb: 2.5, pt: 0.5 }}>
+          <Divider sx={{ borderColor: C.border, mb: 1.5 }} />
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             {prospect?.contact_email && (
-              <Typography sx={{ fontSize: 12, color: '#94A3B8' }}>📧 {prospect.contact_email}</Typography>
+              <Typography sx={{ fontSize: 12, color: C.textMid }}>📧 {prospect.contact_email}</Typography>
             )}
             {prospect?.contact_tel && (
-              <Typography sx={{ fontSize: 12, color: '#94A3B8' }}>📞 {prospect.contact_tel}</Typography>
+              <Typography sx={{ fontSize: 12, color: C.textMid }}>📞 {prospect.contact_tel}</Typography>
             )}
           </Box>
           {/* Historique activités */}
           {activiteHistory.length > 0 && (
             <Box sx={{ mt: 1.5 }}>
-              <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '.06em', mb: 1 }}>
+              <Typography sx={{ fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', mb: 1 }}>
                 Historique
               </Typography>
               {activiteHistory.map((a, i) => {
                 const ICON = { note: '📝', appel: '📞', email: '✉️', rdv: '📅', statut: '🔄', document: '📎', devis: '📄' }
                 return (
-                  <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', py: 0.4, borderBottom: i < activiteHistory.length - 1 ? '1px solid #1E293B' : 'none' }}>
-                    <Typography sx={{ fontSize: 12, color: a.type === 'statut' ? '#60A5FA' : '#94A3B8' }}>
+                  <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', py: 0.5, borderBottom: i < activiteHistory.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                    <Typography sx={{ fontSize: 12, color: a.type === 'statut' ? '#2563EB' : C.textMid }}>
                       {ICON[a.type] || '·'} {a.contenu}
                     </Typography>
-                    <Typography sx={{ fontSize: 10, color: '#475569', flexShrink: 0, ml: 1 }}>
+                    <Typography sx={{ fontSize: 10, color: C.textSoft, flexShrink: 0, ml: 1 }}>
                       {new Date(a.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' })}
                     </Typography>
                   </Box>
@@ -142,27 +161,27 @@ function DossierRow({ dossier, expanded, onToggleExpand }) {
           {/* Emails générés */}
           {Object.keys(generations || {}).length > 0 && (
             <Box sx={{ mt: 1.5 }}>
-              <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '.06em', mb: 1 }}>
+              <Typography sx={{ fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', mb: 1 }}>
                 Emails générés
               </Typography>
               {Object.entries(generations).map(([type, gen]) => {
                 const typeConfig = EMAIL_TYPES.find(t => t.key === type)
                 return (
-                  <Box key={type} sx={{ mb: 1, p: 1.2, background: '#0F172A', borderRadius: 1.5, border: '1px solid #1e293b' }}>
+                  <Box key={type} sx={{ mb: 1, p: 1.5, background: '#F8FAFC', borderRadius: 1.5, border: `1px solid ${C.border}` }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                      <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#60A5FA' }}>
+                      <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#2563EB' }}>
                         {typeConfig?.label || type}
                       </Typography>
-                      <Typography sx={{ fontSize: 11, color: '#475569' }}>
+                      <Typography sx={{ fontSize: 11, color: C.textSoft }}>
                         {new Date(gen.updated_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                       </Typography>
                     </Box>
                     {gen.subject && (
-                      <Typography sx={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic', mb: 0.3 }}>
+                      <Typography sx={{ fontSize: 11, color: C.textMid, fontStyle: 'italic', mb: 0.3 }}>
                         Objet : {gen.subject}
                       </Typography>
                     )}
-                    <Typography sx={{ fontSize: 12, color: '#64748B', whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    <Typography sx={{ fontSize: 12, color: C.textMid, whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                       {gen.body}
                     </Typography>
                   </Box>
@@ -213,33 +232,34 @@ function StyleExemplesTab({ session }) {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography sx={{ fontSize: 13, color: '#94A3B8' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography sx={{ fontSize: 13, color: C.textMid }}>
           Guide et exemples partagés avec tous les commerciaux. Injectés dans le prompt Claude.
         </Typography>
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
           {saved && <Chip icon={<CheckIcon />} label="Sauvegardé" size="small" color="success" />}
           <Button variant="contained" size="small" onClick={handleSave} disabled={saving}
-            startIcon={saving ? <CircularProgress size={14} /> : <SaveIcon fontSize="small" />}>
+            startIcon={saving ? <CircularProgress size={14} /> : <SaveIcon fontSize="small" />}
+            sx={{ textTransform: 'none', fontWeight: 600 }}>
             Sauvegarder
           </Button>
         </Box>
       </Box>
-      {error && <Typography sx={{ fontSize: 12, color: '#FC8181', mb: 2 }}>{error}</Typography>}
+      {error && <Typography sx={{ fontSize: 12, color: '#DC2626', mb: 2 }}>{error}</Typography>}
 
-      <Paper sx={{ background: '#1E293B', border: '1px solid #334155', p: 2, mb: 3, borderRadius: 2 }}>
-        <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#F8FAFC', mb: 1.5 }}>Guide rédactionnel global</Typography>
+      <Paper elevation={0} sx={{ background: C.surface, border: `1px solid ${C.border}`, p: 2.5, mb: 3, borderRadius: 2 }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 700, color: C.text, mb: 1.5 }}>Guide rédactionnel global</Typography>
         <TextField fullWidth multiline minRows={6} value={guide} onChange={e => setGuide(e.target.value)}
           placeholder="Ton, formules clés, ce qu'il faut éviter…"
           sx={{ '& textarea': { fontSize: 13, lineHeight: 1.6 } }} />
       </Paper>
 
-      <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '.06em', mb: 1.5 }}>
+      <Typography sx={{ fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', mb: 1.5 }}>
         Exemples par type
       </Typography>
       {EMAIL_TYPES.map(t => (
-        <Paper key={t.key} sx={{ background: '#1E293B', border: '1px solid #334155', p: 2, mb: 2, borderRadius: 2 }}>
-          <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#F8FAFC', mb: 1 }}>{t.label}</Typography>
+        <Paper key={t.key} elevation={0} sx={{ background: C.surface, border: `1px solid ${C.border}`, p: 2.5, mb: 2, borderRadius: 2 }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 700, color: C.text, mb: 1 }}>{t.label}</Typography>
           <TextField fullWidth multiline minRows={4} value={exemples[t.key] || ''}
             onChange={e => setExemples(prev => ({ ...prev, [t.key]: e.target.value }))}
             placeholder={`Exemple d'email "${t.label}"…`}
@@ -266,12 +286,18 @@ const fmtK = (n) => {
   return n.toFixed(0) + ' €'
 }
 
-function KpiCard({ label, value, sub, color }) {
+function KpiCard({ label, value, sub, color, icon }) {
   return (
-    <Paper sx={{ p: 1.5, background: '#1E293B', border: '1px solid #334155', borderRadius: 2 }}>
-      <Typography sx={{ fontSize: 10, color: '#64748B', textTransform: 'uppercase', letterSpacing: '.06em', mb: 0.5 }}>{label}</Typography>
-      <Typography sx={{ fontSize: 20, fontWeight: 800, color: color || '#F1F5F9', lineHeight: 1.1 }}>{value}</Typography>
-      {sub && <Typography sx={{ fontSize: 10, color: '#475569', mt: 0.3 }}>{sub}</Typography>}
+    <Paper elevation={0} sx={{
+      p: 2.5, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 2,
+      display: 'flex', flexDirection: 'column', gap: 0.5,
+      transition: 'box-shadow .15s', '&:hover': { boxShadow: '0 2px 8px rgba(0,0,0,.07)' }
+    }}>
+      <Typography sx={{ fontSize: 11, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 600 }}>
+        {icon && <span style={{ marginRight: 4 }}>{icon}</span>}{label}
+      </Typography>
+      <Typography sx={{ fontSize: 24, fontWeight: 800, color: color || C.text, lineHeight: 1.1 }}>{value}</Typography>
+      {sub && <Typography sx={{ fontSize: 11, color: C.textSoft }}>{sub}</Typography>}
     </Paper>
   )
 }
@@ -283,6 +309,12 @@ function computeDevisFinancials(devis) {
   const achat = lignes.reduce((s, l) => s + (l.puAchat || 0) * (l.qte || 0), 0)
   return { totalHT, marge: totalHT - achat, prime: devis.prime || 0 }
 }
+
+const sectionTitle = (label) => (
+  <Typography sx={{ fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.08em', mb: 1.5, mt: 3 }}>
+    {label}
+  </Typography>
+)
 
 function DashboardTab() {
   const [stats,   setStats]   = useState(null)
@@ -296,24 +328,24 @@ function DashboardTab() {
         supabase.from('dossiers').select('id, statut, assigne_a, created_at'),
         supabase.from('appels').select('etat, created_at, dossier_id'),
         supabase.from('activites').select('type, created_at, user_id, dossier_id'),
-        supabase.from('profiles').select('user_id, prenom, nom'),
+        supabase.from('profiles').select('id, prenom, nom'),
         supabase.from('devis_hub').select('dossier_id, lignes, prime, bat_qte, bat_pu_vente, created_at'),
         supabase.from('simulations').select('dossier_id, mwh_cumac, created_at'),
       ])
       setStats({
-        dossiers:  dossiersRes.data  || [],
-        appels:    appelsRes.data    || [],
-        activites: activitesRes.data || [],
-        profiles:  profilesRes.data  || [],
-        devis:     devisRes.data     || [],
-        simulations: simuRes.data    || [],
+        dossiers:    dossiersRes.data  || [],
+        appels:      appelsRes.data    || [],
+        activites:   activitesRes.data || [],
+        profiles:    profilesRes.data  || [],
+        devis:       devisRes.data     || [],
+        simulations: simuRes.data      || [],
       })
       setLoading(false)
     }
     load()
   }, [])
 
-  if (loading) return <Box sx={{ textAlign: 'center', py: 6 }}><CircularProgress size={24} /></Box>
+  if (loading) return <Box sx={{ textAlign: 'center', py: 8 }}><CircularProgress size={28} /></Box>
   if (!stats) return null
 
   const { dossiers, appels, activites, profiles, devis, simulations } = stats
@@ -327,7 +359,6 @@ function DashboardTab() {
 
   const PIPELINE = ['simulation','prospect','contacte','visio_planifiee','visio_effectuee','visite_planifiee','visite_effectuee','devis','ah','conforme','facture']
 
-  // Activités filtrées par période
   const appelsP    = appels.filter(inPeriode)
   const activitesP = activites.filter(inPeriode)
   const emailsP    = activitesP.filter(a => a.type === 'email').length
@@ -335,7 +366,6 @@ function DashboardTab() {
   const docsP      = activitesP.filter(a => a.type === 'document').length
   const nouveauxP  = dossiers.filter(inPeriode).length
 
-  // Financier — devis filtrés par période
   const devisP = devis.filter(inPeriode)
   const finTotals = devisP.reduce((acc, dv) => {
     const { totalHT, marge, prime } = computeDevisFinancials(dv)
@@ -343,11 +373,9 @@ function DashboardTab() {
   }, { ca: 0, marge: 0, prime: 0 })
   const margePct = finTotals.ca > 0 ? (finTotals.marge / finTotals.ca * 100).toFixed(1) : '—'
 
-  // MWh cumac — simulations filtrées par période
   const totalMwh = simulations.filter(inPeriode).reduce((s, sim) => s + (sim.mwh_cumac || 0), 0)
 
-  // Par commercial — construit depuis les dossiers (assigne_a) + lookup profil pour le nom
-  const profileMap = Object.fromEntries(profiles.map(p => [p.user_id, p]))
+  const profileMap = Object.fromEntries(profiles.map(p => [p.id, p]))
   const uniqueAssignes = [...new Set(dossiers.map(d => d.assigne_a).filter(Boolean))]
   const perCommercial = uniqueAssignes.map(uid => {
     const p = profileMap[uid] || {}
@@ -371,59 +399,53 @@ function DashboardTab() {
     }
   }).sort((a, b) => b.ca - a.ca)
 
-  const sectionTitle = (label) => (
-    <Typography sx={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '.08em', mb: 1.5, mt: 2.5 }}>
-      {label}
-    </Typography>
-  )
-
   return (
     <Box>
       {/* Filtre période */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
         {PERIODES.map(p => (
           <Chip key={p.key} label={p.label} size="small" onClick={() => setPeriode(p.key)}
-            sx={{ fontSize: 11, fontWeight: 600, cursor: 'pointer', height: 26,
-              background: periode === p.key ? '#3B82F6' : '#1E293B',
-              color: periode === p.key ? '#fff' : '#94A3B8',
-              border: `1px solid ${periode === p.key ? '#3B82F6' : '#334155'}`,
-              '&:hover': { background: periode === p.key ? '#2563EB' : '#273549' },
+            sx={{ fontSize: 12, fontWeight: 600, cursor: 'pointer', height: 28,
+              background: periode === p.key ? '#2563EB' : C.surface,
+              color: periode === p.key ? '#fff' : C.textMid,
+              border: `1px solid ${periode === p.key ? '#2563EB' : C.border}`,
+              '&:hover': { background: periode === p.key ? '#1D4ED8' : C.hover },
             }}
           />
         ))}
-        <Typography sx={{ fontSize: 11, color: '#475569', alignSelf: 'center', ml: 1 }}>
+        <Typography sx={{ fontSize: 11, color: C.textSoft, ml: 0.5 }}>
           {since ? `depuis le ${since.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}` : 'toutes périodes'}
         </Typography>
       </Box>
 
       {/* Pipeline actuel */}
       {sectionTitle('Pipeline actuel')}
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 1.5, mb: 1 }}>
-        <KpiCard label="Dossiers actifs"    value={dossiers.filter(d => !['facture','archive'].includes(d.statut)).length} color="#60A5FA" />
-        <KpiCard label="Visio planifiées"   value={byStatut['visio_planifiee']  || 0} color="#06B6D4" />
-        <KpiCard label="Visite planifiées"  value={byStatut['visite_planifiee'] || 0} color="#F59E0B" />
-        <KpiCard label="Devis envoyés"      value={byStatut['devis'] || 0}            color="#8B5CF6" />
-        <KpiCard label="AH signés"          value={byStatut['ah']    || 0}            color="#10B981" />
-        <KpiCard label="Facturés"           value={byStatut['facture'] || 0}          color="#047857" />
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 1.5 }}>
+        <KpiCard label="Dossiers actifs"   value={dossiers.filter(d => !['facture','archive'].includes(d.statut)).length} color="#2563EB" icon="📁" />
+        <KpiCard label="Visio planifiées"  value={byStatut['visio_planifiee']  || 0} color="#0891B2" icon="🎥" />
+        <KpiCard label="Visite planifiées" value={byStatut['visite_planifiee'] || 0} color="#D97706" icon="🏠" />
+        <KpiCard label="Devis envoyés"     value={byStatut['devis'] || 0}            color="#7C3AED" icon="📄" />
+        <KpiCard label="AH signés"         value={byStatut['ah']    || 0}            color="#059669" icon="✅" />
+        <KpiCard label="Facturés"          value={byStatut['facture'] || 0}          color="#047857" icon="💰" />
       </Box>
 
       {/* Financier */}
-      {sectionTitle(`Financier (${periodeConf?.label})`)}
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 1.5, mb: 1 }}>
-        <KpiCard label="CA devis"    value={fmtK(finTotals.ca)}    color="#60A5FA" sub={`${devisP.length} devis`} />
-        <KpiCard label="Marge brute" value={fmtK(finTotals.marge)} color={finTotals.marge >= 0 ? '#10B981' : '#EF4444'} sub={margePct !== '—' ? `${margePct}% du CA` : undefined} />
-        <KpiCard label="Prime CEE"   value={fmtK(finTotals.prime)} color="#8B5CF6" />
-        <KpiCard label="MWh cumac"   value={totalMwh > 0 ? `${totalMwh.toFixed(0)} MWh` : '—'} color="#F59E0B" />
-        <KpiCard label="Nouveaux dossiers" value={nouveauxP} color="#64748B" />
+      {sectionTitle(`Financier — ${periodeConf?.label}`)}
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 1.5 }}>
+        <KpiCard label="CA devis"          value={fmtK(finTotals.ca)}    color="#2563EB" sub={`${devisP.length} devis`} icon="📊" />
+        <KpiCard label="Marge brute"       value={fmtK(finTotals.marge)} color={finTotals.marge >= 0 ? '#059669' : '#DC2626'} sub={margePct !== '—' ? `${margePct}% du CA` : undefined} icon="📈" />
+        <KpiCard label="Prime CEE"         value={fmtK(finTotals.prime)} color="#7C3AED" icon="⚡" />
+        <KpiCard label="MWh cumac"         value={totalMwh > 0 ? `${totalMwh.toFixed(0)} MWh` : '—'} color="#D97706" icon="🔋" />
+        <KpiCard label="Nouveaux dossiers" value={nouveauxP}             color={C.textMid} icon="🆕" />
       </Box>
 
       {/* Activité */}
-      {sectionTitle(`Activité (${periodeConf?.label})`)}
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 1.5, mb: 1 }}>
-        <KpiCard label="Appels"   value={appelsP.length} color="#64748B" />
-        <KpiCard label="Emails"   value={emailsP}        color="#6366F1" />
-        <KpiCard label="RDV"      value={rdvsP}          color="#EC4899" />
-        <KpiCard label="Documents" value={docsP}         color="#78716C" />
+      {sectionTitle(`Activité — ${periodeConf?.label}`)}
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 1.5 }}>
+        <KpiCard label="Appels"    value={appelsP.length} color={C.textMid} icon="📞" />
+        <KpiCard label="Emails"    value={emailsP}        color="#4F46E5"   icon="✉️" />
+        <KpiCard label="RDV"       value={rdvsP}          color="#DB2777"   icon="📅" />
+        <KpiCard label="Documents" value={docsP}          color="#78716C"   icon="📎" />
       </Box>
 
       {/* Pipeline détaillé */}
@@ -433,10 +455,10 @@ function DashboardTab() {
           const n = byStatut[s] || 0; if (!n) return null
           return (
             <Chip key={s} size="small" label={`${STATUT_LABELS[s] || s} · ${n}`}
-              sx={{ height: 24, fontSize: 11, fontWeight: 600,
-                background: (STATUT_COLORS[s] || '#334155') + '33',
-                color: STATUT_COLORS[s] || '#94A3B8',
-                border: `1px solid ${(STATUT_COLORS[s] || '#334155')}55` }}
+              sx={{ height: 26, fontSize: 11, fontWeight: 600,
+                background: (STATUT_COLORS[s] || C.border) + '18',
+                color: STATUT_COLORS[s] || C.textSoft,
+                border: `1px solid ${(STATUT_COLORS[s] || C.borderMid)}44` }}
             />
           )
         })}
@@ -446,36 +468,45 @@ function DashboardTab() {
       {perCommercial.length > 0 && (
         <>
           {sectionTitle('Par commercial')}
-          <Box sx={{ overflowX: 'auto' }}>
-            <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <Box component="thead">
-                <Box component="tr" sx={{ color: '#475569', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>
-                  {['Commercial','Actifs','Visio','Visite','Devis','CA','Marge','Prime CEE','MWh cumac'].map(h => (
-                    <Box component="th" key={h} sx={{ textAlign: h === 'Commercial' ? 'left' : 'right', pb: 1, pr: 2, fontWeight: 700, whiteSpace: 'nowrap' }}>{h}</Box>
+          <Paper elevation={0} sx={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 2, overflow: 'hidden' }}>
+            <Box sx={{ overflowX: 'auto' }}>
+              <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <Box component="thead">
+                  <Box component="tr" sx={{ background: '#F8FAFC', borderBottom: `1px solid ${C.border}` }}>
+                    {['Commercial','Actifs','Visio','Visite','Devis','CA','Marge','Prime CEE','MWh cumac'].map(h => (
+                      <Box component="th" key={h} sx={{
+                        textAlign: h === 'Commercial' ? 'left' : 'right',
+                        py: 1.2, px: 2, fontSize: 10, fontWeight: 700, color: C.textSoft,
+                        textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap'
+                      }}>{h}</Box>
+                    ))}
+                  </Box>
+                </Box>
+                <Box component="tbody">
+                  {perCommercial.map((p, idx) => (
+                    <Box component="tr" key={p.uid} sx={{
+                      borderBottom: idx < perCommercial.length - 1 ? `1px solid ${C.border}` : 'none',
+                      '&:hover': { background: C.hover }
+                    }}>
+                      {[
+                        { v: p.nom,    align: 'left',  color: C.text,   fw: 700 },
+                        { v: p.actifs, align: 'right', color: '#2563EB' },
+                        { v: p.visios, align: 'right', color: '#0891B2' },
+                        { v: p.visites,align: 'right', color: '#D97706' },
+                        { v: p.devisN, align: 'right', color: '#7C3AED' },
+                        { v: fmtK(p.ca),    align: 'right', color: '#2563EB' },
+                        { v: fmtK(p.marge), align: 'right', color: p.marge >= 0 ? '#059669' : '#DC2626' },
+                        { v: fmtK(p.prime), align: 'right', color: '#7C3AED' },
+                        { v: p.mwh > 0 ? `${p.mwh.toFixed(0)} MWh` : '—', align: 'right', color: '#D97706' },
+                      ].map((c, i) => (
+                        <Box component="td" key={i} sx={{ py: 1.2, px: 2, textAlign: c.align, color: c.color, fontWeight: c.fw || 500, whiteSpace: 'nowrap', fontSize: 13 }}>{c.v}</Box>
+                      ))}
+                    </Box>
                   ))}
                 </Box>
               </Box>
-              <Box component="tbody">
-                {perCommercial.map(p => (
-                  <Box component="tr" key={p.uid} sx={{ borderTop: '1px solid #1E293B', '&:hover td': { background: '#273549' } }}>
-                    {[
-                      { v: p.nom, align: 'left', color: '#F1F5F9', fw: 700 },
-                      { v: p.actifs,  align: 'right', color: '#60A5FA' },
-                      { v: p.visios,  align: 'right', color: '#06B6D4' },
-                      { v: p.visites, align: 'right', color: '#F59E0B' },
-                      { v: p.devisN,  align: 'right', color: '#8B5CF6' },
-                      { v: fmtK(p.ca),    align: 'right', color: '#60A5FA' },
-                      { v: fmtK(p.marge), align: 'right', color: p.marge >= 0 ? '#10B981' : '#EF4444' },
-                      { v: fmtK(p.prime), align: 'right', color: '#8B5CF6' },
-                      { v: p.mwh > 0 ? `${p.mwh.toFixed(0)} MWh` : '—', align: 'right', color: '#F59E0B' },
-                    ].map((c, i) => (
-                      <Box component="td" key={i} sx={{ py: 1, pr: 2, textAlign: c.align, color: c.color, fontWeight: c.fw || 400, whiteSpace: 'nowrap' }}>{c.v}</Box>
-                    ))}
-                  </Box>
-                ))}
-              </Box>
             </Box>
-          </Box>
+          </Paper>
         </>
       )}
     </Box>
@@ -484,15 +515,16 @@ function DashboardTab() {
 
 // ── Onglet Activité équipe ────────────────────────────────────────────────────
 
-const TYPE_ICON = { note: '📝', appel: '📞', email: '✉️', rdv: '📅', statut: '🔄', document: '📎', devis: '📄' }
+const TYPE_ICON  = { note: '📝', appel: '📞', email: '✉️', rdv: '📅', statut: '🔄', document: '📎', devis: '📄' }
 const TYPE_LABEL = { note: 'Note', appel: 'Appel', email: 'Email', rdv: 'RDV', statut: 'Statut', document: 'Document', devis: 'Devis' }
+const TYPE_COLOR = { appel: '#0891B2', email: '#4F46E5', rdv: '#DB2777', document: '#78716C', devis: '#7C3AED', note: '#64748B', statut: '#2563EB' }
 
 function ActiviteEquipeTab() {
-  const [activites, setActivites]     = useState([])
-  const [loading, setLoading]         = useState(true)
-  const [typeFilter, setTypeFilter]   = useState('all')
+  const [activites, setActivites]               = useState([])
+  const [loading, setLoading]                   = useState(true)
+  const [typeFilter, setTypeFilter]             = useState('all')
   const [commercialFilter, setCommercialFilter] = useState('all')
-  const [profiles, setProfiles]       = useState([])
+  const [profiles, setProfiles]                 = useState([])
 
   const fetchActivites = useCallback(async () => {
     setLoading(true)
@@ -501,7 +533,7 @@ function ActiviteEquipeTab() {
         .select('*, dossiers(ref, prospects(raison_sociale))')
         .order('created_at', { ascending: false })
         .limit(200),
-      supabase.from('profiles').select('user_id, prenom, nom'),
+      supabase.from('profiles').select('id, prenom, nom'),
     ])
     setActivites(actRes.data || [])
     setProfiles(profRes.data || [])
@@ -514,12 +546,21 @@ function ActiviteEquipeTab() {
     .filter(a => typeFilter === 'all' || a.type === typeFilter)
     .filter(a => commercialFilter === 'all' || a.user_id === commercialFilter)
 
+  const filterChip = (active, label, onClick) => (
+    <Chip label={label} size="small" onClick={onClick}
+      sx={{ cursor: 'pointer', fontSize: 11, fontWeight: active ? 700 : 500, height: 26,
+        background: active ? '#2563EB' : C.surface, color: active ? '#fff' : C.textMid,
+        border: `1px solid ${active ? '#2563EB' : C.border}`,
+        '&:hover': { background: active ? '#1D4ED8' : C.hover } }}
+    />
+  )
+
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography sx={{ fontSize: 13, color: '#94A3B8' }}>100 dernières activités de l'équipe</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
+        <Typography sx={{ fontSize: 13, color: C.textMid }}>200 dernières activités de l'équipe</Typography>
         <Button variant="outlined" size="small" onClick={fetchActivites} disabled={loading}
-          sx={{ fontSize: 12, textTransform: 'none', borderColor: '#334155', color: '#94A3B8' }}>
+          sx={{ fontSize: 12, textTransform: 'none', borderColor: C.border, color: C.textMid, '&:hover': { borderColor: C.borderMid } }}>
           ↻ Actualiser
         </Button>
       </Box>
@@ -527,62 +568,56 @@ function ActiviteEquipeTab() {
       {/* Filtre par commercial */}
       {profiles.length > 0 && (
         <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Typography sx={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>Commercial :</Typography>
-          {[{ user_id: 'all', prenom: 'Tous', nom: '' }, ...profiles].map(p => (
-            <Chip key={p.user_id} size="small"
-              label={p.user_id === 'all' ? 'Tous' : `${p.prenom} ${p.nom}`}
-              onClick={() => setCommercialFilter(p.user_id)}
-              sx={{ cursor: 'pointer', fontSize: 11, fontWeight: commercialFilter === p.user_id ? 700 : 400,
-                background: commercialFilter === p.user_id ? '#2563EB' : '#1E293B',
-                color: commercialFilter === p.user_id ? '#fff' : '#94A3B8',
-                border: `1px solid ${commercialFilter === p.user_id ? '#2563EB' : '#334155'}` }}
-            />
+          <Typography sx={{ fontSize: 11, color: C.textSoft, fontWeight: 600, mr: 0.5 }}>Commercial :</Typography>
+          {filterChip(commercialFilter === 'all', 'Tous', () => setCommercialFilter('all'))}
+          {profiles.map(p => filterChip(
+            commercialFilter === p.id,
+            `${p.prenom} ${p.nom}`,
+            () => setCommercialFilter(p.id)
           ))}
         </Box>
       )}
 
       {/* Filtre par type */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 2.5, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
         {['all', 'appel', 'rdv', 'email', 'document', 'devis', 'note', 'statut'].map(t => (
-          <Chip
-            key={t}
-            label={t === 'all' ? 'Tout' : (TYPE_LABEL[t] || t)}
-            size="small"
-            onClick={() => setTypeFilter(t)}
-            sx={{
-              cursor: 'pointer',
-              background: typeFilter === t ? '#3B82F6' : '#1E293B',
-              color: typeFilter === t ? '#fff' : '#94A3B8',
-              border: `1px solid ${typeFilter === t ? '#3B82F6' : '#334155'}`,
-              fontSize: 11,
-              fontWeight: typeFilter === t ? 700 : 400,
-            }}
-          />
+          filterChip(
+            typeFilter === t,
+            t === 'all' ? 'Tout' : (TYPE_LABEL[t] || t),
+            () => setTypeFilter(t)
+          )
         ))}
       </Box>
 
       {loading ? (
-        <Box sx={{ textAlign: 'center', py: 6 }}><CircularProgress size={24} /></Box>
+        <Box sx={{ textAlign: 'center', py: 8 }}><CircularProgress size={28} /></Box>
       ) : filtered.length === 0 ? (
-        <Box sx={{ textAlign: 'center', py: 6 }}>
-          <Typography sx={{ fontSize: 14, color: '#64748B' }}>Aucune activité.</Typography>
+        <Box sx={{ textAlign: 'center', py: 8 }}>
+          <Typography sx={{ fontSize: 14, color: C.textSoft }}>Aucune activité.</Typography>
         </Box>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {filtered.map(a => {
             const dossierRef = a.dossiers?.ref || '—'
-            const societe = a.dossiers?.prospects?.raison_sociale || ''
+            const societe    = a.dossiers?.prospects?.raison_sociale || ''
+            const tColor     = TYPE_COLOR[a.type] || C.textSoft
             return (
-              <Paper key={a.id} sx={{ p: 1.5, background: '#1E293B', border: '1px solid #334155', borderRadius: 2, display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
-                <Typography sx={{ fontSize: 16, lineHeight: '20px', flexShrink: 0 }}>{TYPE_ICON[a.type] || '·'}</Typography>
+              <Paper key={a.id} elevation={0} sx={{
+                p: 1.5, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 2,
+                display: 'flex', gap: 1.5, alignItems: 'flex-start',
+                transition: 'box-shadow .12s', '&:hover': { boxShadow: '0 2px 6px rgba(0,0,0,.06)' }
+              }}>
+                <Box sx={{ width: 28, height: 28, borderRadius: 1.5, background: tColor + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 14 }}>
+                  {TYPE_ICON[a.type] || '·'}
+                </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.3, flexWrap: 'wrap' }}>
-                    <Chip label={dossierRef} size="small" sx={{ height: 18, fontSize: 10, background: '#0F172A', color: '#60A5FA', border: '1px solid #1E3A5F' }} />
-                    {societe && <Typography sx={{ fontSize: 11, color: '#64748B' }}>{societe}</Typography>}
-                    <Chip label={TYPE_LABEL[a.type] || a.type} size="small" sx={{ height: 18, fontSize: 10, background: '#0F172A', color: '#94A3B8', border: '1px solid #334155' }} />
+                    <Chip label={dossierRef} size="small" sx={{ height: 18, fontSize: 10, fontWeight: 700, background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE' }} />
+                    {societe && <Typography sx={{ fontSize: 11, color: C.textSoft }}>{societe}</Typography>}
+                    <Chip label={TYPE_LABEL[a.type] || a.type} size="small" sx={{ height: 18, fontSize: 10, background: tColor + '15', color: tColor }} />
                   </Box>
-                  <Typography sx={{ fontSize: 12, color: '#CBD5E1' }}>{a.contenu}</Typography>
-                  <Typography sx={{ fontSize: 11, color: '#475569', mt: 0.3 }}>
+                  <Typography sx={{ fontSize: 13, color: C.textMid }}>{a.contenu}</Typography>
+                  <Typography sx={{ fontSize: 11, color: C.textSoft, mt: 0.3 }}>
                     {new Date(a.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </Typography>
                 </Box>
@@ -607,7 +642,6 @@ export default function SuiviEquipe() {
   const [dossiers,    setDossiers]    = useState([])
   const [commercials, setCommercials] = useState([])
   const [filter,      setFilter]      = useState('all')
-  // Expanded state centralisé pour survivre aux re-fetches
   const [expandedSet, setExpandedSet] = useState(new Set())
 
   const toggleExpand = (id) => {
@@ -618,7 +652,6 @@ export default function SuiviEquipe() {
     })
   }
 
-  // Rediriger les non-admins
   useEffect(() => {
     if (profile && !isAdmin) navigate('/', { replace: true })
   }, [profile, isAdmin])
@@ -646,60 +679,82 @@ export default function SuiviEquipe() {
   if (!isAdmin) return null
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 900, mx: 'auto' }}>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 800, color: '#F8FAFC', mb: 0.5 }}>Suivi équipe</Typography>
-        <Typography sx={{ fontSize: 13, color: '#64748B' }}>
-          Vue admin — dossiers actifs de tous les commerciaux
-        </Typography>
+    <Box sx={{ minHeight: '100vh', background: C.bg, py: { xs: 2, md: 4 }, px: { xs: 1.5, md: 3 } }}>
+      <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
+
+        {/* Header */}
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, color: C.text, mb: 0.5 }}>
+            Suivi équipe
+          </Typography>
+          <Typography sx={{ fontSize: 13, color: C.textSoft }}>
+            Vue admin — dossiers actifs de tous les commerciaux
+          </Typography>
+        </Box>
+
+        {/* Tabs */}
+        <Paper elevation={0} sx={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 2, mb: 3 }}>
+          <Tabs
+            value={tab}
+            onChange={(_, v) => setTab(v)}
+            sx={{
+              px: 1,
+              '& .MuiTab-root': { fontSize: 13, textTransform: 'none', fontWeight: 600, color: C.textMid, minHeight: 48 },
+              '& .Mui-selected': { color: '#2563EB' },
+              '& .MuiTabs-indicator': { backgroundColor: '#2563EB' },
+            }}
+          >
+            <Tab label="📊 Dashboard" />
+            <Tab label="Dossiers actifs" />
+            <Tab label="Activité équipe" />
+            <Tab label="Style & Exemples" />
+          </Tabs>
+        </Paper>
+
+        {/* Contenu des onglets */}
+        <Box>
+          {tab === 0 && <DashboardTab />}
+
+          {tab === 1 && (
+            <>
+              {commercials.length > 0 && (
+                <Paper elevation={0} sx={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 2, px: 2, py: 1.5, mb: 2 }}>
+                  <ToggleButtonGroup value={filter} exclusive onChange={(_, v) => { if (v) setFilter(v) }} size="small">
+                    <ToggleButton value="all" sx={{ fontSize: 12, px: 1.5, textTransform: 'none', fontWeight: 600 }}>
+                      Tous ({dossiers.length})
+                    </ToggleButton>
+                    {commercials.map(c => (
+                      <ToggleButton key={c.id} value={c.id} sx={{ fontSize: 12, px: 1.5, textTransform: 'none', fontWeight: 600 }}>
+                        {c.prenom} {c.nom} ({dossiers.filter(d => d.assigneA === c.id).length})
+                      </ToggleButton>
+                    ))}
+                  </ToggleButtonGroup>
+                </Paper>
+              )}
+
+              {loading ? (
+                <Box sx={{ textAlign: 'center', py: 8 }}><CircularProgress size={28} /></Box>
+              ) : filteredDossiers.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 8 }}>
+                  <Typography sx={{ fontSize: 14, color: C.textSoft }}>Aucun dossier actif.</Typography>
+                </Box>
+              ) : (
+                filteredDossiers.map(d => (
+                  <DossierRow
+                    key={d.dossierId}
+                    dossier={d}
+                    expanded={expandedSet.has(d.dossierId)}
+                    onToggleExpand={toggleExpand}
+                  />
+                ))
+              )}
+            </>
+          )}
+
+          {tab === 2 && <ActiviteEquipeTab />}
+          {tab === 3 && <StyleExemplesTab session={session} />}
+        </Box>
       </Box>
-
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3, borderBottom: '1px solid #334155' }}>
-        <Tab label="📊 Dashboard" sx={{ fontSize: 13, textTransform: 'none', fontWeight: 600 }} />
-        <Tab label="Dossiers actifs" sx={{ fontSize: 13, textTransform: 'none', fontWeight: 600 }} />
-        <Tab label="Activité équipe" sx={{ fontSize: 13, textTransform: 'none', fontWeight: 600 }} />
-        <Tab label="Style & Exemples" sx={{ fontSize: 13, textTransform: 'none', fontWeight: 600 }} />
-      </Tabs>
-
-      {tab === 0 && <DashboardTab />}
-
-      {tab === 1 && (
-        <>
-          {/* Filtre commercial */}
-          {commercials.length > 0 && (
-            <Box sx={{ mb: 2.5 }}>
-              <ToggleButtonGroup value={filter} exclusive onChange={(_, v) => { if (v) setFilter(v) }} size="small">
-                <ToggleButton value="all" sx={{ fontSize: 12, px: 1.5 }}>Tous ({dossiers.length})</ToggleButton>
-                {commercials.map(c => (
-                  <ToggleButton key={c.id} value={c.id} sx={{ fontSize: 12, px: 1.5 }}>
-                    {c.prenom} {c.nom} ({dossiers.filter(d => d.assigneA === c.id).length})
-                  </ToggleButton>
-                ))}
-              </ToggleButtonGroup>
-            </Box>
-          )}
-
-          {loading ? (
-            <Box sx={{ textAlign: 'center', py: 6 }}><CircularProgress size={28} /></Box>
-          ) : filteredDossiers.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 6 }}>
-              <Typography sx={{ fontSize: 14, color: '#64748B' }}>Aucun dossier actif.</Typography>
-            </Box>
-          ) : (
-            filteredDossiers.map(d => (
-              <DossierRow
-                key={d.dossierId}
-                dossier={d}
-                expanded={expandedSet.has(d.dossierId)}
-                onToggleExpand={toggleExpand}
-              />
-            ))
-          )}
-        </>
-      )}
-
-      {tab === 2 && <ActiviteEquipeTab />}
-      {tab === 3 && <StyleExemplesTab session={session} />}
     </Box>
   )
 }
