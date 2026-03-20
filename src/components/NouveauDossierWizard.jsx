@@ -194,33 +194,36 @@ function RaisonSocialeAutocomplete({ value, onChange, onSelect }) {
 function AdresseAutocomplete({ label, value, onChange, onSelect }) {
   const [suggestions, setSuggestions] = useState([])
   const [open, setOpen] = useState(false)
-  const timer = useRef(null)
+  const timer    = useRef(null)
+  const queryRef = useRef('')
 
   const search = (q) => {
+    queryRef.current = q
     onChange(q)
     clearTimeout(timer.current)
     if (q.length < 3) { setSuggestions([]); setOpen(false); return }
     timer.current = setTimeout(async () => {
       try {
-        const base = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`
-        const startsWithNum = /^\d/.test(q)
-        const res = await fetch(startsWithNum ? base + '&type=housenumber' : base)
+        const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`)
         const data = await res.json()
-        let features = data.features || []
-        if (!features.length && startsWithNum) {
-          const r2 = await fetch(base)
-          features = (await r2.json()).features || []
-        }
-        setSuggestions(features)
-        setOpen(features.length > 0)
+        setSuggestions(data.features || [])
+        setOpen((data.features || []).length > 0)
       } catch { setSuggestions([]) }
     }, 300)
   }
 
+  const buildLabel = (feat) => {
+    const p = feat.properties
+    const num = queryRef.current.match(/^(\d+[a-zA-Z]?)/)?.[1]
+    if (num && p.type !== 'housenumber' && !p.label.startsWith(num)) return num + ' ' + p.label
+    return p.label || ''
+  }
+
   const select = (feat) => {
     const p = feat.properties
-    onSelect({ adresse_site: p.label || '', code_postal_site: p.postcode || '', ville_site: p.city || '' })
-    onChange(p.label || '')
+    const lbl = buildLabel(feat)
+    onSelect({ adresse_site: lbl, code_postal_site: p.postcode || '', ville_site: p.city || '' })
+    onChange(lbl)
     setSuggestions([]); setOpen(false)
   }
 
@@ -244,7 +247,7 @@ function AdresseAutocomplete({ label, value, onChange, onSelect }) {
               style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.border}`, fontSize: 13, color: C.text }}
               onMouseEnter={e => e.currentTarget.style.background = C.bg}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              {f.properties.label}
+              {buildLabel(f)}
             </div>
           ))}
         </div>

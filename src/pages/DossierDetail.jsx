@@ -196,21 +196,20 @@ export default function DossierDetail() {
     if (q.length < 3) { setAdresseSiteSugg([]); return }
     adresseSiteTimer.current = setTimeout(async () => {
       try {
-        const base = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`
-        const startsWithNum = /^\d/.test(q)
-        const res = await fetch(startsWithNum ? base + '&type=housenumber' : base)
+        const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`)
         const data = await res.json()
-        let features = data.features || []
-        if (!features.length && startsWithNum) {
-          const r2 = await fetch(base)
-          features = (await r2.json()).features || []
-        }
-        setAdresseSiteSugg(features)
+        setAdresseSiteSugg(data.features || [])
       } catch { setAdresseSiteSugg([]) }
     }, 300)
   }
+  const buildAdresseLabel = (feat) => {
+    const p = feat.properties
+    const num = adresseSiteLabel.match(/^(\d+[a-zA-Z]?)/)?.[1]
+    if (num && p.type !== 'housenumber' && !p.label.startsWith(num)) return num + ' ' + p.label
+    return p.label || ''
+  }
   const selectAdresseSite = (feat) => {
-    const label = feat.properties.label || ''
+    const label = buildAdresseLabel(feat)
     setAdresseSiteForm(label)
     setAdresseSiteLabel(label)
     setAdresseSiteSugg([])
@@ -964,7 +963,7 @@ export default function DossierDetail() {
                               style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.border}`, fontSize: 13, color: C.text }}
                               onMouseEnter={e => e.currentTarget.style.background = C.bg}
                               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                              {f.properties.label}
+                              {buildAdresseLabel(f)}
                             </div>
                           ))}
                         </div>

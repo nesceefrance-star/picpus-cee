@@ -35,30 +35,36 @@ function AdresseAutocomplete({ value, onChange }) {
   const [sugg, setSugg]   = useState([])
   const [open, setOpen]   = useState(false)
   const timer             = useRef(null)
+  const queryRef          = useRef('')
 
   const search = (q) => {
+    queryRef.current = q
     onChange(q)
     clearTimeout(timer.current)
     if (q.length < 3) { setSugg([]); setOpen(false); return }
     timer.current = setTimeout(async () => {
       try {
-        const base = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`
-        const startsWithNum = /^\d/.test(q)
-        const res  = await fetch(startsWithNum ? base + '&type=housenumber' : base)
+        const res  = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`)
         const data = await res.json()
-        let features = data.features || []
-        if (!features.length && startsWithNum) {
-          const r2 = await fetch(base)
-          features = (await r2.json()).features || []
-        }
-        setSugg(features)
-        setOpen(features.length > 0)
+        setSugg(data.features || [])
+        setOpen((data.features || []).length > 0)
       } catch {}
     }, 300)
   }
 
+  // Si la saisie commence par un numéro mais que le résultat BAN est type=street (numéro absent),
+  // on injecte le numéro saisi dans le label pour ne pas le perdre.
+  const buildLabel = (feat) => {
+    const p = feat.properties
+    const num = queryRef.current.match(/^(\d+[a-zA-Z]?)/)?.[1]
+    if (num && p.type !== 'housenumber' && !p.label.startsWith(num)) {
+      return num + ' ' + p.label
+    }
+    return p.label || ''
+  }
+
   const select = (feat) => {
-    onChange(feat.properties.label || '')
+    onChange(buildLabel(feat))
     setSugg([]); setOpen(false)
   }
 
@@ -82,7 +88,7 @@ function AdresseAutocomplete({ value, onChange }) {
               onMouseEnter={e => e.currentTarget.style.background = C.bg}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
-              {f.properties.label}
+              {buildLabel(f)}
             </div>
           ))}
         </div>
