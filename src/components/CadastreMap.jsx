@@ -54,12 +54,17 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
     try { return JSON.parse(localStorage.getItem(CACHE_KEY)) } catch { return null }
   })()
 
-  const [state, setState]           = useState(cached ? 'done' : 'idle')
-  const [parcelles, setParcelles]   = useState(cached?.parcelles || null)   // toutes les parcelles chargées
+  const [state, setState]             = useState(cached ? 'done' : 'idle')
+  const [parcelles, setParcelles]     = useState(cached?.parcelles || null)
   const [selectedIds, setSelectedIds] = useState(() => new Set(cached?.selectedIds || []))
-  const [center, setCenter]         = useState(cached?.center    || null)
-  const [errorMsg, setErrorMsg]     = useState('')
+  const [center, setCenter]           = useState(cached?.center    || null)
+  const [errorMsg, setErrorMsg]       = useState('')
   const [sourceLabel, setSourceLabel] = useState(cached?.sourceLabel || '')
+  const [rayon, setRayon]             = useState(cached?.rayon || 100) // mètres
+  const [loadingMore, setLoadingMore] = useState(false)
+  // Stocke les coords géocodées pour pouvoir recharger sans re-géocoder
+  const [geoCoords, setGeoCoords]     = useState(cached?.geoCoords || null)
+  const [refCadastre, setRefCadastre] = useState(cached?.refCadastre || null) // { section, insee }
 
   const fullAddress = adresse && !codePostal && !ville
     ? adresse
@@ -79,6 +84,39 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
       return next
     })
   }, [CACHE_KEY])
+
+  // Charge les parcelles autour de coords avec un rayon donné
+  const chargerParcelles = async (lon, lat, rayonM, ref, pointParcel, isFirstLoad) => {
+    const D = rayonM / 100000 // degrés approximatifs
+    let allFeatures = []
+
+    if (ref?.section && ref?.insee) {
+      const r = await fetch(`https://apicarto.ign.fr/api/cadastre/parcelle?code_insee=${ref.insee}&section=${ref.section}&_limit=200`)
+      if (r.ok) {
+        const d = await r.json()
+        allFeatures = (d?.features || []).filter(f => {
+          const c = centroid(f)
+          return c && c[0] >= lon-D && c[0] <= lon+D && c[1] >= lat-D && c[1] <= lat+D
+        })
+      }
+    }
+
+    if (!allFeatures.length) {
+      const bbox = `${lon-D},${lat-D},${lon+D},${lat+D},CRS:84`
+      const r = await fetch(
+        `https://data.geopf.fr/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature` +
+        `&TYPENAMES=CADASTRALPARCELS.PARCELLAIRE_EXPRESS:parcelle` +
+        `&OUTPUTFORMAT=application/json&COUNT=100&BBOX=${bbox}`
+      )
+      if (r.ok) { const d = await r.json(); allFeatures = d?.features || [] }
+    }
+
+    if (pointParcel && !allFeatures.find(f => parcelleId(f) === parcelleId(pointParcel))) {
+      allFeatures = [pointParcel, ...allFeatures]
+    }
+
+    return allFeatures
+  }
 
   const rechercher = async () => {
     if (!fullAddress && !siret && !raisonSociale) return
@@ -118,8 +156,9 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
 
       setSourceLabel(newSourceLabel)
       setCenter([lat, lon])
+      setGeoCoords([lon, lat])
 
-      // 2. Parcelle sous le point (pré-sélection automatique)
+      // Parcelle sous le point
       const geomParam = encodeURIComponent(JSON.stringify({ type: 'Point', coordinates: [lon, lat] }))
       let pointParcel = null
       const cadRes = await fetch(`https://apicarto.ign.fr/api/cadastre/parcelle?geom=${geomParam}`)
@@ -128,47 +167,18 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
         if (d?.features?.length) pointParcel = d.features[0]
       }
 
-      // 3. Toutes les parcelles dans ~100m (pour sélection manuelle)
-      const D = 0.001 // ~100m
-      let allFeatures = []
+      const ref = pointParcel ? {
+        section: pointParcel.properties?.section,
+        insee:   pointParcel.properties?.code_insee || pointParcel.properties?.com_abs,
+      } : null
+      setRefCadastre(ref)
 
-      const refSection = pointParcel?.properties?.section
-      const refInsee   = pointParcel?.properties?.code_insee || pointParcel?.properties?.com_abs
-
-      if (refSection && refInsee) {
-        const r = await fetch(`https://apicarto.ign.fr/api/cadastre/parcelle?code_insee=${refInsee}&section=${refSection}&_limit=100`)
-        if (r.ok) {
-          const d = await r.json()
-          // Filtre bbox 100m
-          allFeatures = (d?.features || []).filter(f => {
-            const c = centroid(f)
-            return c && c[0] >= lon-D && c[0] <= lon+D && c[1] >= lat-D && c[1] <= lat+D
-          })
-        }
-      }
-
-      // Fallback WFS bbox 100m
-      if (!allFeatures.length) {
-        const bbox = `${lon-D},${lat-D},${lon+D},${lat+D},CRS:84`
-        const r = await fetch(
-          `https://data.geopf.fr/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature` +
-          `&TYPENAMES=CADASTRALPARCELS.PARCELLAIRE_EXPRESS:parcelle` +
-          `&OUTPUTFORMAT=application/json&COUNT=50&BBOX=${bbox}`
-        )
-        if (r.ok) { const d = await r.json(); allFeatures = d?.features || [] }
-      }
-
-      // Assure que la parcelle du point est incluse
-      if (pointParcel && !allFeatures.find(f => parcelleId(f) === parcelleId(pointParcel))) {
-        allFeatures = [pointParcel, ...allFeatures]
-      }
-
+      const allFeatures = await chargerParcelles(lon, lat, rayon, ref, pointParcel, true)
       if (!allFeatures.length) throw new Error("Aucune parcelle trouvée à cette adresse")
 
       const cadData = { type: 'FeatureCollection', features: allFeatures }
       setParcelles(cadData)
 
-      // Pré-sélectionne uniquement la parcelle sous le point GPS
       const autoId = pointParcel ? parcelleId(pointParcel) : parcelleId(allFeatures[0])
       setSelectedIds(new Set(autoId ? [autoId] : []))
 
@@ -177,13 +187,36 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
         try {
           localStorage.setItem(CACHE_KEY, JSON.stringify({
             parcelles: cadData, center: [lat, lon], sourceLabel: newSourceLabel,
-            selectedIds: autoId ? [autoId] : [],
+            selectedIds: autoId ? [autoId] : [], rayon,
+            geoCoords: [lon, lat], refCadastre: ref,
           }))
         } catch {}
       }
     } catch (e) {
       setErrorMsg(e.message || "Erreur lors de la recherche cadastrale")
       setState('error')
+    }
+  }
+
+  const changerRayon = async (newRayon) => {
+    if (!geoCoords) return
+    setRayon(newRayon)
+    setLoadingMore(true)
+    try {
+      const [lon, lat] = geoCoords
+      const allFeatures = await chargerParcelles(lon, lat, newRayon, refCadastre, null, false)
+      if (allFeatures.length) {
+        const cadData = { type: 'FeatureCollection', features: allFeatures }
+        setParcelles(cadData)
+        if (CACHE_KEY) {
+          try {
+            const c = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}')
+            localStorage.setItem(CACHE_KEY, JSON.stringify({ ...c, parcelles: cadData, rayon: newRayon }))
+          } catch {}
+        }
+      }
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -242,9 +275,29 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
       {/* Carte */}
       {state === 'done' && center && (
         <>
-          {/* Instruction */}
-          <div style={{ fontSize: 11, color: '#16A34A', fontWeight: 600, marginBottom: 8 }}>
-            Cliquez sur les parcelles du site pour les sélectionner / désélectionner
+          {/* Rayon + instruction */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+            <span style={{ fontSize: 11, color: '#16A34A', fontWeight: 600 }}>
+              Cliquez sur les parcelles du site pour les sélectionner / désélectionner
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: C.textSoft }}>Rayon :</span>
+              {[100, 200, 300, 500].map(r => (
+                <button
+                  key={r}
+                  onClick={() => changerRayon(r)}
+                  disabled={loadingMore}
+                  style={{
+                    padding: '3px 8px', fontSize: 11, fontWeight: 600, borderRadius: 5,
+                    cursor: loadingMore ? 'wait' : 'pointer', fontFamily: 'inherit',
+                    border: `1px solid ${rayon === r ? C.accent : C.border}`,
+                    background: rayon === r ? '#EFF6FF' : 'transparent',
+                    color: rayon === r ? C.accent : C.textSoft,
+                  }}
+                >{r}m</button>
+              ))}
+              {loadingMore && <span style={{ fontSize: 11, color: C.textSoft }}>⏳</span>}
+            </div>
           </div>
 
           <div style={{ borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}`, marginBottom: 12 }}>
