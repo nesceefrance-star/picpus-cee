@@ -296,7 +296,7 @@ function DashboardTab() {
         supabase.from('dossiers').select('id, statut, assigne_a, created_at'),
         supabase.from('appels').select('etat, created_at, dossier_id'),
         supabase.from('activites').select('type, created_at, user_id, dossier_id'),
-        supabase.from('profiles').select('user_id, prenom, nom').eq('role', 'commercial'),
+        supabase.from('profiles').select('user_id, prenom, nom'),
         supabase.from('devis_hub').select('dossier_id, lignes, prime, bat_qte, bat_pu_vente, created_at'),
         supabase.from('simulations').select('dossier_id, mwh_cumac, created_at'),
       ])
