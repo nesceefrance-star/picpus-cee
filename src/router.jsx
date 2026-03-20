@@ -4,6 +4,7 @@ import { supabase } from './lib/supabase'
 import useStore from './store/useStore'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import Dossiers from './pages/Dossiers'
 import DossierDetail from './pages/DossierDetail'
 import AdminUsers from './pages/AdminUsers'
 import AgentRelance from './pages/AgentRelance'
@@ -80,6 +81,7 @@ export default function AppRouter() {
           <Route path="/login"          element={<Login />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/"               element={<WithLayout><Dashboard /></WithLayout>} />
+          <Route path="/dossiers"       element={<WithLayout><Dossiers /></WithLayout>} />
           <Route path="/hub"            element={<WithLayout><AppHub /></WithLayout>} />
           <Route path="/dossier/:id"    element={<WithLayout><DossierDetail /></WithLayout>} />
           <Route path="/relances"       element={<WithLayout><AgentRelance /></WithLayout>} />

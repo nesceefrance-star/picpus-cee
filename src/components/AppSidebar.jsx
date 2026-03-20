@@ -173,7 +173,7 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
           <Item icon={<DashboardIcon fontSize="small" />} label="Tableau de bord" path="/" />
 
           {/* Dossiers */}
-          <Item icon={<FolderIcon fontSize="small" />} label="Dossiers" path="/" />
+          <Item icon={<FolderIcon fontSize="small" />} label="Dossiers" path="/dossiers" />
 
           <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
 
@@ -189,12 +189,6 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
             <Item icon={<ReceiptLongIcon fontSize="small" />} label="Générateur de devis"  path="/hub" module="marges"       indent />
           </Collapse>
 
-          {/* Admin — Suivi équipe */}
-          {isAdmin && <>
-            <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
-            <Item icon={<ForwardToInboxIcon fontSize="small" />} label="Suivi équipe" path="/suivi-equipe" />
-          </>}
-
           {/* Admin */}
           {isAdmin && <>
             <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
@@ -205,6 +199,7 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
               onToggle={() => setAdminOpen(o => !o)}
             />
             <Collapse in={open ? adminOpen : true} timeout="auto" unmountOnExit>
+              <Item icon={<ForwardToInboxIcon fontSize="small" />} label="Suivi équipe" path="/suivi-equipe" indent />
               <Item icon={<PeopleIcon fontSize="small" />} label="Utilisateurs" path="/admin/users" indent />
             </Collapse>
           </>}
