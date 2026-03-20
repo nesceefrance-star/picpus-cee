@@ -60,33 +60,37 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
       let lon, lat
       let newSourceLabel = ''
 
-      // 1a. Priorité : SIRET ou raison sociale → coordonnées précises au bâtiment (base SIRENE)
-      const sireneQ = siret?.replace(/\s/g,'') || raisonSociale
-      if (sireneQ) {
-        const sireneRes = await fetch(
-          `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(sireneQ)}&per_page=1`
-        )
-        const sireneData = await sireneRes.json()
-        const etab = sireneData?.results?.[0]?.siege
-        if (etab?.latitude && etab?.longitude) {
-          lat = parseFloat(etab.latitude)
-          lon = parseFloat(etab.longitude)
-          newSourceLabel = '📍 Localisation SIRENE (précision bâtiment)'
-        }
-      }
-
-      // 1b. Fallback : géocodage de l'adresse du site
-      if (!lat || !lon) {
-        if (!fullAddress) throw new Error("Adresse introuvable — renseignez l'adresse du site ou le SIRET")
+      // 1a. Priorité : adresse du site (géocodage BAN) — plus précis que le siège social
+      if (fullAddress) {
         const geoRes = await fetch(
           `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(fullAddress)}&limit=1`
         )
         const geoData = await geoRes.json()
         const feat = geoData?.features?.[0]
-        if (!feat) throw new Error("Adresse introuvable")
-        ;[lon, lat] = feat.geometry.coordinates
-        newSourceLabel = '📍 Géocodage adresse'
+        if (feat) {
+          ;[lon, lat] = feat.geometry.coordinates
+          newSourceLabel = '📍 Géocodage adresse du site'
+        }
       }
+
+      // 1b. Fallback : SIRET ou raison sociale → siège social (base SIRENE)
+      if (!lat || !lon) {
+        const sireneQ = siret?.replace(/\s/g,'') || raisonSociale
+        if (sireneQ) {
+          const sireneRes = await fetch(
+            `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(sireneQ)}&per_page=1`
+          )
+          const sireneData = await sireneRes.json()
+          const etab = sireneData?.results?.[0]?.siege
+          if (etab?.latitude && etab?.longitude) {
+            lat = parseFloat(etab.latitude)
+            lon = parseFloat(etab.longitude)
+            newSourceLabel = '📍 Localisation SIRENE (siège social)'
+          }
+        }
+      }
+
+      if (!lat || !lon) throw new Error("Adresse introuvable — renseignez l'adresse du site ou le SIRET")
 
       setSourceLabel(newSourceLabel)
       setCenter([lat, lon])
