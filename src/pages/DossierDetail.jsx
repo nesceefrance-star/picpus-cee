@@ -5,6 +5,7 @@ import useStore from '../store/useStore'
 import { refDefault } from '../lib/genRef'
 import EmailSection from '../components/EmailSection'
 import CalendarPicker from '../components/CalendarPicker'
+import CadastreMap from '../components/CadastreMap'
 
 // ── IND-BA-110 ADEME coefficients (kWh cumac / kW) ────────────────────────
 const COEFFICIENTS_IND_110 = {
@@ -908,6 +909,13 @@ export default function DossierDetail() {
                   </div>
                 )}
               </div>
+
+              {/* Parcelle cadastrale */}
+              <CadastreMap
+                adresse={dossier.prospects?.adresse}
+                codePostal={dossier.prospects?.code_postal}
+                ville={dossier.prospects?.ville}
+              />
 
               {/* Notes */}
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
