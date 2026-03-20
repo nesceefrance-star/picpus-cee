@@ -944,7 +944,7 @@ export default function DossierDetail() {
                       <input
                         value={adresseSiteLabel}
                         onChange={e => searchAdresseSite(e.target.value)}
-                        onBlur={() => setTimeout(() => setAdresseSiteSugg([]), 200)}
+                        onBlur={() => setTimeout(() => setAdresseSiteSugg([]), 350)}
                         placeholder="771 Rue de la Plaine, 59553 Lauwin-Planque…"
                         style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
                       />
@@ -953,7 +953,9 @@ export default function DossierDetail() {
                           onMouseDown={e => e.preventDefault()}
                           style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,.12)' }}>
                           {adresseSiteSugg.map((f, i) => (
-                            <div key={i} onClick={() => selectAdresseSite(f)}
+                            <div key={i}
+                              onClick={() => selectAdresseSite(f)}
+                              onTouchEnd={e => { e.preventDefault(); selectAdresseSite(f) }}
                               style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.border}`, fontSize: 13, color: C.text }}
                               onMouseEnter={e => e.currentTarget.style.background = C.bg}
                               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>

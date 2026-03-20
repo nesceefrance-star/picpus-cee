@@ -63,7 +63,7 @@ function AdresseAutocomplete({ value, onChange }) {
       <input
         value={value || ''}
         onChange={e => search(e.target.value)}
-        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        onBlur={() => setTimeout(() => setOpen(false), 350)}
         placeholder="12 rue des Acacias, 75012 Paris…"
         style={INP}
       />
@@ -71,7 +71,9 @@ function AdresseAutocomplete({ value, onChange }) {
         <div onMouseDown={e => e.preventDefault()}
           style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 200, overflow: 'hidden' }}>
           {sugg.map((f, i) => (
-            <div key={i} onClick={() => select(f)}
+            <div key={i}
+              onClick={() => select(f)}
+              onTouchEnd={e => { e.preventDefault(); select(f) }}
               style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.bg}`, fontSize: 13, color: C.text }}
               onMouseEnter={e => e.currentTarget.style.background = C.bg}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -415,7 +417,7 @@ export default function VisiteTechniqueDetail() {
                                 value={dossierSearch}
                                 onChange={e => { setDossierSearch(e.target.value); setDossierOpen(true) }}
                                 onFocus={() => setDossierOpen(true)}
-                                onBlur={() => setTimeout(() => setDossierOpen(false), 150)}
+                                onBlur={() => setTimeout(() => setDossierOpen(false), 350)}
                                 placeholder="Rechercher par référence ou raison sociale…"
                                 style={INP}
                               />
@@ -423,7 +425,9 @@ export default function VisiteTechniqueDetail() {
                                 <div onMouseDown={e => e.preventDefault()}
                                   style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 200, overflow: 'hidden' }}>
                                   {dossierResults.map(d => (
-                                    <div key={d.id} onClick={() => selectDossier(d)}
+                                    <div key={d.id}
+                                      onClick={() => selectDossier(d)}
+                                      onTouchEnd={e => { e.preventDefault(); selectDossier(d) }}
                                       style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.bg}`, fontSize: 13, color: C.text }}
                                       onMouseEnter={e => e.currentTarget.style.background = C.bg}
                                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
