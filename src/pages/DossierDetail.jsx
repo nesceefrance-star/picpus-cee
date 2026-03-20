@@ -944,7 +944,7 @@ export default function DossierDetail() {
                       <input
                         value={adresseSiteLabel}
                         onChange={e => searchAdresseSite(e.target.value)}
-                        onBlur={() => setAdresseSiteSugg([])}
+                        onBlur={() => setTimeout(() => setAdresseSiteSugg([]), 200)}
                         placeholder="771 Rue de la Plaine, 59553 Lauwin-Planque…"
                         style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
                       />
@@ -973,6 +973,7 @@ export default function DossierDetail() {
                   </>
                 ) : (
                   <div>
+                    <InfoRow label="Raison sociale" value={dossier.prospects?.raison_sociale} />
                     <InfoRow label="SIRET" value={dossier.prospects?.siret} />
                     <InfoRow label="Adresse société" value={[dossier.prospects?.adresse, dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(', ') || null} />
                     {adresseSite && (

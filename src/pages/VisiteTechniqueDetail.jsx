@@ -52,7 +52,7 @@ function AdresseAutocomplete({ value, onChange }) {
 
   const select = (feat) => {
     const p = feat.properties
-    const full = p.label || [p.housenumber, p.street].filter(Boolean).join(' ')
+    const full = [p.housenumber, p.street].filter(Boolean).join(' ') || p.name || p.label
     onChange(full)
     setSugg([]); setOpen(false)
   }
@@ -62,7 +62,7 @@ function AdresseAutocomplete({ value, onChange }) {
       <input
         value={value || ''}
         onChange={e => search(e.target.value)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
         placeholder="12 rue des Acacias, 75012 Paris…"
         style={INP}
       />
@@ -417,7 +417,7 @@ export default function VisiteTechniqueDetail() {
                                   style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 200, overflow: 'hidden' }}>
                                   {dossierResults.map(d => (
                                     <div key={d.id} onClick={() => selectDossier(d)}
-                                      style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.bg}`, fontSize: 13 }}
+                                      style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.bg}`, fontSize: 13, color: C.text }}
                                       onMouseEnter={e => e.currentTarget.style.background = C.bg}
                                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                                     >

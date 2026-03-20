@@ -224,7 +224,7 @@ function AdresseAutocomplete({ label, value, onChange, onSelect }) {
         {label}
         <span style={{ marginLeft: 6, fontSize: 10, color: '#2563EB', fontWeight: 400, textTransform: 'none' }}>autocomplétion adresse</span>
       </label>
-      <input value={value} onChange={e => search(e.target.value)} onBlur={() => setOpen(false)}
+      <input value={value} onChange={e => search(e.target.value)} onBlur={() => setTimeout(() => setOpen(false), 200)}
         placeholder="771 Rue de la Plaine, Lauwin-Planque…"
         style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
       />

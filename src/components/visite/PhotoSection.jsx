@@ -81,10 +81,15 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
       let toUpload = file
       try { toUpload = await compressImage(file) } catch { toUpload = file }
 
-      // Upload Supabase Storage via ArrayBuffer (évite le bug iOS Safari avec les blobs)
+      // Upload Supabase Storage via FileReader (compatible iOS Safari — arrayBuffer() y est instable)
       const ext  = (toUpload.type || 'image/jpeg').includes('png') ? 'png' : 'jpg'
       const path = `${visiteId}/${catId}/${Date.now()}.${ext}`
-      const buf  = await toUpload.arrayBuffer()
+      const buf  = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload  = () => resolve(reader.result)
+        reader.onerror = () => reject(new Error('Lecture fichier échouée'))
+        reader.readAsArrayBuffer(toUpload)
+      })
       const { error } = await supabase.storage
         .from('visites-photos')
         .upload(path, buf, { contentType: toUpload.type || 'image/jpeg', upsert: false })
