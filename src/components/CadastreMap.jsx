@@ -37,7 +37,10 @@ export default function CadastreMap({ adresse, codePostal, ville }) {
   const [center, setCenter]       = useState(null)   // [lat, lng]
   const [errorMsg, setErrorMsg]   = useState('')
 
-  const fullAddress = [adresse, codePostal, ville].filter(Boolean).join(' ')
+  // adresse peut être une chaîne complète (adresse_site) ou être complétée par codePostal/ville
+  const fullAddress = adresse && !codePostal && !ville
+    ? adresse
+    : [adresse, codePostal, ville].filter(Boolean).join(' ')
 
   const rechercher = async () => {
     if (!fullAddress) return

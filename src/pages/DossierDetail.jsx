@@ -150,6 +150,7 @@ export default function DossierDetail() {
 
   const [dossier,       setDossier]       = useState(null)
   const [simulation,    setSimulation]    = useState(null)
+  const [adresseSite,   setAdresseSite]   = useState(null)
   const [loading,       setLoading]       = useState(true)
   const [savingStatut,  setSavingStatut]  = useState(false)
   const [statutForm,    setStatutForm]    = useState({ statut: '', date: new Date().toISOString().split('T')[0] })
@@ -335,10 +336,12 @@ export default function DossierDetail() {
   const loadData = async () => {
     setLoading(true)
     let d = currentDossier?.id === id ? currentDossier : null
-    if (!d) {
-      const { data } = await supabase.from('dossiers').select('*, prospects(*)').eq('id', id).single()
-      d = data
-    }
+    const [dossierRes, devisRes] = await Promise.all([
+      d ? Promise.resolve({ data: d }) : supabase.from('dossiers').select('*, prospects(*)').eq('id', id).single(),
+      supabase.from('devis_hub').select('adresse_site').eq('dossier_id', id).not('adresse_site', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ])
+    if (!d) d = dossierRes.data
+    if (devisRes.data?.adresse_site) setAdresseSite(devisRes.data.adresse_site)
     if (d) {
       setDossier(d)
       setNotesForm(d.notes || '')
@@ -901,13 +904,11 @@ export default function DossierDetail() {
                 ) : (
                   <div>
                     <InfoRow label="SIRET" value={dossier.prospects?.siret} />
-                    <InfoRow label="Adresse société" value={dossier.prospects?.adresse} />
-                    <InfoRow label="Ville société" value={[dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(' ') || null} />
-                    {(dossier.adresse_site || dossier.ville_site) && (
+                    <InfoRow label="Adresse société" value={[dossier.prospects?.adresse, dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(', ') || null} />
+                    {adresseSite && (
                       <>
                         <div style={{ height: 1, background: C.border, margin: '8px 0' }} />
-                        <InfoRow label="Adresse site" value={dossier.adresse_site} color={C.accent} />
-                        <InfoRow label="Ville site" value={[dossier.code_postal_site, dossier.ville_site].filter(Boolean).join(' ') || null} color={C.accent} />
+                        <InfoRow label="Adresse site" value={adresseSite} color={C.accent} />
                       </>
                     )}
                     <div style={{ height: 1, background: C.border, margin: '8px 0' }} />
@@ -918,11 +919,9 @@ export default function DossierDetail() {
                 )}
               </div>
 
-              {/* Parcelle cadastrale — priorité à l'adresse du site */}
+              {/* Parcelle cadastrale — adresse site depuis devis_hub, fallback adresse société */}
               <CadastreMap
-                adresse={dossier.adresse_site || dossier.prospects?.adresse}
-                codePostal={dossier.code_postal_site || dossier.prospects?.code_postal}
-                ville={dossier.ville_site || dossier.prospects?.ville}
+                adresse={adresseSite || [dossier.prospects?.adresse, dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(', ')}
               />
 
               {/* Notes */}
