@@ -31,7 +31,7 @@ function FitBounds({ geojson }) {
   return null
 }
 
-export default function CadastreMap({ adresse, codePostal, ville }) {
+export default function CadastreMap({ adresse, codePostal, ville, siret, raisonSociale }) {
   const [state, setState]         = useState('idle') // idle | loading | done | error
   const [parcelles, setParcelles] = useState(null)   // GeoJSON FeatureCollection
   const [center, setCenter]       = useState(null)   // [lat, lng]
@@ -42,28 +42,63 @@ export default function CadastreMap({ adresse, codePostal, ville }) {
     ? adresse
     : [adresse, codePostal, ville].filter(Boolean).join(' ')
 
+  const [sourceLabel, setSourceLabel] = useState('')
+
   const rechercher = async () => {
-    if (!fullAddress) return
+    if (!fullAddress && !siret && !raisonSociale) return
     setState('loading')
     setErrorMsg('')
     try {
-      // 1. Géocodage de l'adresse
-      const geoRes = await fetch(
-        `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(fullAddress)}&limit=1`
-      )
-      const geoData = await geoRes.json()
-      const feat = geoData?.features?.[0]
-      if (!feat) throw new Error("Adresse introuvable")
+      let lon, lat
 
-      const [lon, lat] = feat.geometry.coordinates
+      // 1a. Priorité : SIRET ou raison sociale → coordonnées précises au bâtiment (base SIRENE)
+      const sireneQ = siret?.replace(/\s/g,'') || raisonSociale
+      if (sireneQ) {
+        const sireneRes = await fetch(
+          `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(sireneQ)}&per_page=1`
+        )
+        const sireneData = await sireneRes.json()
+        const etab = sireneData?.results?.[0]?.siege
+        if (etab?.latitude && etab?.longitude) {
+          lat = parseFloat(etab.latitude)
+          lon = parseFloat(etab.longitude)
+          setSourceLabel('📍 Localisation SIRENE (précision bâtiment)')
+        }
+      }
+
+      // 1b. Fallback : géocodage de l'adresse du site
+      if (!lat || !lon) {
+        if (!fullAddress) throw new Error("Adresse introuvable — renseignez l'adresse du site ou le SIRET")
+        const geoRes = await fetch(
+          `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(fullAddress)}&limit=1`
+        )
+        const geoData = await geoRes.json()
+        const feat = geoData?.features?.[0]
+        if (!feat) throw new Error("Adresse introuvable")
+        ;[lon, lat] = feat.geometry.coordinates
+        setSourceLabel('📍 Géocodage adresse')
+      }
+
       setCenter([lat, lon])
 
-      // 2. Récupération des parcelles cadastrales
+      // 2. Parcelle cadastrale : point précis via apicarto IGN
       const geomParam = encodeURIComponent(JSON.stringify({ type: 'Point', coordinates: [lon, lat] }))
-      const cadRes = await fetch(
-        `https://apicarto.ign.fr/api/cadastre/parcelle?geom=${geomParam}`
-      )
-      const cadData = await cadRes.json()
+      let cadData = null
+      const cadRes = await fetch(`https://apicarto.ign.fr/api/cadastre/parcelle?geom=${geomParam}`)
+      if (cadRes.ok) cadData = await cadRes.json()
+
+      // Fallback bbox 30m si le point tombe sur la voirie
+      if (!cadData?.features?.length) {
+        const d = 0.0003 // ~30m
+        const bbox = `${lon-d},${lat-d},${lon+d},${lat+d},CRS:84`
+        const wfsRes = await fetch(
+          `https://data.geopf.fr/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature` +
+          `&TYPENAMES=CADASTRALPARCELS.PARCELLAIRE_EXPRESS:parcelle` +
+          `&OUTPUTFORMAT=application/json&COUNT=5&BBOX=${bbox}`
+        )
+        if (wfsRes.ok) cadData = await wfsRes.json()
+      }
+
       if (!cadData?.features?.length) throw new Error("Aucune parcelle trouvée à cette adresse")
 
       setParcelles(cadData)
@@ -104,10 +139,10 @@ export default function CadastreMap({ adresse, codePostal, ville }) {
         </button>
       </div>
 
-      {/* Adresse utilisée */}
-      {fullAddress && (
+      {/* Source utilisée */}
+      {(fullAddress || siret || raisonSociale) && (
         <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 12, fontStyle: 'italic' }}>
-          📍 {fullAddress}
+          {state === 'done' && sourceLabel ? sourceLabel + (fullAddress ? ` — ${fullAddress}` : '') : `📍 ${fullAddress || raisonSociale || ''}`}
         </div>
       )}
       {!fullAddress && (
@@ -150,13 +185,14 @@ export default function CadastreMap({ adresse, codePostal, ville }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {features.map((f, i) => {
               const p = f.properties || {}
-              const surface = p.contenance // en m²
-              const section = p.section || p.numero?.slice(0, 2) || '—'
-              const numero  = p.numero || '—'
-              const commune = p.nom_com || p.commune || '—'
-              const codeInsee = p.code_insee || p.codecommune || ''
-              const prefixe = p.code_arr || p.prefixe || ''
-              const idParc  = [codeInsee, prefixe, section, numero].filter(Boolean).join(' ')
+              // PARCELLAIRE_EXPRESS WFS: id_parcelle, section, numero, contenance, commune
+              // apicarto fallbacks: nom_com, code_insee, prefixe
+              const section   = p.section || '—'
+              const numero    = p.numero  || '—'
+              const idParc    = p.id_parcelle || p.idu || [p.code_insee || p.commune, p.section, p.numero].filter(Boolean).join(' ')
+              const commune   = p.nom_com || p.com_nom || p.commune_name || idParc?.slice(0, 5) || '—'
+              // contenance en m² (WFS = m², parfois en ares = diviser par 100)
+              const surface   = p.contenance ? Math.round(p.contenance) : null
               return (
                 <div key={i} style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '10px 14px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -164,9 +200,8 @@ export default function CadastreMap({ adresse, codePostal, ville }) {
                       <div style={{ fontSize: 12, fontWeight: 700, color: '#1D4ED8', marginBottom: 3 }}>
                         Parcelle {section} {numero}
                       </div>
-                      <div style={{ fontSize: 11, color: C.textMid }}>Commune : {commune}</div>
-                      {surface && <div style={{ fontSize: 11, color: C.textMid }}>Surface : <strong>{surface.toLocaleString('fr-FR')} m²</strong></div>}
-                      {idParc && <div style={{ fontSize: 10, color: C.textSoft, marginTop: 2, fontFamily: 'monospace' }}>{idParc}</div>}
+                      {idParc && <div style={{ fontSize: 10, color: C.textSoft, fontFamily: 'monospace', marginBottom: 2 }}>{idParc}</div>}
+                      {surface != null && <div style={{ fontSize: 11, color: C.textMid }}>Surface : <strong>{surface.toLocaleString('fr-FR')} m²</strong></div>}
                     </div>
                     <a
                       href={`https://www.geoportail.gouv.fr/carte?c=${center[1]},${center[0]}&z=19&l0=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes`}

@@ -989,9 +989,11 @@ export default function DossierDetail() {
                 )}
               </div>
 
-              {/* Parcelle cadastrale — adresse site depuis devis_hub, fallback adresse société */}
+              {/* Parcelle cadastrale — SIRET prioritaire pour précision bâtiment */}
               <CadastreMap
                 adresse={adresseSite || [dossier.prospects?.adresse, dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(', ')}
+                siret={dossier.prospects?.siret}
+                raisonSociale={dossier.prospects?.raison_sociale}
               />
 
               {/* Notes */}
