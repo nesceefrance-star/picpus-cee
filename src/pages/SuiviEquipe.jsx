@@ -346,9 +346,12 @@ function DashboardTab() {
   // MWh cumac — simulations filtrées par période
   const totalMwh = simulations.filter(inPeriode).reduce((s, sim) => s + (sim.mwh_cumac || 0), 0)
 
-  // Par commercial
-  const perCommercial = profiles.map(p => {
-    const myDossiers = dossiers.filter(d => d.assigne_a === p.user_id)
+  // Par commercial — construit depuis les dossiers (assigne_a) + lookup profil pour le nom
+  const profileMap = Object.fromEntries(profiles.map(p => [p.user_id, p]))
+  const uniqueAssignes = [...new Set(dossiers.map(d => d.assigne_a).filter(Boolean))]
+  const perCommercial = uniqueAssignes.map(uid => {
+    const p = profileMap[uid] || {}
+    const myDossiers = dossiers.filter(d => d.assigne_a === uid)
     const myIds = new Set(myDossiers.map(d => d.id))
     const myDevis = devisP.filter(dv => myIds.has(dv.dossier_id))
     const myFin = myDevis.reduce((acc, dv) => {
@@ -356,8 +359,9 @@ function DashboardTab() {
       return { ca: acc.ca + totalHT, marge: acc.marge + marge, prime: acc.prime + prime }
     }, { ca: 0, marge: 0, prime: 0 })
     const myMwh = simulations.filter(s => myIds.has(s.dossier_id) && inPeriode(s)).reduce((s, sim) => s + (sim.mwh_cumac || 0), 0)
+    const nom = p.prenom || p.nom ? `${p.prenom || ''} ${p.nom || ''}`.trim() : uid.slice(0, 8)
     return {
-      ...p,
+      uid, nom,
       actifs:  myDossiers.filter(d => !['facture','archive'].includes(d.statut)).length,
       visios:  myDossiers.filter(d => d.statut === 'visio_planifiee').length,
       visites: myDossiers.filter(d => d.statut === 'visite_planifiee').length,
@@ -365,7 +369,7 @@ function DashboardTab() {
       ca: myFin.ca, marge: myFin.marge, prime: myFin.prime, mwh: myMwh,
       total: myDossiers.length,
     }
-  }).filter(p => p.total > 0).sort((a, b) => b.ca - a.ca)
+  }).sort((a, b) => b.ca - a.ca)
 
   const sectionTitle = (label) => (
     <Typography sx={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '.08em', mb: 1.5, mt: 2.5 }}>
@@ -453,9 +457,9 @@ function DashboardTab() {
               </Box>
               <Box component="tbody">
                 {perCommercial.map(p => (
-                  <Box component="tr" key={p.user_id} sx={{ borderTop: '1px solid #1E293B', '&:hover td': { background: '#273549' } }}>
+                  <Box component="tr" key={p.uid} sx={{ borderTop: '1px solid #1E293B', '&:hover td': { background: '#273549' } }}>
                     {[
-                      { v: `${p.prenom} ${p.nom}`, align: 'left',  color: '#F1F5F9', fw: 700 },
+                      { v: p.nom, align: 'left', color: '#F1F5F9', fw: 700 },
                       { v: p.actifs,  align: 'right', color: '#60A5FA' },
                       { v: p.visios,  align: 'right', color: '#06B6D4' },
                       { v: p.visites, align: 'right', color: '#F59E0B' },
