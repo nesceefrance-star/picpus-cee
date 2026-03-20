@@ -252,24 +252,61 @@ function StyleExemplesTab({ session }) {
 
 // ── Onglet Dashboard ─────────────────────────────────────────────────────────
 
+const PERIODES = [
+  { key: '7j',   label: '7 jours',  ms: 7  * 24 * 3600 * 1000 },
+  { key: '30j',  label: '30 jours', ms: 30 * 24 * 3600 * 1000 },
+  { key: '90j',  label: '3 mois',   ms: 90 * 24 * 3600 * 1000 },
+  { key: 'tout', label: 'Tout',     ms: null },
+]
+
+const fmtK = (n) => {
+  if (n == null || isNaN(n)) return '—'
+  if (n >= 1000000) return (n / 1000000).toFixed(1).replace('.', ',') + ' M€'
+  if (n >= 1000)    return (n / 1000).toFixed(0) + ' k€'
+  return n.toFixed(0) + ' €'
+}
+
+function KpiCard({ label, value, sub, color }) {
+  return (
+    <Paper sx={{ p: 1.5, background: '#1E293B', border: '1px solid #334155', borderRadius: 2 }}>
+      <Typography sx={{ fontSize: 10, color: '#64748B', textTransform: 'uppercase', letterSpacing: '.06em', mb: 0.5 }}>{label}</Typography>
+      <Typography sx={{ fontSize: 20, fontWeight: 800, color: color || '#F1F5F9', lineHeight: 1.1 }}>{value}</Typography>
+      {sub && <Typography sx={{ fontSize: 10, color: '#475569', mt: 0.3 }}>{sub}</Typography>}
+    </Paper>
+  )
+}
+
+function computeDevisFinancials(devis) {
+  const lignes = (devis.lignes || []).filter(l => l.inclus !== false)
+  const totalHT = lignes.reduce((s, l) => s + (l.puVente || 0) * (l.qte || 0), 0)
+    + (devis.bat_qte || 0) * (devis.bat_pu_vente || 0)
+  const achat = lignes.reduce((s, l) => s + (l.puAchat || 0) * (l.qte || 0), 0)
+  return { totalHT, marge: totalHT - achat, prime: devis.prime || 0 }
+}
+
 function DashboardTab() {
-  const [stats, setStats]   = useState(null)
+  const [stats,   setStats]   = useState(null)
   const [loading, setLoading] = useState(true)
+  const [periode, setPeriode] = useState('30j')
 
   useEffect(() => {
     const load = async () => {
       setLoading(true)
-      const [dossiersRes, appelsRes, activitesRes, profilesRes] = await Promise.all([
-        supabase.from('dossiers').select('statut, assigne_a, statut_date'),
+      const [dossiersRes, appelsRes, activitesRes, profilesRes, devisRes, simuRes] = await Promise.all([
+        supabase.from('dossiers').select('id, statut, assigne_a, created_at'),
         supabase.from('appels').select('etat, created_at, dossier_id'),
         supabase.from('activites').select('type, created_at, user_id, dossier_id'),
         supabase.from('profiles').select('user_id, prenom, nom').eq('role', 'commercial'),
+        supabase.from('devis_hub').select('dossier_id, lignes, prime, bat_qte, bat_pu_vente, created_at'),
+        supabase.from('simulations').select('dossier_id, mwh_cumac, created_at'),
       ])
       setStats({
         dossiers:  dossiersRes.data  || [],
         appels:    appelsRes.data    || [],
         activites: activitesRes.data || [],
         profiles:  profilesRes.data  || [],
+        devis:     devisRes.data     || [],
+        simulations: simuRes.data    || [],
       })
       setLoading(false)
     }
@@ -279,70 +316,119 @@ function DashboardTab() {
   if (loading) return <Box sx={{ textAlign: 'center', py: 6 }}><CircularProgress size={24} /></Box>
   if (!stats) return null
 
-  const { dossiers, appels, activites, profiles } = stats
+  const { dossiers, appels, activites, profiles, devis, simulations } = stats
   const now = new Date()
-  const weekAgo = new Date(now - 7 * 24 * 3600 * 1000)
-  const monthAgo = new Date(now - 30 * 24 * 3600 * 1000)
+  const periodeConf = PERIODES.find(p => p.key === periode)
+  const since = periodeConf?.ms ? new Date(now - periodeConf.ms) : null
+  const inPeriode = (d) => !since || new Date(d.created_at) > since
 
   const byStatut = {}
   for (const d of dossiers) byStatut[d.statut] = (byStatut[d.statut] || 0) + 1
 
-  const appelsWeek    = appels.filter(a => new Date(a.created_at) > weekAgo)
-  const activitesWeek = activites.filter(a => new Date(a.created_at) > weekAgo)
-  const emailsWeek    = activitesWeek.filter(a => a.type === 'email').length
-  const rdvsWeek      = activitesWeek.filter(a => a.type === 'rdv').length
-  const docsWeek      = activitesWeek.filter(a => a.type === 'document').length
-
   const PIPELINE = ['simulation','prospect','contacte','visio_planifiee','visio_effectuee','visite_planifiee','visite_effectuee','devis','ah','conforme','facture']
 
-  const kpis = [
-    { label: 'Dossiers actifs', value: dossiers.filter(d => !['facture','archive'].includes(d.statut)).length, color: '#60A5FA' },
-    { label: 'Visio planifiées', value: (byStatut['visio_planifiee'] || 0), color: '#06B6D4' },
-    { label: 'Visites planifiées', value: (byStatut['visite_planifiee'] || 0), color: '#F59E0B' },
-    { label: 'Devis envoyés', value: (byStatut['devis'] || 0), color: '#8B5CF6' },
-    { label: 'AH signés', value: (byStatut['ah'] || 0), color: '#10B981' },
-    { label: 'Facturés', value: (byStatut['facture'] || 0), color: '#047857' },
-    { label: 'Appels (7j)', value: appelsWeek.length, color: '#64748B' },
-    { label: 'Emails (7j)', value: emailsWeek, color: '#6366F1' },
-    { label: 'RDV créés (7j)', value: rdvsWeek, color: '#EC4899' },
-    { label: 'Docs uploadés (7j)', value: docsWeek, color: '#78716C' },
-  ]
+  // Activités filtrées par période
+  const appelsP    = appels.filter(inPeriode)
+  const activitesP = activites.filter(inPeriode)
+  const emailsP    = activitesP.filter(a => a.type === 'email').length
+  const rdvsP      = activitesP.filter(a => a.type === 'rdv').length
+  const docsP      = activitesP.filter(a => a.type === 'document').length
+  const nouveauxP  = dossiers.filter(inPeriode).length
 
-  // Résumé par commercial
+  // Financier — devis filtrés par période
+  const devisP = devis.filter(inPeriode)
+  const finTotals = devisP.reduce((acc, dv) => {
+    const { totalHT, marge, prime } = computeDevisFinancials(dv)
+    return { ca: acc.ca + totalHT, marge: acc.marge + marge, prime: acc.prime + prime }
+  }, { ca: 0, marge: 0, prime: 0 })
+  const margePct = finTotals.ca > 0 ? (finTotals.marge / finTotals.ca * 100).toFixed(1) : '—'
+
+  // MWh cumac — simulations filtrées par période
+  const totalMwh = simulations.filter(inPeriode).reduce((s, sim) => s + (sim.mwh_cumac || 0), 0)
+
+  // Par commercial
   const perCommercial = profiles.map(p => {
     const myDossiers = dossiers.filter(d => d.assigne_a === p.user_id)
-    const myActifs   = myDossiers.filter(d => !['facture','archive'].includes(d.statut))
-    const myAppels   = appelsWeek.filter(a => activites.find(ac => ac.dossier_id === a.dossier_id && myDossiers.some(d => d.id === ac.dossier_id)))
-    return { ...p, total: myDossiers.length, actifs: myActifs.length,
-      visios: myDossiers.filter(d => d.statut === 'visio_planifiee').length,
+    const myIds = new Set(myDossiers.map(d => d.id))
+    const myDevis = devisP.filter(dv => myIds.has(dv.dossier_id))
+    const myFin = myDevis.reduce((acc, dv) => {
+      const { totalHT, marge, prime } = computeDevisFinancials(dv)
+      return { ca: acc.ca + totalHT, marge: acc.marge + marge, prime: acc.prime + prime }
+    }, { ca: 0, marge: 0, prime: 0 })
+    const myMwh = simulations.filter(s => myIds.has(s.dossier_id) && inPeriode(s)).reduce((s, sim) => s + (sim.mwh_cumac || 0), 0)
+    return {
+      ...p,
+      actifs:  myDossiers.filter(d => !['facture','archive'].includes(d.statut)).length,
+      visios:  myDossiers.filter(d => d.statut === 'visio_planifiee').length,
       visites: myDossiers.filter(d => d.statut === 'visite_planifiee').length,
-      devis: myDossiers.filter(d => d.statut === 'devis').length,
+      devisN:  myDossiers.filter(d => d.statut === 'devis').length,
+      ca: myFin.ca, marge: myFin.marge, prime: myFin.prime, mwh: myMwh,
+      total: myDossiers.length,
     }
-  }).filter(p => p.total > 0)
+  }).filter(p => p.total > 0).sort((a, b) => b.ca - a.ca)
+
+  const sectionTitle = (label) => (
+    <Typography sx={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '.08em', mb: 1.5, mt: 2.5 }}>
+      {label}
+    </Typography>
+  )
 
   return (
     <Box>
-      {/* KPI Grid */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 1.5, mb: 3 }}>
-        {kpis.map(k => (
-          <Paper key={k.label} sx={{ p: 1.5, background: '#1E293B', border: '1px solid #334155', borderRadius: 2 }}>
-            <Typography sx={{ fontSize: 10, color: '#64748B', textTransform: 'uppercase', letterSpacing: '.06em', mb: 0.5 }}>{k.label}</Typography>
-            <Typography sx={{ fontSize: 22, fontWeight: 800, color: k.color }}>{k.value}</Typography>
-          </Paper>
+      {/* Filtre période */}
+      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+        {PERIODES.map(p => (
+          <Chip key={p.key} label={p.label} size="small" onClick={() => setPeriode(p.key)}
+            sx={{ fontSize: 11, fontWeight: 600, cursor: 'pointer', height: 26,
+              background: periode === p.key ? '#3B82F6' : '#1E293B',
+              color: periode === p.key ? '#fff' : '#94A3B8',
+              border: `1px solid ${periode === p.key ? '#3B82F6' : '#334155'}`,
+              '&:hover': { background: periode === p.key ? '#2563EB' : '#273549' },
+            }}
+          />
         ))}
+        <Typography sx={{ fontSize: 11, color: '#475569', alignSelf: 'center', ml: 1 }}>
+          {since ? `depuis le ${since.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}` : 'toutes périodes'}
+        </Typography>
       </Box>
 
-      {/* Pipeline */}
-      <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '.06em', mb: 1.5 }}>
-        Pipeline
-      </Typography>
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
+      {/* Pipeline actuel */}
+      {sectionTitle('Pipeline actuel')}
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 1.5, mb: 1 }}>
+        <KpiCard label="Dossiers actifs"    value={dossiers.filter(d => !['facture','archive'].includes(d.statut)).length} color="#60A5FA" />
+        <KpiCard label="Visio planifiées"   value={byStatut['visio_planifiee']  || 0} color="#06B6D4" />
+        <KpiCard label="Visite planifiées"  value={byStatut['visite_planifiee'] || 0} color="#F59E0B" />
+        <KpiCard label="Devis envoyés"      value={byStatut['devis'] || 0}            color="#8B5CF6" />
+        <KpiCard label="AH signés"          value={byStatut['ah']    || 0}            color="#10B981" />
+        <KpiCard label="Facturés"           value={byStatut['facture'] || 0}          color="#047857" />
+      </Box>
+
+      {/* Financier */}
+      {sectionTitle(`Financier (${periodeConf?.label})`)}
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 1.5, mb: 1 }}>
+        <KpiCard label="CA devis"    value={fmtK(finTotals.ca)}    color="#60A5FA" sub={`${devisP.length} devis`} />
+        <KpiCard label="Marge brute" value={fmtK(finTotals.marge)} color={finTotals.marge >= 0 ? '#10B981' : '#EF4444'} sub={margePct !== '—' ? `${margePct}% du CA` : undefined} />
+        <KpiCard label="Prime CEE"   value={fmtK(finTotals.prime)} color="#8B5CF6" />
+        <KpiCard label="MWh cumac"   value={totalMwh > 0 ? `${totalMwh.toFixed(0)} MWh` : '—'} color="#F59E0B" />
+        <KpiCard label="Nouveaux dossiers" value={nouveauxP} color="#64748B" />
+      </Box>
+
+      {/* Activité */}
+      {sectionTitle(`Activité (${periodeConf?.label})`)}
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 1.5, mb: 1 }}>
+        <KpiCard label="Appels"   value={appelsP.length} color="#64748B" />
+        <KpiCard label="Emails"   value={emailsP}        color="#6366F1" />
+        <KpiCard label="RDV"      value={rdvsP}          color="#EC4899" />
+        <KpiCard label="Documents" value={docsP}         color="#78716C" />
+      </Box>
+
+      {/* Pipeline détaillé */}
+      {sectionTitle('Répartition pipeline')}
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
         {PIPELINE.map(s => {
-          const n = byStatut[s] || 0
-          if (!n) return null
+          const n = byStatut[s] || 0; if (!n) return null
           return (
-            <Chip key={s} size="small"
-              label={`${STATUT_LABELS[s] || s} · ${n}`}
+            <Chip key={s} size="small" label={`${STATUT_LABELS[s] || s} · ${n}`}
               sx={{ height: 24, fontSize: 11, fontWeight: 600,
                 background: (STATUT_COLORS[s] || '#334155') + '33',
                 color: STATUT_COLORS[s] || '#94A3B8',
@@ -355,28 +441,36 @@ function DashboardTab() {
       {/* Par commercial */}
       {perCommercial.length > 0 && (
         <>
-          <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '.06em', mb: 1.5 }}>
-            Par commercial
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {perCommercial.map(p => (
-              <Paper key={p.user_id} sx={{ p: 1.5, background: '#1E293B', border: '1px solid #334155', borderRadius: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: '#fff', minWidth: 120 }}>{p.prenom} {p.nom}</Typography>
-                  {[
-                    { l: 'Dossiers actifs', v: p.actifs, c: '#60A5FA' },
-                    { l: 'Visio plan.', v: p.visios, c: '#06B6D4' },
-                    { l: 'Visite plan.', v: p.visites, c: '#F59E0B' },
-                    { l: 'Devis', v: p.devis, c: '#8B5CF6' },
-                  ].map(k => (
-                    <Box key={k.l} sx={{ textAlign: 'center', minWidth: 60 }}>
-                      <Typography sx={{ fontSize: 16, fontWeight: 800, color: k.c }}>{k.v}</Typography>
-                      <Typography sx={{ fontSize: 10, color: '#475569' }}>{k.l}</Typography>
-                    </Box>
+          {sectionTitle('Par commercial')}
+          <Box sx={{ overflowX: 'auto' }}>
+            <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <Box component="thead">
+                <Box component="tr" sx={{ color: '#475569', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                  {['Commercial','Actifs','Visio','Visite','Devis','CA','Marge','Prime CEE','MWh cumac'].map(h => (
+                    <Box component="th" key={h} sx={{ textAlign: h === 'Commercial' ? 'left' : 'right', pb: 1, pr: 2, fontWeight: 700, whiteSpace: 'nowrap' }}>{h}</Box>
                   ))}
                 </Box>
-              </Paper>
-            ))}
+              </Box>
+              <Box component="tbody">
+                {perCommercial.map(p => (
+                  <Box component="tr" key={p.user_id} sx={{ borderTop: '1px solid #1E293B', '&:hover td': { background: '#273549' } }}>
+                    {[
+                      { v: `${p.prenom} ${p.nom}`, align: 'left',  color: '#F1F5F9', fw: 700 },
+                      { v: p.actifs,  align: 'right', color: '#60A5FA' },
+                      { v: p.visios,  align: 'right', color: '#06B6D4' },
+                      { v: p.visites, align: 'right', color: '#F59E0B' },
+                      { v: p.devisN,  align: 'right', color: '#8B5CF6' },
+                      { v: fmtK(p.ca),    align: 'right', color: '#60A5FA' },
+                      { v: fmtK(p.marge), align: 'right', color: p.marge >= 0 ? '#10B981' : '#EF4444' },
+                      { v: fmtK(p.prime), align: 'right', color: '#8B5CF6' },
+                      { v: p.mwh > 0 ? `${p.mwh.toFixed(0)} MWh` : '—', align: 'right', color: '#F59E0B' },
+                    ].map((c, i) => (
+                      <Box component="td" key={i} sx={{ py: 1, pr: 2, textAlign: c.align, color: c.color, fontWeight: c.fw || 400, whiteSpace: 'nowrap' }}>{c.v}</Box>
+                    ))}
+                  </Box>
+                ))}
+              </Box>
+            </Box>
           </Box>
         </>
       )}
