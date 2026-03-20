@@ -97,21 +97,57 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
 
       // 2. Parcelle cadastrale : point précis via apicarto IGN
       const geomParam = encodeURIComponent(JSON.stringify({ type: 'Point', coordinates: [lon, lat] }))
-      let cadData = null
+      let firstParcel = null
       const cadRes = await fetch(`https://apicarto.ign.fr/api/cadastre/parcelle?geom=${geomParam}`)
-      if (cadRes.ok) cadData = await cadRes.json()
+      if (cadRes.ok) {
+        const d = await cadRes.json()
+        if (d?.features?.length) firstParcel = d
+      }
 
-      // Fallback bbox 30m si le point tombe sur la voirie
+      // Bbox 200m pour récupérer toutes les parcelles du site
+      const D = 0.002 // ~200m
+      const bbox200 = `${lon-D},${lat-D},${lon+D},${lat+D},CRS:84`
+      let cadData = null
+
+      // Si on a une section de référence, on filtre par section dans le bbox
+      const refSection = firstParcel?.features?.[0]?.properties?.section
+      const refInsee   = firstParcel?.features?.[0]?.properties?.code_insee || firstParcel?.features?.[0]?.properties?.com_abs
+
+      if (refSection && refInsee) {
+        // Toutes les parcelles de la même section dans 200m
+        const url = `https://apicarto.ign.fr/api/cadastre/parcelle?code_insee=${refInsee}&section=${refSection}&_limit=50`
+        const r = await fetch(url)
+        if (r.ok) {
+          const d = await r.json()
+          if (d?.features?.length) {
+            // Filtre : ne garde que les parcelles dans le bbox 200m
+            const inBbox = d.features.filter(f => {
+              const coords = f.geometry?.coordinates
+              if (!coords) return false
+              // Centroïde approximatif du polygone (premier anneau)
+              const ring = coords[0]?.[0] ?? coords[0]
+              if (!ring?.length) return false
+              const cx = ring.reduce((s, p) => s + p[0], 0) / ring.length
+              const cy = ring.reduce((s, p) => s + p[1], 0) / ring.length
+              return cx >= lon-D && cx <= lon+D && cy >= lat-D && cy <= lat+D
+            })
+            if (inBbox.length) cadData = { ...d, features: inBbox }
+          }
+        }
+      }
+
+      // Fallback : WFS bbox 200m si pas de données section
       if (!cadData?.features?.length) {
-        const d = 0.0003 // ~30m
-        const bbox = `${lon-d},${lat-d},${lon+d},${lat+d},CRS:84`
         const wfsRes = await fetch(
           `https://data.geopf.fr/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature` +
           `&TYPENAMES=CADASTRALPARCELS.PARCELLAIRE_EXPRESS:parcelle` +
-          `&OUTPUTFORMAT=application/json&COUNT=5&BBOX=${bbox}`
+          `&OUTPUTFORMAT=application/json&COUNT=30&BBOX=${bbox200}`
         )
         if (wfsRes.ok) cadData = await wfsRes.json()
       }
+
+      // Dernier recours : retour à la parcelle du point uniquement
+      if (!cadData?.features?.length && firstParcel?.features?.length) cadData = firstParcel
 
       if (!cadData?.features?.length) throw new Error("Aucune parcelle trouvée à cette adresse")
 
