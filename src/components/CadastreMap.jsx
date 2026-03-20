@@ -181,41 +181,78 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
             </MapContainer>
           </div>
 
-          {/* Infos parcelles */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {features.map((f, i) => {
+          {/* Résumé global */}
+          {(() => {
+            const parsed = features.map(f => {
               const p = f.properties || {}
-              // PARCELLAIRE_EXPRESS WFS: id_parcelle, section, numero, contenance, commune
-              // apicarto fallbacks: nom_com, code_insee, prefixe
-              const section   = p.section || '—'
-              const numero    = p.numero  || '—'
-              const idParc    = p.id_parcelle || p.idu || [p.code_insee || p.commune, p.section, p.numero].filter(Boolean).join(' ')
-              const commune   = p.nom_com || p.com_nom || p.commune_name || idParc?.slice(0, 5) || '—'
-              // contenance en m² (WFS = m², parfois en ares = diviser par 100)
-              const surface   = p.contenance ? Math.round(p.contenance) : null
-              return (
-                <div key={i} style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '10px 14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#1D4ED8', marginBottom: 3 }}>
-                        Parcelle {section} {numero}
-                      </div>
-                      {idParc && <div style={{ fontSize: 10, color: C.textSoft, fontFamily: 'monospace', marginBottom: 2 }}>{idParc}</div>}
-                      {surface != null && <div style={{ fontSize: 11, color: C.textMid }}>Surface : <strong>{surface.toLocaleString('fr-FR')} m²</strong></div>}
+              const id    = p.id_parcelle || p.idu || ''
+              // id_parcelle = deptcode(2) + commune(3) + prefixe(3) + section(2) + numero(4)
+              const prefixe = id.length >= 14 ? id.slice(5, 8) : (p.code_arr || p.prefixe || '000')
+              const section = p.section || (id.length >= 14 ? id.slice(8, 10) : '—')
+              const numero  = p.numero  || (id.length >= 14 ? id.slice(10, 14) : '—')
+              const surface = p.contenance ? Math.round(p.contenance) : null
+              const refOff  = `${prefixe} / ${section} / ${numero}`
+              return { prefixe, section, numero, surface, refOff, id }
+            })
+            const totalSurface = parsed.reduce((s, x) => s + (x.surface || 0), 0)
+            const allRefs = parsed.map(x => x.refOff).join('\n')
+            return (
+              <>
+                {/* Bloc résumé */}
+                <div style={{ background: '#F0F7FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '12px 14px', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#1D4ED8' }}>
+                      {parsed.length} parcelle{parsed.length > 1 ? 's' : ''} trouvée{parsed.length > 1 ? 's' : ''}
+                      {totalSurface > 0 && <span style={{ fontWeight: 400, color: C.textMid, marginLeft: 8 }}>· Surface totale : <strong>{totalSurface.toLocaleString('fr-FR')} m²</strong></span>}
                     </div>
-                    <a
-                      href={`https://www.geoportail.gouv.fr/carte?c=${center[1]},${center[0]}&z=19&l0=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ fontSize: 11, color: C.accent, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', marginLeft: 8 }}
-                    >
-                      Géoportail →
-                    </a>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(allRefs) }}
+                      title="Copier toutes les références"
+                      style={{ background: C.accent, border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      📋 Copier les refs
+                    </button>
+                  </div>
+                  {/* Liste refs copiables */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {parsed.map((x, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <code style={{ fontSize: 12, fontWeight: 700, color: '#1D4ED8', background: '#fff', border: '1px solid #BFDBFE', borderRadius: 5, padding: '2px 8px', letterSpacing: '0.05em', flex: 1 }}>
+                          {x.refOff}
+                        </code>
+                        {x.surface != null && <span style={{ fontSize: 11, color: C.textSoft, whiteSpace: 'nowrap' }}>{x.surface.toLocaleString('fr-FR')} m²</span>}
+                        <button
+                          onClick={() => navigator.clipboard.writeText(x.refOff)}
+                          title="Copier"
+                          style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textSoft, borderRadius: 5, padding: '2px 7px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          ⧉
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              )
-            })}
-          </div>
+
+                {/* Détail par parcelle */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {parsed.map((x, i) => (
+                    <div key={i} style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '8px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#1D4ED8' }}>Section {x.section} — n° {x.numero}</span>
+                        {x.id && <div style={{ fontSize: 10, color: C.textSoft, fontFamily: 'monospace', marginTop: 1 }}>{x.id}</div>}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {x.surface != null && <span style={{ fontSize: 11, color: C.textMid }}><strong>{x.surface.toLocaleString('fr-FR')}</strong> m²</span>}
+                        <a href={`https://www.geoportail.gouv.fr/carte?c=${center[1]},${center[0]}&z=19&l0=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes`}
+                          target="_blank" rel="noopener noreferrer"
+                          style={{ fontSize: 11, color: C.accent, fontWeight: 600, textDecoration: 'none' }}>
+                          Géoportail →
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )
+          })()}
         </>
       )}
     </div>
