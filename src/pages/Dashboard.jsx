@@ -93,10 +93,12 @@ export default function Dashboard() {
   const [rappelsMap, setRappelsMap]             = useState({}) // dossier_id → rappel_at
   const [briefingOpen, setBriefingOpen]         = useState(null) // tâche key ouverte
 
+  // Attend que le profil soit chargé avant de fetcher les dossiers (sinon admin = filtré par user.id)
   useEffect(() => {
+    if (!profile) return
     fetchProfiles()
     fetchDossiers().then(() => setLoading(false))
-  }, [])
+  }, [profile?.id])
 
   // Charge devis_hub pour les dossiers de ce commercial
   useEffect(() => {
@@ -267,26 +269,27 @@ export default function Dashboard() {
               {' · '}{myDossiers.filter(d => !['facture','archive'].includes(d.statut)).length} dossiers actifs
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {isAdmin && (
-              <select value={filtreCommercial} onChange={e => setFiltreCommercial(e.target.value)}
-                style={{ ...INP, width: 180, padding: '9px 12px', borderRadius: 8 }}>
-                <option value="all">Tous les commerciaux</option>
-                {profiles.filter(p => ['admin','commercial'].includes(p.role)).map(p => (
-                  <option key={p.id} value={p.id}>{(`${p.prenom || ''} ${p.nom || ''}`.trim()) || p.email}</option>
-                ))}
-              </select>
-            )}
-            <button onClick={() => setShowModal(true)} style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: 9, padding: '11px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-              ➕ Nouveau dossier
-            </button>
-          </div>
+          <button onClick={() => setShowModal(true)} style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: 9, padding: '11px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+            ➕ Nouveau dossier
+          </button>
         </div>
 
         {/* ── Bloc tâches du jour ── */}
         {totalTaches > 0 && (
           <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 10 }}>Actions du jour</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.07em' }}>Actions du jour</div>
+              {isAdmin && (
+                <select value={filtreCommercial} onChange={e => setFiltreCommercial(e.target.value)}
+                  style={{ ...INP, width: 180, padding: '6px 10px', borderRadius: 7, fontSize: 12 }}>
+                  <option value="all">Tous les commerciaux</option>
+                  <option value={user?.id}>Mes actions</option>
+                  {profiles.filter(p => ['admin','commercial'].includes(p.role) && p.id !== user?.id).map(p => (
+                    <option key={p.id} value={p.id}>{(`${p.prenom || ''} ${p.nom || ''}`.trim()) || p.email}</option>
+                  ))}
+                </select>
+              )}
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10 }}>
               {tachesByKey.filter(t => t.dossiers.length > 0).map(t => (
                 <div key={t.label}>
@@ -309,7 +312,14 @@ export default function Dashboard() {
                           onMouseEnter={e => e.currentTarget.style.background = C.bg}
                           onMouseLeave={e => e.currentTarget.style.background = C.surface}>
                           <div>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{d.ref} — {d.prospects?.raison_sociale}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{d.ref} — {d.prospects?.raison_sociale}</span>
+                              {isAdmin && filtreCommercial === 'all' && (
+                                <span style={{ fontSize: 10, background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: 10, padding: '1px 7px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                  {profileName(d.assigne_a)}
+                                </span>
+                              )}
+                            </div>
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
                               {d.prospects?.contact_nom && <span style={{ fontSize: 11, color: C.textMid }}>👤 {d.prospects.contact_nom}</span>}
                               {d.prospects?.contact_tel && (
@@ -359,6 +369,15 @@ export default function Dashboard() {
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Rechercher référence, prospect, contact…"
             style={{ ...INP, flex: 1, minWidth: 200, fontSize: 14, padding: '10px 16px', borderRadius: 9 }}/>
+          {isAdmin && (
+            <select value={filtreCommercial} onChange={e => setFiltreCommercial(e.target.value)}
+              style={{ ...INP, width: 170, padding: '10px 12px', borderRadius: 9, cursor: 'pointer' }}>
+              <option value="all">Tous les commerciaux</option>
+              {profiles.filter(p => ['admin','commercial'].includes(p.role)).map(p => (
+                <option key={p.id} value={p.id}>{(`${p.prenom || ''} ${p.nom || ''}`.trim()) || p.email}</option>
+              ))}
+            </select>
+          )}
           <select value={filtreFiche} onChange={e => setFiltreFiche(e.target.value)}
             style={{ ...INP, width: 160, padding: '10px 12px', borderRadius: 9, cursor: 'pointer' }}>
             <option value="all">Toutes les fiches</option>
