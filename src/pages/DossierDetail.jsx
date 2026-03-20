@@ -212,6 +212,7 @@ export default function DossierDetail() {
   // Activités / Historique
   const [activites, setActivites] = useState([])
   const [activitesLoading, setActivitesLoading] = useState(false)
+  const [ceeAnalyses, setCeeAnalyses] = useState([])
 
   // Documents extra
   const [checkedDocs, setCheckedDocs] = useState(new Set())
@@ -279,9 +280,13 @@ export default function DossierDetail() {
 
   const loadDocuments = async () => {
     setDocsLoading(true)
-    const { data, error } = await supabase.storage.from(BUCKET).list(id, { sortBy: { column: 'created_at', order: 'desc' } })
-    if (error) console.error('[Documents] list error:', error)
-    if (!error && data) setDocuments(data.filter(f => f.name !== '.emptyFolderPlaceholder'))
+    const [storageRes, ceeRes] = await Promise.all([
+      supabase.storage.from(BUCKET).list(id, { sortBy: { column: 'created_at', order: 'desc' } }),
+      supabase.from('cee_analyses').select('id, fiche, ref, result, created_at').eq('dossier_id', id).order('created_at', { ascending: false }),
+    ])
+    if (storageRes.error) console.error('[Documents] list error:', storageRes.error)
+    if (!storageRes.error && storageRes.data) setDocuments(storageRes.data.filter(f => f.name !== '.emptyFolderPlaceholder'))
+    setCeeAnalyses(ceeRes.data || [])
     setDocsLoading(false)
   }
 
@@ -440,12 +445,7 @@ export default function DossierDetail() {
 
   const loadActivites = async () => {
     setActivitesLoading(true)
-    const { data } = await supabase
-      .from('activites')
-      .select('*')
-      .eq('dossier_id', id)
-      .order('created_at', { ascending: false })
-      .limit(50)
+    const { data } = await supabase.from('activites').select('*').eq('dossier_id', id).order('created_at', { ascending: false }).limit(50)
     setActivites(data || [])
     setActivitesLoading(false)
   }
@@ -1665,6 +1665,40 @@ export default function DossierDetail() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── Analyses CEE sauvegardées ── */}
+          {ceeAnalyses.length > 0 && (
+            <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>🔍 Analyses CEE IA</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {ceeAnalyses.map(a => {
+                  const avis = a.result?.avis || 'ATTENTION'
+                  const AVIS_STYLE = {
+                    CONFORME:  { bg: '#F0FDF4', border: '#86EFAC', color: '#16A34A', icon: '✅' },
+                    ATTENTION: { bg: '#FFFBEB', border: '#FCD34D', color: '#D97706', icon: '⚠️' },
+                    BLOQUANT:  { bg: '#FEF2F2', border: '#FCA5A5', color: '#DC2626', icon: '🚫' },
+                  }
+                  const s = AVIS_STYLE[avis] || AVIS_STYLE.ATTENTION
+                  return (
+                    <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: s.bg, borderRadius: 8, border: `1px solid ${s.border}` }}>
+                      <span style={{ fontSize: 16, flexShrink: 0 }}>{s.icon}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: s.color }}>{avis}</div>
+                        <div style={{ fontSize: 11, color: C.textSoft, marginTop: 1 }}>
+                          {a.fiche} · {new Date(a.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => navigate('/hub', { state: { module: 'verificateur', prefill: { dossierId: id, ref: dossier?.ref || '', fiche: a.fiche } } })}
+                        style={{ background: C.surface, border: `1px solid ${s.border}`, color: s.color, borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        Voir →
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
         </div>
