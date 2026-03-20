@@ -277,25 +277,37 @@ export default function Dashboard() {
         {/* ── Bloc tâches du jour ── */}
         {totalTaches > 0 && (
           <div style={{ marginBottom: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+
+            {/* Titre + filtre commercial (boutons pills pour admin) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.07em' }}>Actions du jour</div>
               {isAdmin && (
-                <select value={filtreCommercial} onChange={e => setFiltreCommercial(e.target.value)}
-                  style={{ ...INP, width: 180, padding: '6px 10px', borderRadius: 7, fontSize: 12 }}>
-                  <option value="all">Tous les commerciaux</option>
-                  <option value={user?.id}>Mes actions</option>
-                  {profiles.filter(p => ['admin','commercial'].includes(p.role) && p.id !== user?.id).map(p => (
-                    <option key={p.id} value={p.id}>{(`${p.prenom || ''} ${p.nom || ''}`.trim()) || p.email}</option>
-                  ))}
-                </select>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {[
+                    { value: 'all',    label: 'Tous' },
+                    { value: user?.id, label: 'Mes actions' },
+                    ...profiles.filter(p => ['admin','commercial'].includes(p.role) && p.id !== user?.id)
+                      .map(p => ({ value: p.id, label: (`${p.prenom || ''} ${p.nom || ''}`.trim()) || p.email }))
+                  ].map(opt => {
+                    const active = filtreCommercial === opt.value
+                    return (
+                      <button key={opt.value} onClick={() => setFiltreCommercial(opt.value)}
+                        style={{ border: `1px solid ${active ? C.accent : C.border}`, borderRadius: 20, padding: '4px 13px', fontSize: 12, fontWeight: active ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit', background: active ? C.accent : C.surface, color: active ? '#fff' : C.textMid, transition: 'all .15s' }}>
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
               )}
             </div>
+
+            {/* Cards tâches */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10 }}>
               {tachesByKey.filter(t => t.dossiers.length > 0).map(t => (
                 <div key={t.label}>
                   <div
                     onClick={() => setBriefingOpen(briefingOpen === t.label ? null : t.label)}
-                    style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer', transition: 'box-shadow .15s', boxShadow: briefingOpen === t.label ? '0 2px 8px rgba(0,0,0,.1)' : 'none' }}
+                    style={{ background: briefingOpen === t.label ? t.border : t.bg, border: `1px solid ${t.border}`, borderRadius: briefingOpen === t.label ? '10px 10px 0 0' : 10, padding: '12px 14px', cursor: 'pointer', transition: 'all .15s' }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <span style={{ fontSize: 18 }}>{t.icon}</span>
@@ -303,46 +315,62 @@ export default function Dashboard() {
                     </div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: t.color }}>{t.label}</div>
                   </div>
-                  {/* Dropdown dossiers concernés */}
-                  {briefingOpen === t.label && (
-                    <div style={{ background: C.surface, border: `1px solid ${t.border}`, borderTop: 'none', borderRadius: '0 0 10px 10px', overflow: 'hidden' }}>
-                      {t.dossiers.map(d => (
-                        <div key={d.id} onClick={() => openDossier(d)}
-                          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.border}`, transition: 'background .1s' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                          onMouseLeave={e => e.currentTarget.style.background = C.surface}>
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{d.ref} — {d.prospects?.raison_sociale}</span>
-                              {isAdmin && filtreCommercial === 'all' && (
-                                <span style={{ fontSize: 10, background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: 10, padding: '1px 7px', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                  {profileName(d.assigne_a)}
-                                </span>
-                              )}
-                            </div>
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
-                              {d.prospects?.contact_nom && <span style={{ fontSize: 11, color: C.textMid }}>👤 {d.prospects.contact_nom}</span>}
-                              {d.prospects?.contact_tel && (
-                                <a href={`tel:${d.prospects.contact_tel}`} onClick={e => e.stopPropagation()}
-                                  style={{ fontSize: 11, color: t.color, fontWeight: 600, textDecoration: 'none' }}>
-                                  📞 {d.prospects.contact_tel}
-                                </a>
-                              )}
-                            </div>
-                            {rappelsMap[d.id] && (
-                              <div style={{ fontSize: 11, color: '#7C3AED', fontWeight: 600, marginTop: 2 }}>
-                                🕐 Rappel prévu : {new Date(rappelsMap[d.id]).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} à {new Date(rappelsMap[d.id]).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                              </div>
-                            )}
-                          </div>
-                          <span style={{ fontSize: 11, color: C.textSoft }}>J+{daysSince(d.created_at)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
+
+            {/* Panel pleine largeur sous les cards */}
+            {briefingOpen && (() => {
+              const t = tachesByKey.find(x => x.label === briefingOpen)
+              if (!t) return null
+              return (
+                <div style={{ marginTop: 8, background: C.surface, border: `1px solid ${t.border}`, borderRadius: 10, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,.06)' }}>
+                  {/* En-tête panel */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 20px', borderBottom: `1px solid ${t.border}`, background: t.bg }}>
+                    <span style={{ fontSize: 16 }}>{t.icon}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: t.color }}>{t.label}</span>
+                    <span style={{ fontSize: 12, color: t.color, opacity: .7 }}>— {t.dossiers.length} dossier{t.dossiers.length > 1 ? 's' : ''}</span>
+                  </div>
+                  {/* Lignes dossiers en grille */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
+                    {t.dossiers.map((d, idx) => (
+                      <div key={d.id} onClick={() => openDossier(d)}
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '12px 20px', cursor: 'pointer', borderBottom: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`, transition: 'background .1s', gap: 12 }}
+                        onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{d.ref}</span>
+                            <span style={{ fontSize: 12, color: C.textMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.prospects?.raison_sociale}</span>
+                            {isAdmin && filtreCommercial === 'all' && (
+                              <span style={{ fontSize: 10, background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: 10, padding: '1px 7px', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                {profileName(d.assigne_a)}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+                            {d.prospects?.contact_nom && <span style={{ fontSize: 11, color: C.textMid }}>👤 {d.prospects.contact_nom}</span>}
+                            {d.prospects?.contact_tel && (
+                              <a href={`tel:${d.prospects.contact_tel}`} onClick={e => e.stopPropagation()}
+                                style={{ fontSize: 11, color: t.color, fontWeight: 700, textDecoration: 'none' }}>
+                                📞 {d.prospects.contact_tel}
+                              </a>
+                            )}
+                          </div>
+                          {rappelsMap[d.id] && (
+                            <div style={{ fontSize: 11, color: '#7C3AED', fontWeight: 600, marginTop: 3 }}>
+                              🕐 {new Date(rappelsMap[d.id]).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} à {new Date(rappelsMap[d.id]).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          )}
+                        </div>
+                        <span style={{ fontSize: 11, color: C.textSoft, flexShrink: 0, paddingTop: 2 }}>J+{daysSince(d.created_at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
           </div>
         )}
 
