@@ -212,8 +212,7 @@ function AdresseAutocomplete({ label, value, onChange, onSelect }) {
 
   const select = (feat) => {
     const p = feat.properties
-    const streetPart = [p.housenumber, p.street].filter(Boolean).join(' ') || p.name
-    onSelect({ adresse_site: streetPart, code_postal_site: p.postcode || '', ville_site: p.city || '' })
+    onSelect({ adresse_site: p.label || '', code_postal_site: p.postcode || '', ville_site: p.city || '' })
     onChange(p.label || '')
     setSuggestions([]); setOpen(false)
   }

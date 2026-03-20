@@ -203,11 +203,9 @@ export default function DossierDetail() {
     }, 300)
   }
   const selectAdresseSite = (feat) => {
-    const p = feat.properties
-    const street = [p.housenumber, p.street].filter(Boolean).join(' ') || p.name
-    const full = [street, p.postcode, p.city].filter(Boolean).join(', ')
-    setAdresseSiteForm(full)
-    setAdresseSiteLabel(p.label || full)
+    const label = feat.properties.label || ''
+    setAdresseSiteForm(label)
+    setAdresseSiteLabel(label)
     setAdresseSiteSugg([])
   }
 

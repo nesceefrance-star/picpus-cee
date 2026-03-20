@@ -51,10 +51,7 @@ function AdresseAutocomplete({ value, onChange }) {
   }
 
   const select = (feat) => {
-    const p = feat.properties
-    const street = [p.housenumber, p.street].filter(Boolean).join(' ') || p.name
-    const full   = [street, p.postcode, p.city].filter(Boolean).join(', ') || p.label
-    onChange(full)
+    onChange(feat.properties.label || '')
     setSugg([]); setOpen(false)
   }
 
