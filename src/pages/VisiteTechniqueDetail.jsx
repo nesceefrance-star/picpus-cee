@@ -72,7 +72,7 @@ function AdresseAutocomplete({ value, onChange }) {
           style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 200, overflow: 'hidden' }}>
           {sugg.map((f, i) => (
             <div key={i} onClick={() => select(f)}
-              style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.bg}`, fontSize: 13 }}
+              style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.bg}`, fontSize: 13, color: C.text }}
               onMouseEnter={e => e.currentTarget.style.background = C.bg}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
@@ -153,13 +153,13 @@ export default function VisiteTechniqueDetail() {
 
   const loadAllDossiers = async () => {
     const { data: dos } = await supabase.from('dossiers')
-      .select('id, ref, prospect_id, adresse_site').order('created_at', { ascending: false }).limit(200)
+      .select('id, ref, prospect_id').order('created_at', { ascending: false }).limit(200)
     if (!dos?.length) { setAllDossiers([]); return }
     const prospectIds = [...new Set(dos.map(d => d.prospect_id).filter(Boolean))]
     let prospectMap = {}
     if (prospectIds.length) {
       const { data: pros } = await supabase.from('prospects')
-        .select('id, raison_sociale, contact_nom, contact_tel, contact_email').in('id', prospectIds)
+        .select('id, raison_sociale, adresse, code_postal, ville, contact_nom, contact_tel, contact_email').in('id', prospectIds)
       ;(pros || []).forEach(p => { prospectMap[p.id] = p })
     }
     setAllDossiers(dos.map(d => ({
@@ -249,10 +249,11 @@ export default function VisiteTechniqueDetail() {
   const selectDossier = async (d) => {
     setDossier(d); setDossierRef(d.ref); setDossierSearch(''); setDossierOpen(false)
     const p = d.prospects || {}
+    const adresseProspect = [p.adresse, p.code_postal, p.ville].filter(Boolean).join(', ')
     const nd = {
       ...donnees,
       raison_sociale: donnees.raison_sociale || p.raison_sociale || '',
-      adresse_site:   donnees.adresse_site   || d.adresse_site   || '',
+      adresse_site:   donnees.adresse_site   || adresseProspect  || '',
       contact_nom:    donnees.contact_nom    || p.contact_nom    || '',
       contact_tel:    donnees.contact_tel    || p.contact_tel    || '',
     }
