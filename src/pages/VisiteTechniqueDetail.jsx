@@ -52,7 +52,8 @@ function AdresseAutocomplete({ value, onChange }) {
 
   const select = (feat) => {
     const p = feat.properties
-    const full = [p.housenumber, p.street].filter(Boolean).join(' ') || p.name || p.label
+    const street = [p.housenumber, p.street].filter(Boolean).join(' ') || p.name
+    const full   = [street, p.postcode, p.city].filter(Boolean).join(', ') || p.label
     onChange(full)
     setSugg([]); setOpen(false)
   }
@@ -151,21 +152,19 @@ export default function VisiteTechniqueDetail() {
   }, [id])
 
   const loadAllDossiers = async () => {
-    // On charge la liste de dossiers + prospects en deux étapes pour fiabilité des joins
     const { data: dos } = await supabase.from('dossiers')
-      .select('id, ref, prospect_id').order('created_at', { ascending: false }).limit(200)
+      .select('id, ref, prospect_id, adresse_site').order('created_at', { ascending: false }).limit(200)
     if (!dos?.length) { setAllDossiers([]); return }
-    // Charge les raisons sociales depuis prospects
     const prospectIds = [...new Set(dos.map(d => d.prospect_id).filter(Boolean))]
     let prospectMap = {}
     if (prospectIds.length) {
       const { data: pros } = await supabase.from('prospects')
-        .select('id, raison_sociale').in('id', prospectIds)
-      ;(pros || []).forEach(p => { prospectMap[p.id] = p.raison_sociale })
+        .select('id, raison_sociale, contact_nom, contact_tel, contact_email').in('id', prospectIds)
+      ;(pros || []).forEach(p => { prospectMap[p.id] = p })
     }
     setAllDossiers(dos.map(d => ({
       ...d,
-      prospects: { raison_sociale: prospectMap[d.prospect_id] || '' },
+      prospects: prospectMap[d.prospect_id] || {},
     })))
   }
 
@@ -249,7 +248,14 @@ export default function VisiteTechniqueDetail() {
 
   const selectDossier = async (d) => {
     setDossier(d); setDossierRef(d.ref); setDossierSearch(''); setDossierOpen(false)
-    const nd = { ...donnees, raison_sociale: donnees.raison_sociale || d.prospects?.raison_sociale || '' }
+    const p = d.prospects || {}
+    const nd = {
+      ...donnees,
+      raison_sociale: donnees.raison_sociale || p.raison_sociale || '',
+      adresse_site:   donnees.adresse_site   || d.adresse_site   || '',
+      contact_nom:    donnees.contact_nom    || p.contact_nom    || '',
+      contact_tel:    donnees.contact_tel    || p.contact_tel    || '',
+    }
     setDonnees(nd)
     const vid = await ensureCreated(nd, photos)
     await supabase.from('visites_techniques').update({ dossier_id: d.id, donnees: nd }).eq('id', vid)

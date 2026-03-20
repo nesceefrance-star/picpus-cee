@@ -20,6 +20,11 @@ const C = {
   accent: '#2563EB',
 }
 
+// Détecte iOS/iPadOS (y compris iPadOS 13+ qui se présente comme "Macintosh")
+const isIOSDevice = () =>
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
+
 // Compresse l'image à 1600px max et 85% qualité JPEG
 function compressImage(file, maxPx = 1600) {
   return new Promise(resolve => {
@@ -32,30 +37,28 @@ function compressImage(file, maxPx = 1600) {
       canvas.height = Math.round(img.height * scale)
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
       URL.revokeObjectURL(url)
-      canvas.toBlob(blob => resolve(new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' })), 'image/jpeg', 0.85)
+      canvas.toBlob(blob => {
+        if (!blob) { resolve(file); return } // guard — toBlob peut retourner null sur certains appareils
+        resolve(new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' }))
+      }, 'image/jpeg', 0.85)
     }
     img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
     img.src = url
   })
 }
 
-// Sauvegarde dans les photos de l'appareil (iOS: Share API, Android: download)
+// Sauvegarde dans les photos de l'appareil (Android uniquement — sur iOS/iPadOS, capture="environment" sauvegarde déjà dans la pellicule)
 async function saveToDevice(file) {
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
   try {
-    if (isIOS && navigator.share && navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: file.name })
-    } else {
-      const url = URL.createObjectURL(file)
-      const a   = document.createElement('a')
-      a.href     = url
-      a.download = file.name
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(url), 2000)
-    }
-  } catch { /* annulé par l'utilisateur ou non supporté */ }
+    const url = URL.createObjectURL(file)
+    const a   = document.createElement('a')
+    a.href     = url
+    a.download = file.name
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
+  } catch { /* non supporté */ }
 }
 
 export default function PhotoSection({ visiteId, photos = [], onPhotosChange, showCategories }) {
@@ -74,12 +77,17 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
     if (!file || !visiteId) return
     setUploading(u => ({ ...u, [catId]: true }))
     try {
-      // Sauvegarde sur l'appareil d'abord (avant toute compression)
-      await saveToDevice(file)
+      const ios = isIOSDevice()
 
-      // Compression (peut échouer silencieusement → retourne le fichier original)
+      // Sur iOS/iPadOS : la photo est déjà dans la pellicule via capture="environment" — pas besoin de saveToDevice
+      // Sur Android/desktop : déclenche le téléchargement
+      if (!ios) await saveToDevice(file)
+
+      // Compression — skippée sur iOS/iPadOS (canvas.toBlob instable sur certains modèles)
       let toUpload = file
-      try { toUpload = await compressImage(file) } catch { toUpload = file }
+      if (!ios) {
+        try { toUpload = await compressImage(file) } catch { toUpload = file }
+      }
 
       // Upload Supabase Storage via FileReader (compatible iOS Safari — arrayBuffer() y est instable)
       const ext  = (toUpload.type || 'image/jpeg').includes('png') ? 'png' : 'jpg'
