@@ -366,15 +366,20 @@ export default function DossierDetail() {
   const loadData = async () => {
     setLoading(true)
     let d = currentDossier?.id === id ? currentDossier : null
-    const [dossierRes, devisRes] = await Promise.all([
-      d ? Promise.resolve({ data: d }) : supabase.from('dossiers').select('*, prospects(*)').eq('id', id).single(),
-      supabase.from('devis_hub').select('adresse_site').eq('dossier_id', id).not('adresse_site', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    ])
-    if (!d) d = dossierRes.data
-    if (devisRes.data?.adresse_site) {
-      setAdresseSite(devisRes.data.adresse_site)
-      setAdresseSiteForm(devisRes.data.adresse_site)
-      setAdresseSiteLabel(devisRes.data.adresse_site)
+    if (!d) {
+      const { data } = await supabase.from('dossiers').select('*, prospects(*)').eq('id', id).single()
+      d = data
+    }
+    // adresse_site stockée dans dossiers (colonne ajoutée via ALTER TABLE)
+    // fallback sur devis_hub pour les dossiers anciens
+    const adr = d?.adresse_site || null
+    if (adr) {
+      setAdresseSite(adr); setAdresseSiteForm(adr); setAdresseSiteLabel(adr)
+    } else {
+      const { data: devisRes } = await supabase.from('devis_hub').select('adresse_site').eq('dossier_id', id).not('adresse_site', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle()
+      if (devisRes?.adresse_site) {
+        setAdresseSite(devisRes.adresse_site); setAdresseSiteForm(devisRes.adresse_site); setAdresseSiteLabel(devisRes.adresse_site)
+      }
     }
     if (d) {
       setDossier(d)
@@ -589,7 +594,7 @@ export default function DossierDetail() {
     const [prospectData] = await Promise.all([
       updateProspect(dossier.prospects.id, { raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_email, contact_tel }),
       adresseSiteForm
-        ? supabase.from('devis_hub').update({ adresse_site: adresseSiteForm }).eq('dossier_id', id)
+        ? supabase.from('dossiers').update({ adresse_site: adresseSiteForm }).eq('id', id)
         : Promise.resolve(),
     ])
     if (prospectData) setDossier(d => ({ ...d, prospects: prospectData }))

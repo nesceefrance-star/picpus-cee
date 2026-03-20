@@ -165,7 +165,7 @@ export default function VisiteTechniqueDetail() {
 
   const loadAllDossiers = async () => {
     const { data: dos } = await supabase.from('dossiers')
-      .select('id, ref, prospect_id').order('created_at', { ascending: false }).limit(200)
+      .select('id, ref, prospect_id, adresse_site').order('created_at', { ascending: false }).limit(200)
     if (!dos?.length) { setAllDossiers([]); return }
     const prospectIds = [...new Set(dos.map(d => d.prospect_id).filter(Boolean))]
     let prospectMap = {}
@@ -265,7 +265,7 @@ export default function VisiteTechniqueDetail() {
     const nd = {
       ...donnees,
       raison_sociale: donnees.raison_sociale || p.raison_sociale || '',
-      adresse_site:   donnees.adresse_site   || adresseProspect  || '',
+      adresse_site:   donnees.adresse_site   || d.adresse_site   || adresseProspect || '',
       contact_nom:    donnees.contact_nom    || p.contact_nom    || '',
       contact_tel:    donnees.contact_tel    || p.contact_tel    || '',
     }
