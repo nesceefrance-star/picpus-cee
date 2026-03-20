@@ -176,9 +176,6 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
           {/* Dossiers */}
           <Item icon={<FolderIcon fontSize="small" />} label="Dossiers" path="/dossiers" />
 
-          {/* Visites techniques */}
-          <Item icon={<EngineeringIcon fontSize="small" />} label="Visites techniques" path="/visites" />
-
           <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
 
           {/* Outils CEE */}
@@ -189,8 +186,9 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
             onToggle={() => setOutilsOpen(o => !o)}
           />
           <Collapse in={open ? outilsOpen : true} timeout="auto" unmountOnExit>
-            <Item icon={<SearchIcon fontSize="small" />}      label="Vérificateur CEE"     path="/hub" module="verificateur" indent />
-            <Item icon={<ReceiptLongIcon fontSize="small" />} label="Générateur de devis"  path="/hub" module="marges"       indent />
+            <Item icon={<SearchIcon fontSize="small" />}        label="Vérificateur CEE"     path="/hub" module="verificateur" indent />
+            <Item icon={<ReceiptLongIcon fontSize="small" />}  label="Générateur de devis"  path="/hub" module="marges"       indent />
+            <Item icon={<EngineeringIcon fontSize="small" />}  label="Visites techniques"   path="/visites"                   indent />
           </Collapse>
 
           {/* Admin */}

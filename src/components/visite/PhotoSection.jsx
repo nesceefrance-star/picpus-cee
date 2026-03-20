@@ -58,11 +58,15 @@ async function saveToDevice(file) {
   } catch { /* annulé par l'utilisateur ou non supporté */ }
 }
 
-export default function PhotoSection({ visiteId, photos = [], onPhotosChange }) {
+export default function PhotoSection({ visiteId, photos = [], onPhotosChange, showCategories }) {
   const [uploading, setUploading] = useState({}) // { catId: bool }
   const [expanded,  setExpanded]  = useState({}) // { catId: bool }
   const [lightbox,  setLightbox]  = useState(null) // { url, label }
   const inputs = useRef({})
+
+  const visibleCategories = showCategories
+    ? PHOTO_CATEGORIES.filter(c => showCategories.includes(c.id))
+    : PHOTO_CATEGORIES
 
   const byCategory = (catId) => photos.filter(p => p.categorie === catId)
 
@@ -104,7 +108,7 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange }) 
         {totalCount} photo{totalCount !== 1 ? 's' : ''} enregistrée{totalCount !== 1 ? 's' : ''}
       </div>
 
-      {PHOTO_CATEGORIES.map(cat => {
+      {visibleCategories.map(cat => {
         const catPhotos = byCategory(cat.id)
         const isOpen    = expanded[cat.id] ?? catPhotos.length > 0
         const isUploading = uploading[cat.id]
