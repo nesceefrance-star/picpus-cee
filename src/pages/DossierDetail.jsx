@@ -901,8 +901,16 @@ export default function DossierDetail() {
                 ) : (
                   <div>
                     <InfoRow label="SIRET" value={dossier.prospects?.siret} />
-                    <InfoRow label="Adresse" value={dossier.prospects?.adresse} />
-                    <InfoRow label="Ville" value={[dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(' ') || null} />
+                    <InfoRow label="Adresse société" value={dossier.prospects?.adresse} />
+                    <InfoRow label="Ville société" value={[dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(' ') || null} />
+                    {(dossier.adresse_site || dossier.ville_site) && (
+                      <>
+                        <div style={{ height: 1, background: C.border, margin: '8px 0' }} />
+                        <InfoRow label="Adresse site" value={dossier.adresse_site} color={C.accent} />
+                        <InfoRow label="Ville site" value={[dossier.code_postal_site, dossier.ville_site].filter(Boolean).join(' ') || null} color={C.accent} />
+                      </>
+                    )}
+                    <div style={{ height: 1, background: C.border, margin: '8px 0' }} />
                     <InfoRow label="Contact" value={dossier.prospects?.contact_nom} />
                     <InfoRow label="Email" value={dossier.prospects?.contact_email} />
                     <InfoRow label="Tél" value={dossier.prospects?.contact_tel} />
@@ -910,11 +918,11 @@ export default function DossierDetail() {
                 )}
               </div>
 
-              {/* Parcelle cadastrale */}
+              {/* Parcelle cadastrale — priorité à l'adresse du site */}
               <CadastreMap
-                adresse={dossier.prospects?.adresse}
-                codePostal={dossier.prospects?.code_postal}
-                ville={dossier.prospects?.ville}
+                adresse={dossier.adresse_site || dossier.prospects?.adresse}
+                codePostal={dossier.code_postal_site || dossier.prospects?.code_postal}
+                ville={dossier.ville_site || dossier.prospects?.ville}
               />
 
               {/* Notes */}
