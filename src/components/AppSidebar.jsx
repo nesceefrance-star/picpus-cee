@@ -31,6 +31,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import LogoutIcon from '@mui/icons-material/Logout'
 import ElectricBoltIcon from '@mui/icons-material/ElectricBolt'
+import EngineeringIcon from '@mui/icons-material/Engineering'
 import SettingsIcon from '@mui/icons-material/Settings'
 
 const DRAWER_OPEN  = 240
@@ -174,6 +175,9 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
 
           {/* Dossiers */}
           <Item icon={<FolderIcon fontSize="small" />} label="Dossiers" path="/dossiers" />
+
+          {/* Visites techniques */}
+          <Item icon={<EngineeringIcon fontSize="small" />} label="Visites techniques" path="/visites" />
 
           <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
 
