@@ -151,23 +151,49 @@ export default function VisiteTechniqueDetail() {
   }, [id])
 
   const loadAllDossiers = async () => {
-    const { data } = await supabase.from('dossiers')
-      .select('id, ref, prospects(raison_sociale)').order('created_at', { ascending: false }).limit(200)
-    setAllDossiers(data || [])
+    // On charge la liste de dossiers + prospects en deux étapes pour fiabilité des joins
+    const { data: dos } = await supabase.from('dossiers')
+      .select('id, ref, prospect_id').order('created_at', { ascending: false }).limit(200)
+    if (!dos?.length) { setAllDossiers([]); return }
+    // Charge les raisons sociales depuis prospects
+    const prospectIds = [...new Set(dos.map(d => d.prospect_id).filter(Boolean))]
+    let prospectMap = {}
+    if (prospectIds.length) {
+      const { data: pros } = await supabase.from('prospects')
+        .select('id, raison_sociale').in('id', prospectIds)
+      ;(pros || []).forEach(p => { prospectMap[p.id] = p.raison_sociale })
+    }
+    setAllDossiers(dos.map(d => ({
+      ...d,
+      prospects: { raison_sociale: prospectMap[d.prospect_id] || '' },
+    })))
   }
 
   const loadVisite = async () => {
     setLoading(true)
     const { data } = await supabase.from('visites_techniques')
-      .select('*, dossiers(id, ref, prospects(raison_sociale, siret, contact_email))')
-      .eq('id', id).single()
+      .select('*').eq('id', id).single()
     if (!data) { navigate('/visites', { replace: true }); return }
     setDonnees(data.donnees || {})
     setPhotos(data.photos || [])
     setStatut(data.statut)
     setRapportUrl(data.rapport_url)
     setToken(data.partage_token)
-    if (data.dossiers) { setDossier(data.dossiers); setDossierRef(data.dossiers.ref) }
+    // Charge le dossier lié séparément
+    if (data.dossier_id) {
+      const { data: dos } = await supabase.from('dossiers')
+        .select('id, ref, prospect_id').eq('id', data.dossier_id).single()
+      if (dos) {
+        let raisonSociale = ''
+        if (dos.prospect_id) {
+          const { data: pro } = await supabase.from('prospects')
+            .select('raison_sociale').eq('id', dos.prospect_id).single()
+          raisonSociale = pro?.raison_sociale || ''
+        }
+        setDossier({ ...dos, prospects: { raison_sociale: raisonSociale } })
+        setDossierRef(dos.ref)
+      }
+    }
     setLoading(false)
   }
 

@@ -74,18 +74,30 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
     if (!file || !visiteId) return
     setUploading(u => ({ ...u, [catId]: true }))
     try {
-      const compressed = await compressImage(file)
-      // Sauvegarde sur l'appareil d'abord
-      await saveToDevice(compressed)
-      // Upload Supabase Storage
-      const path = `${visiteId}/${catId}/${Date.now()}_${compressed.name}`
-      const { error } = await supabase.storage.from('visites-photos').upload(path, compressed, { contentType: 'image/jpeg' })
-      if (error) throw error
+      // Sauvegarde sur l'appareil d'abord (avant toute compression)
+      await saveToDevice(file)
+
+      // Compression (peut échouer silencieusement → retourne le fichier original)
+      let toUpload = file
+      try { toUpload = await compressImage(file) } catch { toUpload = file }
+
+      // Upload Supabase Storage via ArrayBuffer (évite le bug iOS Safari avec les blobs)
+      const ext  = (toUpload.type || 'image/jpeg').includes('png') ? 'png' : 'jpg'
+      const path = `${visiteId}/${catId}/${Date.now()}.${ext}`
+      const buf  = await toUpload.arrayBuffer()
+      const { error } = await supabase.storage
+        .from('visites-photos')
+        .upload(path, buf, { contentType: toUpload.type || 'image/jpeg', upsert: false })
+      if (error) throw new Error(error.message || JSON.stringify(error))
+
       const { data: { publicUrl } } = supabase.storage.from('visites-photos').getPublicUrl(path)
-      const newPhoto = { id: crypto.randomUUID(), categorie: catId, url: publicUrl, nom: compressed.name, taken_at: new Date().toISOString() }
+      const newPhoto = {
+        id: crypto.randomUUID(), categorie: catId,
+        url: publicUrl, nom: file.name, taken_at: new Date().toISOString(),
+      }
       onPhotosChange([...photos, newPhoto])
     } catch (e) {
-      alert('Erreur upload photo : ' + e.message)
+      alert('Erreur upload : ' + (e.message || String(e)))
     } finally {
       setUploading(u => ({ ...u, [catId]: false }))
       if (inputs.current[catId]) inputs.current[catId].value = ''

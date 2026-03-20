@@ -37,12 +37,30 @@ export default function VisitesTechniques() {
 
   const loadVisites = async () => {
     setLoading(true)
-    const q = supabase
+    const { data: vData } = await supabase
       .from('visites_techniques')
-      .select('id, created_at, updated_at, statut, type_fiche, donnees, photos, dossier_id, dossiers(ref, prospects(raison_sociale))')
+      .select('id, created_at, updated_at, statut, type_fiche, donnees, photos, dossier_id')
       .order('updated_at', { ascending: false })
-    const { data } = await q
-    setVisites(data || [])
+    if (!vData?.length) { setVisites([]); setLoading(false); return }
+
+    // Charge les dossiers liés + leurs prospects séparément
+    const dossierIds = [...new Set(vData.map(v => v.dossier_id).filter(Boolean))]
+    let dossierMap = {}
+    if (dossierIds.length) {
+      const { data: dos } = await supabase.from('dossiers')
+        .select('id, ref, prospect_id').in('id', dossierIds)
+      const prospectIds = [...new Set((dos || []).map(d => d.prospect_id).filter(Boolean))]
+      let prospectMap = {}
+      if (prospectIds.length) {
+        const { data: pros } = await supabase.from('prospects')
+          .select('id, raison_sociale').in('id', prospectIds)
+        ;(pros || []).forEach(p => { prospectMap[p.id] = p.raison_sociale })
+      }
+      ;(dos || []).forEach(d => {
+        dossierMap[d.id] = { ref: d.ref, prospects: { raison_sociale: prospectMap[d.prospect_id] || '' } }
+      })
+    }
+    setVisites(vData.map(v => ({ ...v, dossiers: dossierMap[v.dossier_id] || null })))
     setLoading(false)
   }
 
