@@ -1,14 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
-import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { MapContainer, TileLayer, GeoJSON, useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 
-// Fix icônes Leaflet cassées avec Vite
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
 
 const C = {
@@ -17,33 +16,62 @@ const C = {
   accent: '#2563EB',
 }
 
-function FitBounds({ geojson }) {
+function parcelleId(f) {
+  return f?.properties?.id_parcelle || f?.properties?.idu || ''
+}
+
+// Charge les parcelles WFS dans la bbox visible
+async function fetchParcellesInBbox(bounds) {
+  const bbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()},CRS:84`
+  const r = await fetch(
+    `https://data.geopf.fr/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature` +
+    `&TYPENAMES=CADASTRALPARCELS.PARCELLAIRE_EXPRESS:parcelle` +
+    `&OUTPUTFORMAT=application/json&COUNT=150&BBOX=${bbox}`
+  )
+  if (!r.ok) return []
+  const d = await r.json()
+  return d?.features || []
+}
+
+// Adapte la vue initiale
+function FitBoundsOnce({ geojson }) {
   const map = useMap()
+  const done = useRef(false)
   useEffect(() => {
-    if (!geojson) return
+    if (!geojson || done.current) return
     try {
       const layer = L.geoJSON(geojson)
       const bounds = layer.getBounds()
-      if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] })
+      if (bounds.isValid()) { map.fitBounds(bounds, { padding: [40, 40] }); done.current = true }
     } catch (_) {}
   }, [geojson, map])
   return null
 }
 
-// Calcule le centroïde d'un feature GeoJSON
-function centroid(feature) {
-  try {
-    const coords = feature.geometry?.coordinates
-    if (!coords) return null
-    const ring = Array.isArray(coords[0][0]) ? coords[0] : coords
-    const cx = ring.reduce((s, p) => s + p[0], 0) / ring.length
-    const cy = ring.reduce((s, p) => s + p[1], 0) / ring.length
-    return [cx, cy]
-  } catch { return null }
-}
+// Charge automatiquement les parcelles à chaque déplacement/zoom (debounced)
+function AutoLoader({ onFeatures, setLoading, minZoom = 15 }) {
+  const map = useMap()
+  const timer = useRef(null)
 
-function parcelleId(f) {
-  return f.properties?.id_parcelle || f.properties?.idu || ''
+  const load = useCallback(() => {
+    if (map.getZoom() < minZoom) return
+    clearTimeout(timer.current)
+    timer.current = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const feats = await fetchParcellesInBbox(map.getBounds())
+        onFeatures(feats)
+      } catch (_) {}
+      setLoading(false)
+    }, 600)
+  }, [map, onFeatures, setLoading, minZoom])
+
+  useMapEvents({ moveend: load, zoomend: load })
+
+  // Charge dès l'apparition de la carte
+  useEffect(() => { load() }, [load])
+
+  return null
 }
 
 export default function CadastreMap({ adresse, codePostal, ville, siret, raisonSociale, dossierId }) {
@@ -55,26 +83,41 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
   })()
 
   const [state, setState]             = useState(cached ? 'done' : 'idle')
-  const [parcelles, setParcelles]     = useState(cached?.parcelles || null)
+  // allFeatures : Map id → feature (accumulation)
+  const [featMap, setFeatMap]         = useState(() => {
+    const m = new Map()
+    ;(cached?.parcelles?.features || []).forEach(f => m.set(parcelleId(f), f))
+    return m
+  })
   const [selectedIds, setSelectedIds] = useState(() => new Set(cached?.selectedIds || []))
-  const [center, setCenter]           = useState(cached?.center    || null)
+  const [center, setCenter]           = useState(cached?.center || null)
   const [errorMsg, setErrorMsg]       = useState('')
   const [sourceLabel, setSourceLabel] = useState(cached?.sourceLabel || '')
-  const [rayon, setRayon]             = useState(cached?.rayon || 100) // mètres
   const [loadingMore, setLoadingMore] = useState(false)
-  // Stocke les coords géocodées pour pouvoir recharger sans re-géocoder
-  const [geoCoords, setGeoCoords]     = useState(cached?.geoCoords || null)
-  const [refCadastre, setRefCadastre] = useState(cached?.refCadastre || null) // { section, insee }
+  const initFeatureRef                = useRef(null) // parcelle sous le point, pour fitBounds
 
   const fullAddress = adresse && !codePostal && !ville
     ? adresse
     : [adresse, codePostal, ville].filter(Boolean).join(' ')
 
+  // Appelé par AutoLoader à chaque déplacement
+  const handleFeatures = useCallback((newFeats) => {
+    if (!newFeats.length) return
+    setFeatMap(prev => {
+      const next = new Map(prev)
+      let changed = false
+      newFeats.forEach(f => {
+        const id = parcelleId(f)
+        if (id && !next.has(id)) { next.set(id, f); changed = true }
+      })
+      return changed ? next : prev
+    })
+  }, [])
+
   const toggleParcel = useCallback((id) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id); else next.add(id)
-      // Persiste la sélection dans le cache
       if (CACHE_KEY) {
         try {
           const c = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}')
@@ -85,60 +128,23 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
     })
   }, [CACHE_KEY])
 
-  // Charge les parcelles autour de coords avec un rayon donné
-  const chargerParcelles = async (lon, lat, rayonM, ref, pointParcel, isFirstLoad) => {
-    const D = rayonM / 100000 // degrés approximatifs
-    let allFeatures = []
-
-    if (ref?.section && ref?.insee) {
-      const r = await fetch(`https://apicarto.ign.fr/api/cadastre/parcelle?code_insee=${ref.insee}&section=${ref.section}&_limit=200`)
-      if (r.ok) {
-        const d = await r.json()
-        allFeatures = (d?.features || []).filter(f => {
-          const c = centroid(f)
-          return c && c[0] >= lon-D && c[0] <= lon+D && c[1] >= lat-D && c[1] <= lat+D
-        })
-      }
-    }
-
-    if (!allFeatures.length) {
-      const bbox = `${lon-D},${lat-D},${lon+D},${lat+D},CRS:84`
-      const r = await fetch(
-        `https://data.geopf.fr/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature` +
-        `&TYPENAMES=CADASTRALPARCELS.PARCELLAIRE_EXPRESS:parcelle` +
-        `&OUTPUTFORMAT=application/json&COUNT=100&BBOX=${bbox}`
-      )
-      if (r.ok) { const d = await r.json(); allFeatures = d?.features || [] }
-    }
-
-    if (pointParcel && !allFeatures.find(f => parcelleId(f) === parcelleId(pointParcel))) {
-      allFeatures = [pointParcel, ...allFeatures]
-    }
-
-    return allFeatures
-  }
-
   const rechercher = async () => {
     if (!fullAddress && !siret && !raisonSociale) return
     if (CACHE_KEY) try { localStorage.removeItem(CACHE_KEY) } catch {}
     setState('loading')
     setErrorMsg('')
+    setFeatMap(new Map())
+    setSelectedIds(new Set())
     try {
-      let lon, lat
-      let newSourceLabel = ''
+      let lon, lat, newSourceLabel = ''
 
-      // 1a. Priorité : adresse du site (BAN)
       if (fullAddress) {
         const geoRes  = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(fullAddress)}&limit=1`)
         const geoData = await geoRes.json()
         const feat    = geoData?.features?.[0]
-        if (feat) {
-          ;[lon, lat] = feat.geometry.coordinates
-          newSourceLabel = '📍 Géocodage adresse du site'
-        }
+        if (feat) { ;[lon, lat] = feat.geometry.coordinates; newSourceLabel = '📍 Géocodage adresse du site' }
       }
 
-      // 1b. Fallback SIRENE
       if (!lat || !lon) {
         const sireneQ = siret?.replace(/\s/g,'') || raisonSociale
         if (sireneQ) {
@@ -156,39 +162,28 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
 
       setSourceLabel(newSourceLabel)
       setCenter([lat, lon])
-      setGeoCoords([lon, lat])
 
-      // Parcelle sous le point
+      // Parcelle directement sous le point → pré-sélection
       const geomParam = encodeURIComponent(JSON.stringify({ type: 'Point', coordinates: [lon, lat] }))
-      let pointParcel = null
       const cadRes = await fetch(`https://apicarto.ign.fr/api/cadastre/parcelle?geom=${geomParam}`)
       if (cadRes.ok) {
         const d = await cadRes.json()
-        if (d?.features?.length) pointParcel = d.features[0]
+        const pf = d?.features?.[0]
+        if (pf) {
+          const id = parcelleId(pf)
+          initFeatureRef.current = pf
+          setFeatMap(new Map([[id, pf]]))
+          setSelectedIds(new Set([id]))
+        }
       }
-
-      const ref = pointParcel ? {
-        section: pointParcel.properties?.section,
-        insee:   pointParcel.properties?.code_insee || pointParcel.properties?.com_abs,
-      } : null
-      setRefCadastre(ref)
-
-      const allFeatures = await chargerParcelles(lon, lat, rayon, ref, pointParcel, true)
-      if (!allFeatures.length) throw new Error("Aucune parcelle trouvée à cette adresse")
-
-      const cadData = { type: 'FeatureCollection', features: allFeatures }
-      setParcelles(cadData)
-
-      const autoId = pointParcel ? parcelleId(pointParcel) : parcelleId(allFeatures[0])
-      setSelectedIds(new Set(autoId ? [autoId] : []))
 
       setState('done')
       if (CACHE_KEY) {
         try {
           localStorage.setItem(CACHE_KEY, JSON.stringify({
-            parcelles: cadData, center: [lat, lon], sourceLabel: newSourceLabel,
-            selectedIds: autoId ? [autoId] : [], rayon,
-            geoCoords: [lon, lat], refCadastre: ref,
+            parcelles: { type: 'FeatureCollection', features: initFeatureRef.current ? [initFeatureRef.current] : [] },
+            center: [lat, lon], sourceLabel: newSourceLabel,
+            selectedIds: initFeatureRef.current ? [parcelleId(initFeatureRef.current)] : [],
           }))
         } catch {}
       }
@@ -198,39 +193,32 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
     }
   }
 
-  const changerRayon = async (newRayon) => {
-    if (!geoCoords) return
-    setRayon(newRayon)
-    setLoadingMore(true)
-    try {
-      const [lon, lat] = geoCoords
-      const allFeatures = await chargerParcelles(lon, lat, newRayon, refCadastre, null, false)
-      if (allFeatures.length) {
-        const cadData = { type: 'FeatureCollection', features: allFeatures }
-        setParcelles(cadData)
-        if (CACHE_KEY) {
-          try {
-            const c = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}')
-            localStorage.setItem(CACHE_KEY, JSON.stringify({ ...c, parcelles: cadData, rayon: newRayon }))
-          } catch {}
-        }
-      }
-    } finally {
-      setLoadingMore(false)
-    }
-  }
+  // Persistance des parcelles chargées (debounced)
+  const persistTimer = useRef(null)
+  useEffect(() => {
+    if (!CACHE_KEY || state !== 'done') return
+    clearTimeout(persistTimer.current)
+    persistTimer.current = setTimeout(() => {
+      try {
+        const c = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}')
+        localStorage.setItem(CACHE_KEY, JSON.stringify({
+          ...c,
+          parcelles: { type: 'FeatureCollection', features: [...featMap.values()] },
+        }))
+      } catch {}
+    }, 1000)
+  }, [featMap, CACHE_KEY, state])
 
-  const features      = parcelles?.features || []
-  const selectedFeats = features.filter(f => selectedIds.has(parcelleId(f)))
-  const selectedGeo   = selectedFeats.length ? { type: 'FeatureCollection', features: selectedFeats } : null
+  const allFeatures   = [...featMap.values()]
+  const cadData       = allFeatures.length ? { type: 'FeatureCollection', features: allFeatures } : null
+  const selectedFeats = allFeatures.filter(f => selectedIds.has(parcelleId(f)))
+  const initGeo       = initFeatureRef.current
+    ? { type: 'FeatureCollection', features: [initFeatureRef.current] }
+    : (allFeatures.length ? cadData : null)
 
-  // Style dynamique selon sélection
-  const styleFor = (f) => {
-    const sel = selectedIds.has(parcelleId(f))
-    return sel
-      ? { color: '#16A34A', weight: 2.5, fillColor: '#22C55E', fillOpacity: 0.35 }
-      : { color: '#94A3B8', weight: 1.5, fillColor: '#CBD5E1', fillOpacity: 0.15 }
-  }
+  const styleFor = (f) => selectedIds.has(parcelleId(f))
+    ? { color: '#16A34A', weight: 2.5, fillColor: '#22C55E', fillOpacity: 0.35 }
+    : { color: '#94A3B8', weight: 1.5, fillColor: '#CBD5E1', fillOpacity: 0.12 }
 
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
@@ -253,7 +241,6 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
         </button>
       </div>
 
-      {/* Source */}
       {(fullAddress || siret || raisonSociale) && (
         <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 8, fontStyle: 'italic' }}>
           {state === 'done' && sourceLabel ? sourceLabel + (fullAddress ? ` — ${fullAddress}` : '') : `📍 ${fullAddress || raisonSociale || ''}`}
@@ -265,65 +252,46 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
         </div>
       )}
 
-      {/* Erreur */}
       {state === 'error' && (
         <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#DC2626', marginBottom: 12 }}>
           ⚠️ {errorMsg}
         </div>
       )}
 
-      {/* Carte */}
       {state === 'done' && center && (
         <>
-          {/* Rayon + instruction */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <span style={{ fontSize: 11, color: '#16A34A', fontWeight: 600 }}>
               Cliquez sur les parcelles du site pour les sélectionner / désélectionner
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-              <span style={{ fontSize: 11, color: C.textSoft }}>Rayon :</span>
-              {[100, 200, 300, 500].map(r => (
-                <button
-                  key={r}
-                  onClick={() => changerRayon(r)}
-                  disabled={loadingMore}
-                  style={{
-                    padding: '3px 8px', fontSize: 11, fontWeight: 600, borderRadius: 5,
-                    cursor: loadingMore ? 'wait' : 'pointer', fontFamily: 'inherit',
-                    border: `1px solid ${rayon === r ? C.accent : C.border}`,
-                    background: rayon === r ? '#EFF6FF' : 'transparent',
-                    color: rayon === r ? C.accent : C.textSoft,
-                  }}
-                >{r}m</button>
-              ))}
-              {loadingMore && <span style={{ fontSize: 11, color: C.textSoft }}>⏳</span>}
-            </div>
+            <span style={{ fontSize: 11, color: C.textSoft }}>
+              {loadingMore ? '⏳ Chargement…' : `${allFeatures.length} parcelle${allFeatures.length > 1 ? 's' : ''} chargée${allFeatures.length > 1 ? 's' : ''}`}
+            </span>
           </div>
 
           <div style={{ borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}`, marginBottom: 12 }}>
-            <MapContainer center={center} zoom={18} style={{ height: 300, width: '100%' }} scrollWheelZoom={false}>
+            <MapContainer center={center} zoom={18} style={{ height: 320, width: '100%' }} scrollWheelZoom>
               <TileLayer
                 attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              {parcelles && (
+              {cadData && (
                 <>
                   <GeoJSON
-                    key={[...selectedIds].sort().join(',')}
-                    data={parcelles}
+                    key={`${allFeatures.length}-${[...selectedIds].sort().join(',')}`}
+                    data={cadData}
                     style={styleFor}
                     onEachFeature={(feature, layer) => {
                       const id = parcelleId(feature)
                       layer.on('click', () => toggleParcel(id))
                       const p = feature.properties || {}
-                      const num = p.numero || ''
-                      const sec = p.section || ''
-                      layer.bindTooltip(`Section ${sec} — n° ${num}`, { sticky: true, className: '' })
+                      layer.bindTooltip(`Section ${p.section || '—'} — n° ${p.numero || '—'}`, { sticky: true })
                     }}
                   />
-                  <FitBounds geojson={selectedGeo || parcelles} />
+                  <FitBoundsOnce geojson={initGeo} />
                 </>
               )}
+              <AutoLoader onFeatures={handleFeatures} setLoading={setLoadingMore} />
             </MapContainer>
           </div>
 
@@ -334,9 +302,8 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
                 Aucune parcelle sélectionnée — cliquez sur la carte
               </div>
             )
-
             const parsed = selectedFeats.map(f => {
-              const p  = f.properties || {}
+              const p = f.properties || {}
               const id = parcelleId(f)
               const prefixe = id.length >= 14 ? id.slice(5, 8) : (p.code_arr || p.prefixe || '000')
               const section = p.section || (id.length >= 14 ? id.slice(8, 10) : '—')
@@ -345,7 +312,6 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
               const refOff  = `${prefixe} / ${section} / ${numero}`
               return { prefixe, section, numero, surface, refOff, id }
             })
-
             const totalSurface = parsed.reduce((s, x) => s + (x.surface || 0), 0)
             const allRefs = parsed.map(x => x.refOff).join('\n')
 
@@ -363,7 +329,6 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
                     </div>
                     <button
                       onClick={() => navigator.clipboard.writeText(allRefs)}
-                      title="Copier toutes les références"
                       style={{ background: '#16A34A', border: 'none', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
                       📋 Copier les refs
                     </button>
@@ -375,24 +340,14 @@ export default function CadastreMap({ adresse, codePostal, ville, siret, raisonS
                           {x.refOff}
                         </code>
                         {x.surface != null && <span style={{ fontSize: 11, color: C.textSoft, whiteSpace: 'nowrap' }}>{x.surface.toLocaleString('fr-FR')} m²</span>}
-                        <button
-                          onClick={() => navigator.clipboard.writeText(x.refOff)}
-                          title="Copier"
-                          style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textSoft, borderRadius: 5, padding: '2px 7px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
-                          ⧉
-                        </button>
-                        <button
-                          onClick={() => toggleParcel(x.id)}
-                          title="Désélectionner"
-                          style={{ background: 'transparent', border: `1px solid #FCA5A5`, color: '#DC2626', borderRadius: 5, padding: '2px 7px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
-                          ✕
-                        </button>
+                        <button onClick={() => navigator.clipboard.writeText(x.refOff)}
+                          style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textSoft, borderRadius: 5, padding: '2px 7px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>⧉</button>
+                        <button onClick={() => toggleParcel(x.id)}
+                          style={{ background: 'transparent', border: '1px solid #FCA5A5', color: '#DC2626', borderRadius: 5, padding: '2px 7px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
                       </div>
                     ))}
                   </div>
                 </div>
-
-                {/* Lien Géoportail centré sur la sélection */}
                 <div style={{ textAlign: 'right' }}>
                   <a href={`https://www.geoportail.gouv.fr/carte?c=${center[1]},${center[0]}&z=19&l0=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes`}
                     target="_blank" rel="noopener noreferrer"
