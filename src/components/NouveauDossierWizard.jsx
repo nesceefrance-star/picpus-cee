@@ -224,12 +224,13 @@ function AdresseAutocomplete({ label, value, onChange, onSelect }) {
         {label}
         <span style={{ marginLeft: 6, fontSize: 10, color: '#2563EB', fontWeight: 400, textTransform: 'none' }}>autocomplétion adresse</span>
       </label>
-      <input value={value} onChange={e => search(e.target.value)} onBlur={() => setTimeout(() => setOpen(false), 200)}
+      <input value={value} onChange={e => search(e.target.value)} onBlur={() => setOpen(false)}
         placeholder="771 Rue de la Plaine, Lauwin-Planque…"
         style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
       />
       {open && suggestions.length > 0 && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#FFFFFF', border: `1px solid ${C.border}`, borderRadius: 8, zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,.12)' }}>
+        <div onMouseDown={e => e.preventDefault()}
+          style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#FFFFFF', border: `1px solid ${C.border}`, borderRadius: 8, zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,.12)' }}>
           {suggestions.map((f, i) => (
             <div key={i} onClick={() => select(f)} style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.border}`, fontSize: 13, color: C.text }}
               onMouseEnter={e => e.currentTarget.style.background = C.bg}
