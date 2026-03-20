@@ -202,10 +202,17 @@ function AdresseAutocomplete({ label, value, onChange, onSelect }) {
     if (q.length < 3) { setSuggestions([]); setOpen(false); return }
     timer.current = setTimeout(async () => {
       try {
-        const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`)
+        const base = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`
+        const startsWithNum = /^\d/.test(q)
+        const res = await fetch(startsWithNum ? base + '&type=housenumber' : base)
         const data = await res.json()
-        setSuggestions(data.features || [])
-        setOpen(true)
+        let features = data.features || []
+        if (!features.length && startsWithNum) {
+          const r2 = await fetch(base)
+          features = (await r2.json()).features || []
+        }
+        setSuggestions(features)
+        setOpen(features.length > 0)
       } catch { setSuggestions([]) }
     }, 300)
   }
