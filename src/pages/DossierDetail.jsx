@@ -185,6 +185,32 @@ export default function DossierDetail() {
   const [pForm, setPForm] = useState({})
   const setP = (k, v) => setPForm(f => ({ ...f, [k]: v }))
 
+  // Adresse site — édition avec autocomplete
+  const [adresseSiteLabel, setAdresseSiteLabel] = useState('')  // texte affiché dans l'input
+  const [adresseSiteForm,  setAdresseSiteForm]  = useState('')  // valeur à sauvegarder
+  const [adresseSiteSugg,  setAdresseSiteSugg]  = useState([])
+  const adresseSiteTimer = useRef(null)
+  const searchAdresseSite = (q) => {
+    setAdresseSiteLabel(q); setAdresseSiteForm(q)
+    clearTimeout(adresseSiteTimer.current)
+    if (q.length < 3) { setAdresseSiteSugg([]); return }
+    adresseSiteTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`)
+        const data = await res.json()
+        setAdresseSiteSugg(data.features || [])
+      } catch { setAdresseSiteSugg([]) }
+    }, 300)
+  }
+  const selectAdresseSite = (feat) => {
+    const p = feat.properties
+    const street = [p.housenumber, p.street].filter(Boolean).join(' ') || p.name
+    const full = [street, p.postcode, p.city].filter(Boolean).join(', ')
+    setAdresseSiteForm(full)
+    setAdresseSiteLabel(p.label || full)
+    setAdresseSiteSugg([])
+  }
+
   const [editSimu, setEditSimu] = useState(false)
   const [simuStep, setSimuStep] = useState(1)
   const [sForm, setSForm] = useState({})
@@ -341,7 +367,11 @@ export default function DossierDetail() {
       supabase.from('devis_hub').select('adresse_site').eq('dossier_id', id).not('adresse_site', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ])
     if (!d) d = dossierRes.data
-    if (devisRes.data?.adresse_site) setAdresseSite(devisRes.data.adresse_site)
+    if (devisRes.data?.adresse_site) {
+      setAdresseSite(devisRes.data.adresse_site)
+      setAdresseSiteForm(devisRes.data.adresse_site)
+      setAdresseSiteLabel(devisRes.data.adresse_site)
+    }
     if (d) {
       setDossier(d)
       setNotesForm(d.notes || '')
@@ -552,8 +582,14 @@ export default function DossierDetail() {
 
   const saveProspect = async () => {
     const { raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_email, contact_tel } = pForm
-    const data = await updateProspect(dossier.prospects.id, { raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_email, contact_tel })
-    if (data) setDossier(d => ({ ...d, prospects: data }))
+    const [prospectData] = await Promise.all([
+      updateProspect(dossier.prospects.id, { raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_email, contact_tel }),
+      adresseSiteForm
+        ? supabase.from('devis_hub').update({ adresse_site: adresseSiteForm }).eq('dossier_id', id)
+        : Promise.resolve(),
+    ])
+    if (prospectData) setDossier(d => ({ ...d, prospects: prospectData }))
+    if (adresseSiteForm) setAdresseSite(adresseSiteForm)
     setEditProspect(false)
   }
 
@@ -896,9 +932,41 @@ export default function DossierDetail() {
                       <Field label="Ville" value={pForm.ville} onChange={v => setP('ville', v)} />
                       <div style={{ gridColumn: '1/-1' }}><Field label="Adresse" value={pForm.adresse} onChange={v => setP('adresse', v)} /></div>
                       <Field label="Code postal" value={pForm.code_postal} onChange={v => setP('code_postal', v)} />
+                    </div>
+
+                    {/* Adresse du site — autocomplete api-adresse.data.gouv.fr */}
+                    <div style={{ position: 'relative', margin: '10px 0 4px' }}>
+                      <div style={{ height: 1, background: C.border, marginBottom: 10 }} />
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>
+                        Adresse du site
+                        <span style={{ marginLeft: 6, fontSize: 10, color: C.accent, fontWeight: 400, textTransform: 'none' }}>autocomplétion</span>
+                      </label>
+                      <input
+                        value={adresseSiteLabel}
+                        onChange={e => searchAdresseSite(e.target.value)}
+                        onBlur={() => setTimeout(() => setAdresseSiteSugg([]), 200)}
+                        placeholder="771 Rue de la Plaine, 59553 Lauwin-Planque…"
+                        style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
+                      />
+                      {adresseSiteSugg.length > 0 && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,.12)' }}>
+                          {adresseSiteSugg.map((f, i) => (
+                            <div key={i} onMouseDown={() => selectAdresseSite(f)}
+                              style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.border}`, fontSize: 13, color: C.text }}
+                              onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                              {f.properties.label}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ height: 1, background: C.border, margin: '10px 0' }} />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
                       <Field label="Contact" value={pForm.contact_nom} onChange={v => setP('contact_nom', v)} />
-                      <Field label="Email" value={pForm.contact_email} onChange={v => setP('contact_email', v)} type="email" />
                       <Field label="Téléphone" value={pForm.contact_tel} onChange={v => setP('contact_tel', v)} />
+                      <div style={{ gridColumn: '1/-1' }}><Field label="Email" value={pForm.contact_email} onChange={v => setP('contact_email', v)} type="email" /></div>
                     </div>
                   </>
                 ) : (
