@@ -142,16 +142,6 @@ export default function VisiteRapportPDF({ visite, dossierRef }) {
             <View style={s.field}><Text style={s.fLabel}>Isolation bâtiment</Text><Text style={s.fValue}>{val(d, 'isolation_batiment')}</Text></View>
           </View>
 
-          {/* kWh cumac */}
-          {kwhCumac > 0 && (
-            <View style={s.highlight}>
-              <View>
-                <Text style={s.hLabel}>Estimation CEE — kWh cumac IND-BA-110</Text>
-                <Text style={s.hValue}>{kwhCumac.toLocaleString('fr-FR')} kWh cumac</Text>
-                <Text style={s.hSub}>Zone {z} · Convectif {d.puissance_convectif_kw || 0} kW · Radiatif {d.puissance_radiatif_kw || 0} kW</Text>
-              </View>
-            </View>
-          )}
         </View>
 
         {/* Réseau électrique */}
