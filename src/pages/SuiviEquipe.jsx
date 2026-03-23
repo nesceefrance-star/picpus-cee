@@ -208,9 +208,9 @@ function StyleExemplesTab({ session }) {
   useEffect(() => {
     if (!session) return
     fetch('/api/style-guide', { headers: { Authorization: `Bearer ${session.access_token}` } })
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(`Erreur API ${r.status}`); return r.json() })
       .then(d => { setGuide(d.guide || ''); setExemples(d.exemples || {}); setLoading(false) })
-      .catch(() => setLoading(false))
+      .catch(e => { setError('Impossible de charger le guide : ' + e.message); setLoading(false) })
   }, [session])
 
   const handleSave = async () => {
