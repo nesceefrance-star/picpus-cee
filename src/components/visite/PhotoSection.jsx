@@ -20,9 +20,15 @@ const C = {
   accent: '#2563EB',
 }
 
-// Détecte iOS/iPadOS (y compris iPadOS 13+ qui se présente comme "Macintosh")
+// Détecte tout appareil iOS/iPadOS
 const isIOSDevice = () =>
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
+
+// Détecte spécifiquement iPadOS (canvas.toBlob instable — compression skippée)
+// iPhone : canvas.toBlob stable → compression activée pour réduire les 10-15 Mo natifs
+const isIPadDevice = () =>
+  /iPad/.test(navigator.userAgent) ||
   (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
 
 // Compresse l'image à 1600px max et 85% qualité JPEG
@@ -77,15 +83,17 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
     if (!file || !visiteId) return
     setUploading(u => ({ ...u, [catId]: true }))
     try {
-      const ios = isIOSDevice()
+      const ios  = isIOSDevice()
+      const ipad = isIPadDevice()
 
       // Sur iOS/iPadOS : la photo est déjà dans la pellicule via capture="environment" — pas besoin de saveToDevice
       // Sur Android/desktop : déclenche le téléchargement
       if (!ios) await saveToDevice(file)
 
-      // Compression — skippée sur iOS/iPadOS (canvas.toBlob instable sur certains modèles)
+      // Compression — skippée uniquement sur iPadOS (canvas.toBlob instable sur certains modèles iPad)
+      // Sur iPhone : compression activée (photos natives 10-15 Mo → upload bloqué sans ça)
       let toUpload = file
-      if (!ios) {
+      if (!ipad) {
         try { toUpload = await compressImage(file) } catch { toUpload = file }
       }
 
