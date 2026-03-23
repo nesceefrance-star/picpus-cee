@@ -113,8 +113,10 @@ export default function Dossiers() {
     if (sortBy === 'date')   { va = new Date(a.created_at); vb = new Date(b.created_at) }
     if (sortBy === 'fiche')  { va = a.fiche_cee || ''; vb = b.fiche_cee || '' }
     if (sortBy === 'statut') { va = a.statut || ''; vb = b.statut || '' }
-    if (sortBy === 'ca')     { va = devisMap[a.id]?.ca || 0; vb = devisMap[b.id]?.ca || 0 }
-    if (sortBy === 'marge')  { va = devisMap[a.id]?.ca > 0 ? devisMap[a.id].marge / devisMap[a.id].ca : -1; vb = devisMap[b.id]?.ca > 0 ? devisMap[b.id].marge / devisMap[b.id].ca : -1 }
+    const finA = devisMap[a.id] || (a.montant_devis > 0 ? { ca: a.montant_devis, marge: null } : null)
+    const finB = devisMap[b.id] || (b.montant_devis > 0 ? { ca: b.montant_devis, marge: null } : null)
+    if (sortBy === 'ca')     { va = finA?.ca || 0; vb = finB?.ca || 0 }
+    if (sortBy === 'marge')  { va = finA?.ca > 0 && finA.marge != null ? finA.marge / finA.ca : -1; vb = finB?.ca > 0 && finB.marge != null ? finB.marge / finB.ca : -1 }
     if (va < vb) return sortDir === 'asc' ? -1 : 1
     if (va > vb) return sortDir === 'asc' ? 1 : -1
     return 0
@@ -251,8 +253,9 @@ export default function Dossiers() {
               const isSelected = selected.has(d.id)
               const isDeleting = deletingIds.has(d.id)
               const isConfirm  = confirmDeleteId === d.id
-              const fin        = devisMap[d.id]
-              const margePctD  = fin?.ca > 0 ? Math.round(fin.marge / fin.ca * 100) : null
+              // Priorité : devis_hub (lignes détaillées) → fallback : montant_devis stocké sur le dossier
+              const fin = devisMap[d.id] || (d.montant_devis > 0 ? { ca: d.montant_devis, marge: null, prime: d.prime_estimee || 0 } : null)
+              const margePctD  = fin?.ca > 0 && fin.marge != null ? Math.round(fin.marge / fin.ca * 100) : null
               const jPlus      = daysSince(d.created_at)
               return (
                 <div key={d.id}
