@@ -251,7 +251,7 @@ function StyleExemplesTab({ session }) {
         <Typography sx={{ fontSize: 13, fontWeight: 700, color: C.text, mb: 1.5 }}>Guide rédactionnel global</Typography>
         <TextField fullWidth multiline minRows={6} value={guide} onChange={e => setGuide(e.target.value)}
           placeholder="Ton, formules clés, ce qu'il faut éviter…"
-          sx={{ '& textarea': { fontSize: 13, lineHeight: 1.6 } }} />
+          sx={{ '& textarea': { fontSize: 13, lineHeight: 1.6, color: C.text }, '& .MuiInputBase-root': { background: '#fff' } }} />
       </Paper>
 
       <Typography sx={{ fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', mb: 1.5 }}>
@@ -263,7 +263,7 @@ function StyleExemplesTab({ session }) {
           <TextField fullWidth multiline minRows={4} value={exemples[t.key] || ''}
             onChange={e => setExemples(prev => ({ ...prev, [t.key]: e.target.value }))}
             placeholder={`Exemple d'email "${t.label}"…`}
-            sx={{ '& textarea': { fontSize: 13, lineHeight: 1.6 } }} />
+            sx={{ '& textarea': { fontSize: 13, lineHeight: 1.6, color: C.text }, '& .MuiInputBase-root': { background: '#fff' } }} />
         </Paper>
       ))}
     </Box>
