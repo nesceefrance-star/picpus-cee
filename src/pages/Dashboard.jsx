@@ -441,7 +441,7 @@ export default function Dashboard() {
         ) : (
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
             {/* En-tête */}
-            <div style={{ display: 'grid', gridTemplateColumns: '36px 120px 1fr 150px 110px 130px 90px 70px 110px 80px 44px', gap: 10, padding: '10px 16px', background: '#F8FAFC', borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .4, alignItems: 'center' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '36px 80px 1fr 150px 110px 130px 90px 70px 110px 80px 44px', gap: 10, padding: '10px 16px', background: '#F8FAFC', borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .4, alignItems: 'center' }}>
               <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: C.accent }}/>
               <span>Référence</span>
               <span>Prospect</span>
@@ -466,7 +466,7 @@ export default function Dashboard() {
               return (
                 <div key={d.id}
                   onClick={() => !isDeleting && openDossier(d)}
-                  style={{ display: 'grid', gridTemplateColumns: '36px 120px 1fr 150px 110px 130px 90px 70px 110px 80px 44px', gap: 10, padding: '12px 16px', alignItems: 'center', background: isSelected ? '#EFF6FF' : idx % 2 === 0 ? C.surface : '#FAFBFC', borderBottom: `1px solid ${C.border}`, cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? .5 : 1, transition: 'background .1s' }}
+                  style={{ display: 'grid', gridTemplateColumns: '36px 80px 1fr 150px 110px 130px 90px 70px 110px 80px 44px', gap: 10, padding: '12px 16px', alignItems: 'center', background: isSelected ? '#EFF6FF' : idx % 2 === 0 ? C.surface : '#FAFBFC', borderBottom: `1px solid ${C.border}`, cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? .5 : 1, transition: 'background .1s' }}
                   onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#F0F7FF' }}
                   onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = idx % 2 === 0 ? C.surface : '#FAFBFC' }}>
 

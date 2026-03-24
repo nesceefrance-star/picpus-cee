@@ -279,7 +279,7 @@ export function DevisPDFDoc({ devis, lignes, cats, batPuVente, batQte, primeFaci
               { l: 'Total H.T',              v: fmtE(stats.totalHT) },
               { l: 'TVA (20%)',              v: fmtE(stats.totalTVA) },
               { l: 'Total T.T.C',            v: fmtE(stats.totalTTC),     bold: true, bt: true },
-              { l: `Prime CEE (SOFT.IA)`, v: '− ' + fmtE(primeFaciale), color: GREEN, bt: true },
+              { l: `Prime CEE`, v: '− ' + fmtE(primeFaciale), color: GREEN, bt: true },
               { l: 'Reste à charge T.T.C',  v: fmtE(stats.resteTTC),    bold: true, color: DARK, bt: true },
             ].map((r, i) => (
               <View key={i} style={[s.totLine, r.bt ? { borderTopWidth: 0.5, borderTopColor: '#ccc' } : {}]}>

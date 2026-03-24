@@ -219,7 +219,7 @@ export default function CalendarPicker({ session, onSelect, selectedDate, select
               {selectedDayInfo.events.map((ev, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '3px 0', borderBottom: i < selectedDayInfo.events.length - 1 ? `1px solid ${C.border}` : 'none' }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#DC2626', flexShrink: 0 }}>{ev.start} – {ev.end}</span>
-                  <span style={{ fontSize: 12, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.summary}</span>
+                  <span style={{ fontSize: 12, color: C.textMid, fontStyle: 'italic' }}>Créneau bloqué</span>
                 </div>
               ))}
             </div>

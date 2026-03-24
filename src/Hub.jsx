@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, forwardRef, useCallback, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "./lib/supabase";
 import useStore from "./store/useStore";
 import { refDefault, nextRef } from "./lib/genRef";
@@ -1847,11 +1847,9 @@ function MargesDevis({ prefill }) {
 // HUB
 // ════════════════════════════════════════════════════════════════════════════
 const MODULES = [
-  {id:"verificateur",icon:"🔍",titre:"Vérificateur CEE",sousTitre:"Analyse IA de dossier",desc:"Uploadez l'AH et le devis, Claude détecte automatiquement toutes les incohérences et génère un rapport de conformité.",tags:["AH","Devis","IA","Rapport"],couleur:"#6366F1",actif:true},
+  {id:"verificateur",icon:"🔍",titre:"Vérificateur CEE",   sousTitre:"Analyse IA de dossier",   desc:"Uploadez l'AH et le devis, Claude détecte automatiquement toutes les incohérences et génère un rapport de conformité.",tags:["AH","Devis","IA","Rapport"],couleur:"#6366F1",actif:true},
   {id:"marges",      icon:"📊",titre:"Générateur de devis",sousTitre:"Marges + export PDF",      desc:"Calculez vos marges sur le devis prestataire et générez le devis client AF2E (3 pages) en temps réel.",tags:["Marge","Devis AF2E","3 pages","PDF"],couleur:"#2563EB",actif:true},
-  {id:"dimensionnement",icon:"📐",titre:"Dimensionnement",sousTitre:"Calcul déstratificateurs",desc:"Calcul automatique du nombre de déstratificateurs selon BAT-TH-142 : surface, hauteur, puissance → PDF.",tags:["Calcul","BAT-TH-142","PDF"],couleur:"#7C3AED",actif:false},
-  {id:"rentabilite", icon:"📈",titre:"Rentabilité",      sousTitre:"Coût / CEE / Marge",       desc:"Volume CEE généré, coût acquisition, prime PICPUS estimée, ROI et analyse de rentabilité complète.",tags:["CEE","MWh cumac","ROI"],couleur:"#DB2777",actif:false},
-  {id:"crm",         icon:"👥",titre:"CRM Prospects",    sousTitre:"Pipeline commercial",       desc:"Suivi des prospects et clients, relances Gmail automatiques, intégration Google Agenda.",tags:["Gmail","Agenda","Pipeline"],couleur:"#0369A1",actif:false},
+  {id:"visites",     icon:"🔧",titre:"Visites techniques", sousTitre:"Rapports terrain",         desc:"Gérez vos visites techniques terrain, photos, rapport PDF et suivi des dossiers IND-BA-110.",tags:["Visite","Photos","PDF","Terrain"],couleur:"#D97706",actif:true,href:"/visites"},
 ];
 
 const renderModule = (page, prefill) => {
@@ -1863,6 +1861,7 @@ const renderModule = (page, prefill) => {
 export default function AppHub() {
   const location = useLocation();
   const { module: initModule, prefill: initPrefill } = location.state || {};
+  const navigate = useNavigate();
   const [page, setPage] = useState(initModule || null);
   const [prefill, setPrefill] = useState(initPrefill || null);
   const current = page && MODULES.find(m=>m.id===page);
@@ -1889,7 +1888,7 @@ export default function AppHub() {
         {/* Raccourcis */}
         <div style={{marginLeft:"auto",display:"flex",gap:6}}>
           {MODULES.filter(m=>m.actif).map(m=>(
-            <button key={m.id} onClick={()=>setPage(m.id)}
+            <button key={m.id} onClick={()=>m.href?navigate(m.href):setPage(m.id)}
               style={{background:page===m.id?"#334155":"transparent",color:page===m.id?"#F1F5F9":"#64748B",border:`1px solid ${page===m.id?"#475569":"#334155"}`,borderRadius:7,padding:"4px 11px",fontSize:12,fontWeight:page===m.id?600:400,cursor:"pointer"}}>
               {m.icon} {m.titre}
             </button>
@@ -1941,7 +1940,7 @@ export default function AppHub() {
       <div style={{maxWidth:1100,margin:"0 auto",padding:"28px 32px"}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:16,marginBottom:32}}>
           {MODULES.map(m=>(
-            <div key={m.id} onClick={()=>m.actif&&setPage(m.id)}
+            <div key={m.id} onClick={()=>m.actif&&(m.href?navigate(m.href):setPage(m.id))}
               style={{background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:"20px",cursor:m.actif?"pointer":"default",opacity:m.actif?1:.65,position:"relative",transition:"all .15s",boxSizing:"border-box"}}
               onMouseEnter={e=>{if(m.actif){e.currentTarget.style.borderColor=m.couleur;e.currentTarget.style.boxShadow=`0 4px 16px rgba(0,0,0,.08)`;e.currentTarget.style.transform="translateY(-2px)";}}}
               onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none";}}>
@@ -1975,7 +1974,7 @@ export default function AppHub() {
         <div style={{borderTop:`1px solid ${C.border}`,paddingTop:24}}>
           <div style={{fontSize:13,fontWeight:700,color:C.textMid,marginBottom:14,textTransform:"uppercase",letterSpacing:.8}}>📋 Roadmap — Prochains modules</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:10}}>
-            {[{n:"4",t:"Dimensionnement",d:"Calcul auto nb déstrats BAT-TH-142"},{n:"5",t:"Étude de rentabilité",d:"CEE généré / Marge PICPUS / ROI"},{n:"6",t:"CRM Prospects",d:"Gmail + Google Agenda"},{n:"7",t:"Assistant Visio",d:"Transcription → scoring prospect"},{n:"8",t:"Analyse fiche CEE",d:"Fiche + étude de marché auto"}].map(r=>(
+            {[{n:"4",t:"Simulateur de fiches",d:"Simulation CEE multi-fiches"},{n:"5",t:"Assistant visio",d:"Transcription → scoring prospect"},{n:"6",t:"Enrichissement Leads",d:"Données entreprises + scoring"}].map(r=>(
               <div key={r.n} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px",display:"flex",gap:10,alignItems:"flex-start"}}>
                 <div style={{width:24,height:24,borderRadius:6,background:C.bg,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:C.textMid,flexShrink:0}}>{r.n}</div>
                 <div>
