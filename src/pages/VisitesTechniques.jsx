@@ -9,7 +9,7 @@ const C = {
   accent: '#2563EB',
 }
 
-const FICHE_LABELS = { 'IND-BA-110': 'IND-BA-110', 'BAT-TH-163': 'BAT-TH-163', 'BAT-TH-142': 'BAT-TH-142' }
+import { FICHES_CEE } from './VisiteTechniqueDetail'
 
 function StatutBadge({ statut }) {
   const cfg = statut === 'validée'
@@ -160,9 +160,13 @@ export default function VisitesTechniques() {
                   {v.donnees?.adresse_site && <div style={{ fontSize: 11, color: C.textSoft, marginTop: 1 }}>{v.donnees.adresse_site}</div>}
                   {v.dossiers?.ref && <div style={{ fontSize: 11, color: C.accent, marginTop: 1 }}>📁 {v.dossiers.ref}</div>}
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#1D4ED8', background: '#EFF6FF', padding: '2px 8px', borderRadius: 5, whiteSpace: 'nowrap', display: 'inline-block' }}>
-                  {FICHE_LABELS[v.type_fiche] || v.type_fiche}
-                </span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {(v.donnees?.fiches?.length ? v.donnees.fiches : [v.type_fiche].filter(Boolean)).map(f => (
+                    <span key={f} style={{ fontSize: 11, fontWeight: 700, color: '#1D4ED8', background: '#EFF6FF', padding: '2px 7px', borderRadius: 5, whiteSpace: 'nowrap' }}>
+                      {f}
+                    </span>
+                  ))}
+                </div>
                 <StatutBadge statut={v.statut} />
                 <span style={{ fontSize: 12, color: C.textMid }}>
                   {(v.photos || []).length} 📷

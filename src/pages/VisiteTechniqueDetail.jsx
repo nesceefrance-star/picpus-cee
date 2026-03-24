@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import useStore from '../store/useStore'
@@ -18,16 +18,48 @@ const INP = {
 }
 const SEL = { ...INP, cursor: 'pointer' }
 
-// ── Zones de visite ──────────────────────────────────────────────────────────
-const ZONES = [
-  { id: 'infos',        icon: '📋', title: 'Infos générales',             photoCats: [] },
-  { id: 'vue_generale', icon: '🏭', title: 'Vue générale & Bâtiment',     photoCats: ['vue_generale'] },
-  { id: 'chaufferie',   icon: '🔥', title: 'Chaufferie',                   photoCats: ['chaufferie'] },
-  { id: 'tgbt',         icon: '⚡', title: 'TGBT',                         photoCats: ['tgbt'] },
-  { id: 'td',           icon: '🔌', title: 'Tableau divisionnaire',        photoCats: ['td'] },
-  { id: 'equipements',  icon: '🔧', title: 'Équipements & CEE',            photoCats: ['equipements', 'plaque_constructeur', 'compteur'] },
-  { id: 'observations', icon: '📝', title: 'Observations & Après travaux', photoCats: ['apres_travaux', 'autres'] },
-  { id: 'rapport',      icon: '📄', title: 'Rapport & Envoi',              photoCats: [] },
+// ── Fiches CEE ───────────────────────────────────────────────────────────────
+export const FICHES_CEE = {
+  'BAT-TH-116': { label: 'BAT-TH-116 — GTB',                       zones: ['chaufferie','tgbt','td'] },
+  'BAT-TH-142': { label: 'BAT-TH-142 — Déstratification tertiaire', zones: ['chaufferie','tgbt','td'] },
+  'IND-BA-110': { label: 'IND-BA-110 — Déstratification industrie', zones: ['chaufferie','tgbt','td'] },
+  'BAT-TH-163': { label: 'BAT-TH-163 — PAC air/eau tertiaire',      zones: ['chaufferie','tgbt','td'] },
+  'BAT-TH-125': { label: 'BAT-TH-125 — Ventilation simple flux',    zones: ['ventilation'] },
+  'BAT-TH-126': { label: 'BAT-TH-126 — Ventilation double flux',    zones: ['ventilation'] },
+  'BAT-EN-101': { label: 'BAT-EN-101 — Isolation combles/toiture',  zones: ['isolation'] },
+  'BAT-EN-102': { label: 'BAT-EN-102 — Isolation murs',             zones: ['isolation'] },
+  'BAT-EN-103': { label: 'BAT-EN-103 — Isolation plancher',         zones: ['isolation'] },
+}
+
+// ── Toutes les zones disponibles ─────────────────────────────────────────────
+const ALL_ZONES = [
+  { id: 'infos',        icon: '📋', title: 'Infos générales',         photoCats: [] },
+  { id: 'vue_generale', icon: '🏭', title: 'Vue générale & Bâtiment', photoCats: ['vue_generale'] },
+  { id: 'chaufferie',   icon: '🔥', title: 'Chaufferie',              photoCats: ['chaufferie'] },
+  { id: 'tgbt',         icon: '⚡', title: 'TGBT',                    photoCats: ['tgbt'] },
+  { id: 'td',           icon: '🔌', title: 'Tableau divisionnaire',   photoCats: ['td'] },
+  { id: 'ventilation',  icon: '💨', title: 'Ventilation',             photoCats: ['ventilation'] },
+  { id: 'isolation',    icon: '🏠', title: 'Isolation',               photoCats: ['isolation'] },
+  { id: 'equipements',  icon: '🔧', title: 'Équipements & CEE',       photoCats: ['equipements', 'plaque_constructeur', 'compteur'] },
+  { id: 'observations', icon: '📝', title: 'Observations',            photoCats: ['observations', 'autres'] },
+  { id: 'rapport',      icon: '📄', title: 'Rapport & Envoi',         photoCats: [] },
+]
+
+function getActiveZones(fiches) {
+  if (!fiches || fiches.length === 0) return ALL_ZONES
+  const needed = new Set(['infos','vue_generale','equipements','observations','rapport'])
+  fiches.forEach(f => { (FICHES_CEE[f]?.zones || []).forEach(z => needed.add(z)) })
+  return ALL_ZONES.filter(z => needed.has(z.id))
+}
+
+// ── Types d'isolation ────────────────────────────────────────────────────────
+const ISOLATION_TYPES = [
+  { id: 'toiture_terrasse',  label: 'Toiture terrasse' },
+  { id: 'combles_perdus',    label: 'Combles perdus' },
+  { id: 'combles_amenages',  label: 'Combles aménagés' },
+  { id: 'murs_interieurs',   label: 'Murs intérieurs' },
+  { id: 'murs_exterieurs',   label: 'Murs extérieurs' },
+  { id: 'planchers_bas',     label: 'Planchers bas' },
 ]
 
 // ── Autocomplete adresse ─────────────────────────────────────────────────────
@@ -52,42 +84,28 @@ function AdresseAutocomplete({ value, onChange }) {
     }, 300)
   }
 
-  // Si la saisie commence par un numéro mais que le résultat BAN est type=street (numéro absent),
-  // on injecte le numéro saisi dans le label pour ne pas le perdre.
   const buildLabel = (feat) => {
     const p = feat.properties
     const num = queryRef.current.match(/^(\d+[a-zA-Z]?)/)?.[1]
-    if (num && p.type !== 'housenumber' && !p.label.startsWith(num)) {
-      return num + ' ' + p.label
-    }
+    if (num && p.type !== 'housenumber' && !p.label.startsWith(num)) return num + ' ' + p.label
     return p.label || ''
   }
 
-  const select = (feat) => {
-    onChange(buildLabel(feat))
-    setSugg([]); setOpen(false)
-  }
+  const select = (feat) => { onChange(buildLabel(feat)); setSugg([]); setOpen(false) }
 
   return (
     <div style={{ position: 'relative' }}>
-      <input
-        value={value || ''}
-        onChange={e => search(e.target.value)}
+      <input value={value || ''} onChange={e => search(e.target.value)}
         onBlur={() => setTimeout(() => setOpen(false), 350)}
-        placeholder="12 rue des Acacias, 75012 Paris…"
-        style={INP}
-      />
+        placeholder="12 rue des Acacias, 75012 Paris…" style={INP} />
       {open && sugg.length > 0 && (
         <div onMouseDown={e => e.preventDefault()}
           style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 200, overflow: 'hidden' }}>
           {sugg.map((f, i) => (
-            <div key={i}
-              onClick={() => select(f)}
-              onTouchEnd={e => { e.preventDefault(); select(f) }}
+            <div key={i} onClick={() => select(f)} onTouchEnd={e => { e.preventDefault(); select(f) }}
               style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.bg}`, fontSize: 13, color: C.text }}
               onMouseEnter={e => e.currentTarget.style.background = C.bg}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
               {buildLabel(f)}
             </div>
           ))}
@@ -110,18 +128,29 @@ function Field({ label, hint, children, full }) {
   )
 }
 
+// ── Sous-section ─────────────────────────────────────────────────────────────
+function SubSection({ title, children }) {
+  return (
+    <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ background: C.bg, padding: '8px 14px', fontSize: 12, fontWeight: 700, color: C.textMid, borderBottom: `1px solid ${C.border}` }}>
+        {title}
+      </div>
+      <div style={{ padding: '14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 // ── En-tête de zone ──────────────────────────────────────────────────────────
-function ZoneHeader({ zone, photoCount, fieldCount, active, onClick }) {
+function ZoneHeader({ zone, photoCount, active, onClick }) {
   return (
     <div onClick={onClick}
       style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px', cursor: 'pointer', borderBottom: active ? `2px solid ${C.accent}` : '2px solid transparent', userSelect: 'none' }}>
       <span style={{ fontSize: 20 }}>{zone.icon}</span>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: active ? C.accent : C.text }}>{zone.title}</div>
-        <div style={{ fontSize: 11, color: C.textSoft, marginTop: 1 }}>
-          {photoCount > 0 && <span style={{ marginRight: 8 }}>📷 {photoCount}</span>}
-          {fieldCount > 0 && <span>✓ {fieldCount} champ{fieldCount > 1 ? 's' : ''}</span>}
-        </div>
+        {photoCount > 0 && <div style={{ fontSize: 11, color: C.textSoft, marginTop: 1 }}>📷 {photoCount}</div>}
       </div>
       <span style={{ fontSize: 12, color: C.textSoft }}>{active ? '▲' : '▼'}</span>
     </div>
@@ -129,10 +158,10 @@ function ZoneHeader({ zone, photoCount, fieldCount, active, onClick }) {
 }
 
 export default function VisiteTechniqueDetail() {
-  const { id }                    = useParams()
-  const navigate                  = useNavigate()
-  const { profile, session }      = useStore()
-  const isNew                     = id === 'new'
+  const { id }               = useParams()
+  const navigate             = useNavigate()
+  const { profile, session } = useStore()
+  const isNew                = id === 'new'
 
   const [visiteId,    setVisiteId]    = useState(isNew ? null : id)
   const [donnees,     setDonnees]     = useState({ date_visite: new Date().toISOString().split('T')[0] })
@@ -149,13 +178,15 @@ export default function VisiteTechniqueDetail() {
   const [token,       setToken]       = useState(null)
   const [activeZone,  setActiveZone]  = useState('infos')
 
-  // Dossier search
   const [allDossiers,   setAllDossiers]   = useState([])
   const [dossierSearch, setDossierSearch] = useState('')
   const [dossierOpen,   setDossierOpen]   = useState(false)
 
   const zoneRefs  = useRef({})
   const saveTimer = useRef(null)
+
+  // Zones dynamiques selon fiches sélectionnées
+  const zones = useMemo(() => getActiveZones(donnees.fiches || []), [donnees.fiches])
 
   // ── Chargement ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -165,7 +196,7 @@ export default function VisiteTechniqueDetail() {
 
   const loadAllDossiers = async () => {
     const { data: dos } = await supabase.from('dossiers')
-      .select('id, ref, prospect_id, adresse_site').order('created_at', { ascending: false }).limit(200)
+      .select('id, ref, prospect_id, adresse_site, type_fiche').order('created_at', { ascending: false }).limit(200)
     if (!dos?.length) { setAllDossiers([]); return }
     const prospectIds = [...new Set(dos.map(d => d.prospect_id).filter(Boolean))]
     let prospectMap = {}
@@ -174,26 +205,26 @@ export default function VisiteTechniqueDetail() {
         .select('id, raison_sociale, adresse, code_postal, ville, contact_nom, contact_tel, contact_email').in('id', prospectIds)
       ;(pros || []).forEach(p => { prospectMap[p.id] = p })
     }
-    setAllDossiers(dos.map(d => ({
-      ...d,
-      prospects: prospectMap[d.prospect_id] || {},
-    })))
+    setAllDossiers(dos.map(d => ({ ...d, prospects: prospectMap[d.prospect_id] || {} })))
   }
 
   const loadVisite = async () => {
     setLoading(true)
-    const { data } = await supabase.from('visites_techniques')
-      .select('*').eq('id', id).single()
+    const { data } = await supabase.from('visites_techniques').select('*').eq('id', id).single()
     if (!data) { navigate('/visites', { replace: true }); return }
-    setDonnees(data.donnees || {})
+    // Migration : si pas de fiches dans donnees mais type_fiche présent
+    const donneesMigrees = data.donnees || {}
+    if (!donneesMigrees.fiches && data.type_fiche) {
+      donneesMigrees.fiches = [data.type_fiche]
+    }
+    setDonnees(donneesMigrees)
     setPhotos(data.photos || [])
     setStatut(data.statut)
     setRapportUrl(data.rapport_url)
     setToken(data.partage_token)
-    // Charge le dossier lié séparément
     if (data.dossier_id) {
       const { data: dos } = await supabase.from('dossiers')
-        .select('id, ref, prospect_id').eq('id', data.dossier_id).single()
+        .select('id, ref, prospect_id, type_fiche').eq('id', data.dossier_id).single()
       if (dos) {
         let raisonSociale = ''
         if (dos.prospect_id) {
@@ -211,8 +242,10 @@ export default function VisiteTechniqueDetail() {
   // ── Création + autosave ─────────────────────────────────────────────────────
   const ensureCreated = useCallback(async (d, p) => {
     if (visiteId) return visiteId
+    const fiches = d.fiches || []
+    const typeFiche = fiches[0] || 'IND-BA-110'
     const { data, error } = await supabase.from('visites_techniques').insert({
-      created_by: profile?.id, type_fiche: 'IND-BA-110', statut: 'brouillon', donnees: d, photos: p,
+      created_by: profile?.id, type_fiche: typeFiche, statut: 'brouillon', donnees: d, photos: p,
     }).select().single()
     if (error) throw error
     setVisiteId(data.id)
@@ -227,7 +260,10 @@ export default function VisiteTechniqueDetail() {
     saveTimer.current = setTimeout(async () => {
       try {
         const vid = await ensureCreated(newDonnees, photos)
-        await supabase.from('visites_techniques').update({ donnees: newDonnees, updated_at: new Date().toISOString() }).eq('id', vid)
+        const typeFiche = (newDonnees.fiches || [])[0] || 'IND-BA-110'
+        await supabase.from('visites_techniques').update({
+          donnees: newDonnees, type_fiche: typeFiche, updated_at: new Date().toISOString(),
+        }).eq('id', vid)
         setSaveStatus('saved')
       } catch { setSaveStatus('error') }
     }, 1500)
@@ -250,6 +286,18 @@ export default function VisiteTechniqueDetail() {
     } catch { setSaveStatus('error') }
   }
 
+  // ── Fiche toggle ─────────────────────────────────────────────────────────────
+  const toggleFiche = (ficheId) => {
+    const current = donnees.fiches || []
+    const dossierFiche = dossier?.type_fiche
+    const isLocked = ficheId === dossierFiche
+    if (isLocked) return // la fiche du dossier ne peut pas être décochée
+    const newFiches = current.includes(ficheId)
+      ? current.filter(f => f !== ficheId)
+      : [...current, ficheId]
+    set('fiches', newFiches)
+  }
+
   // ── Dossier ─────────────────────────────────────────────────────────────────
   const dossierResults = dossierSearch.length > 1
     ? allDossiers.filter(d =>
@@ -262,8 +310,14 @@ export default function VisiteTechniqueDetail() {
     setDossier(d); setDossierRef(d.ref); setDossierSearch(''); setDossierOpen(false)
     const p = d.prospects || {}
     const adresseProspect = [p.adresse, p.code_postal, p.ville].filter(Boolean).join(', ')
+    // Pré-sélectionner la fiche du dossier
+    const currentFiches = donnees.fiches || []
+    const fichesDossier = d.type_fiche && !currentFiches.includes(d.type_fiche)
+      ? [d.type_fiche, ...currentFiches]
+      : currentFiches
     const nd = {
       ...donnees,
+      fiches:         fichesDossier,
       raison_sociale: donnees.raison_sociale || p.raison_sociale || '',
       adresse_site:   donnees.adresse_site   || d.adresse_site   || adresseProspect || '',
       contact_nom:    donnees.contact_nom    || p.contact_nom    || '',
@@ -271,7 +325,9 @@ export default function VisiteTechniqueDetail() {
     }
     setDonnees(nd)
     const vid = await ensureCreated(nd, photos)
-    await supabase.from('visites_techniques').update({ dossier_id: d.id, donnees: nd }).eq('id', vid)
+    await supabase.from('visites_techniques').update({
+      dossier_id: d.id, donnees: nd, type_fiche: fichesDossier[0] || 'IND-BA-110',
+    }).eq('id', vid)
     setSaveStatus('saved')
   }
 
@@ -294,8 +350,8 @@ export default function VisiteTechniqueDetail() {
     setTimeout(() => zoneRefs.current[zoneId]?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
   }
   const nextZone = (currentId) => {
-    const idx = ZONES.findIndex(z => z.id === currentId)
-    if (idx < ZONES.length - 1) goToZone(ZONES[idx + 1].id)
+    const idx = zones.findIndex(z => z.id === currentId)
+    if (idx < zones.length - 1) goToZone(zones[idx + 1].id)
   }
 
   // ── Rapport PDF ─────────────────────────────────────────────────────────────
@@ -335,15 +391,15 @@ export default function VisiteTechniqueDetail() {
     finally { setSending(false) }
   }
 
-  // ── Helpers rendu ────────────────────────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────────────────
   const zonePhotoCount = (zone) => photos.filter(p => zone.photoCats.includes(p.categorie)).length
   const nom = donnees.nom_site || donnees.raison_sociale || (isNew ? 'Nouvelle visite' : 'Sans nom')
+  const selectedFiches = donnees.fiches || []
 
   if (loading) return (
     <div style={{ padding: 40, textAlign: 'center', color: C.textSoft }}>Chargement…</div>
   )
 
-  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
@@ -354,8 +410,13 @@ export default function VisiteTechniqueDetail() {
             <button onClick={() => navigate('/visites')} style={{ background: 'none', border: 'none', color: C.textSoft, cursor: 'pointer', fontSize: 20, padding: 0, lineHeight: 1 }}>←</button>
             <div>
               <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{nom}</div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#1D4ED8', background: '#EFF6FF', padding: '1px 7px', borderRadius: 5 }}>IND-BA-110</span>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
+                {selectedFiches.length > 0
+                  ? selectedFiches.map(f => (
+                    <span key={f} style={{ fontSize: 11, fontWeight: 700, color: '#1D4ED8', background: '#EFF6FF', padding: '1px 7px', borderRadius: 5 }}>{f}</span>
+                  ))
+                  : <span style={{ fontSize: 11, color: C.textSoft }}>Aucune fiche sélectionnée</span>
+                }
                 {dossierRef && <span style={{ fontSize: 11, color: C.accent }}>📁 {dossierRef}</span>}
                 <span style={{ fontSize: 11, color: saveStatus === 'saving' ? '#D97706' : saveStatus === 'error' ? '#DC2626' : '#16A34A' }}>
                   {saveStatus === 'saving' ? '⏳ Enregistrement…' : saveStatus === 'error' ? '⚠ Erreur' : '✓ Enregistré'}
@@ -373,9 +434,9 @@ export default function VisiteTechniqueDetail() {
           </div>
         </div>
 
-        {/* Navigation zones — scroll horizontal */}
+        {/* Navigation zones */}
         <div style={{ display: 'flex', gap: 4, marginTop: 10, maxWidth: 980, margin: '10px auto 0', overflowX: 'auto', paddingBottom: 2 }}>
-          {ZONES.map(z => {
+          {zones.map(z => {
             const pc = zonePhotoCount(z)
             return (
               <button key={z.id} onClick={() => goToZone(z.id)}
@@ -391,26 +452,58 @@ export default function VisiteTechniqueDetail() {
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
         <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-          {ZONES.map((zone, zoneIdx) => {
-            const isActive  = activeZone === zone.id
-            const photoCnt  = zonePhotoCount(zone)
+          {zones.map((zone, zoneIdx) => {
+            const isActive = activeZone === zone.id
+            const photoCnt = zonePhotoCount(zone)
 
             return (
               <div key={zone.id} ref={el => zoneRefs.current[zone.id] = el}
                 style={{ background: C.surface, border: `1px solid ${isActive ? C.accent : C.border}`, borderRadius: 12, overflow: 'hidden', transition: 'border-color .2s' }}>
 
-                <ZoneHeader zone={zone} photoCount={photoCnt}
-                  fieldCount={zone.photoCats.length === 0 ? 0 : 0}
-                  active={isActive}
-                  onClick={() => setActiveZone(isActive ? '' : zone.id)}
-                />
+                <ZoneHeader zone={zone} photoCount={photoCnt} active={isActive}
+                  onClick={() => setActiveZone(isActive ? '' : zone.id)} />
 
                 {isActive && (
                   <div style={{ padding: '20px 20px 24px', borderTop: `1px solid ${C.bg}` }}>
 
-                    {/* ══ ZONE INFOS GÉNÉRALES ══ */}
+                    {/* ══ INFOS GÉNÉRALES ══ */}
                     {zone.id === 'infos' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                        {/* Fiches CEE */}
+                        <div>
+                          <label style={{ fontSize: 12, fontWeight: 600, color: C.textMid, display: 'block', marginBottom: 6 }}>
+                            📋 Fiches CEE concernées
+                          </label>
+                          {dossier?.type_fiche && (
+                            <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 6 }}>
+                              La fiche du dossier est pré-sélectionnée et ne peut pas être retirée.
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                            {Object.entries(FICHES_CEE).map(([ficheId, cfg]) => {
+                              const isSel    = selectedFiches.includes(ficheId)
+                              const isLocked = ficheId === dossier?.type_fiche
+                              return (
+                                <button key={ficheId} onClick={() => toggleFiche(ficheId)}
+                                  style={{
+                                    padding: '6px 12px', borderRadius: 7, fontSize: 12, cursor: isLocked ? 'default' : 'pointer',
+                                    fontFamily: 'inherit', fontWeight: isSel ? 700 : 400,
+                                    border: `1px solid ${isSel ? C.accent : C.border}`,
+                                    background: isSel ? '#EFF6FF' : C.bg,
+                                    color: isSel ? C.accent : C.textMid,
+                                    opacity: isLocked ? .85 : 1,
+                                    position: 'relative',
+                                  }}>
+                                  {isSel && <span style={{ marginRight: 4 }}>✓</span>}
+                                  {cfg.label}
+                                  {isLocked && <span style={{ marginLeft: 4, fontSize: 10, opacity: .6 }}>🔒</span>}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+
                         {/* Dossier lié */}
                         <div>
                           <label style={{ fontSize: 12, fontWeight: 600, color: C.textMid, display: 'block', marginBottom: 6 }}>
@@ -440,9 +533,9 @@ export default function VisiteTechniqueDetail() {
                                       onTouchEnd={e => { e.preventDefault(); selectDossier(d) }}
                                       style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.bg}`, fontSize: 13, color: C.text }}
                                       onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                    >
+                                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                       <strong>{d.ref}</strong> — {d.prospects?.raison_sociale}
+                                      {d.type_fiche && <span style={{ fontSize: 11, color: C.textSoft, marginLeft: 8 }}>{d.type_fiche}</span>}
                                     </div>
                                   ))}
                                 </div>
@@ -450,7 +543,8 @@ export default function VisiteTechniqueDetail() {
                             </div>
                           )}
                         </div>
-                        {/* Grille champs */}
+
+                        {/* Champs */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
                           <Field label="Raison sociale">
                             <input style={INP} value={v('raison_sociale')} onChange={e => set('raison_sociale', e.target.value)} placeholder="SARL Dupont Industrie" />
@@ -470,14 +564,11 @@ export default function VisiteTechniqueDetail() {
                           <Field label="Date de visite">
                             <input style={INP} type="date" value={v('date_visite')} onChange={e => set('date_visite', e.target.value)} />
                           </Field>
-                          <Field label="Notes d'accès" full>
-                            <textarea style={{ ...INP, resize: 'vertical', minHeight: 90 }} value={v('notes_acces')} onChange={e => set('notes_acces', e.target.value)} placeholder="Horaires d'accès, digicode, interlocuteur sur site, contraintes particulières…" />
-                          </Field>
                         </div>
                       </div>
                     )}
 
-                    {/* ══ ZONE VUE GÉNÉRALE & BÂTIMENT ══ */}
+                    {/* ══ VUE GÉNÉRALE & BÂTIMENT ══ */}
                     {zone.id === 'vue_generale' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                         <PhotoSection visiteId={visiteId} photos={photos} onPhotosChange={handlePhotosChange} showCategories={zone.photoCats} />
@@ -485,10 +576,19 @@ export default function VisiteTechniqueDetail() {
                           <Field label="Type de bâtiment">
                             <select style={SEL} value={v('type_batiment')} onChange={e => set('type_batiment', e.target.value)}>
                               <option value="">— Sélectionner —</option>
-                              <option value="atelier_industriel">Atelier industriel</option>
-                              <option value="entrepot_logistique">Entrepôt logistique</option>
-                              <option value="atelier_artisanal">Atelier artisanal</option>
-                              <option value="batiment_agricole">Bâtiment agricole</option>
+                              <optgroup label="Industrie / Logistique">
+                                <option value="atelier_industriel">Atelier industriel</option>
+                                <option value="entrepot_logistique">Entrepôt logistique</option>
+                                <option value="atelier_artisanal">Atelier artisanal</option>
+                                <option value="batiment_agricole">Bâtiment agricole</option>
+                              </optgroup>
+                              <optgroup label="Tertiaire">
+                                <option value="immeubles_bureaux">Immeubles de bureaux</option>
+                                <option value="centre_commercial">Centre commercial</option>
+                                <option value="batiment_sante">Bâtiment santé</option>
+                                <option value="enseignement">Enseignement</option>
+                                <option value="hotellerie_restauration">Hôtellerie / Restauration</option>
+                              </optgroup>
                               <option value="autre">Autre</option>
                             </select>
                           </Field>
@@ -518,11 +618,13 @@ export default function VisiteTechniqueDetail() {
                       </div>
                     )}
 
-                    {/* ══ ZONE CHAUFFERIE ══ */}
+                    {/* ══ CHAUFFERIE ══ */}
                     {zone.id === 'chaufferie' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                         <PhotoSection visiteId={visiteId} photos={photos} onPhotosChange={handlePhotosChange} showCategories={zone.photoCats} />
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+
+                        {/* Production */}
+                        <SubSection title="🔥 Production">
                           <Field label="Type d'installation">
                             <select style={SEL} value={v('type_installation')} onChange={e => set('type_installation', e.target.value)}>
                               <option value="">— Sélectionner —</option>
@@ -558,6 +660,12 @@ export default function VisiteTechniqueDetail() {
                               <option value="autre">Autre</option>
                             </select>
                           </Field>
+                          <Field label="Température de consigne (°C)">
+                            <input style={INP} type="number" min="5" max="30" value={v('temperature_consigne')} onChange={e => set('temperature_consigne', e.target.value)} placeholder="Ex: 16" />
+                          </Field>
+                          <Field label="Heures de fonctionnement / an">
+                            <input style={INP} type="number" min="0" max="8760" value={v('heures_fonctionnement')} onChange={e => set('heures_fonctionnement', e.target.value)} placeholder="Ex: 3000" />
+                          </Field>
                           <Field label="État général">
                             <select style={SEL} value={v('etat_general')} onChange={e => set('etat_general', e.target.value)}>
                               <option value="">— Sélectionner —</option>
@@ -591,11 +699,27 @@ export default function VisiteTechniqueDetail() {
                               <input style={INP} value={v('bruleur_modele')} onChange={e => set('bruleur_modele', e.target.value)} />
                             </Field>
                           </>}
-                        </div>
+                          <Field label="Plaque constructeur" hint="(photo ci-dessus)" full>
+                            <textarea style={{ ...INP, resize: 'vertical', minHeight: 60 }} value={v('plaque_constructeur_notes')} onChange={e => set('plaque_constructeur_notes', e.target.value)} placeholder="Informations relevées sur la plaque constructeur…" />
+                          </Field>
+                        </SubSection>
+
+                        {/* Distribution */}
+                        <SubSection title="🌡 Distribution">
+                          <Field label="Nombre d'aérothèmes (points de chauffage)">
+                            <input style={INP} type="number" min="0" value={v('chauf_nb_aerothermes')} onChange={e => set('chauf_nb_aerothermes', e.target.value)} placeholder="Ex: 4" />
+                          </Field>
+                          <Field label="Puissance / aérothème (kW)">
+                            <input style={INP} type="number" min="0" step="0.1" value={v('chauf_puissance_aero_kw')} onChange={e => set('chauf_puissance_aero_kw', e.target.value)} placeholder="Ex: 20" />
+                          </Field>
+                          <Field label="Observations distribution" full>
+                            <textarea style={{ ...INP, resize: 'vertical', minHeight: 70 }} value={v('chauf_distribution_obs')} onChange={e => set('chauf_distribution_obs', e.target.value)} placeholder="Type de réseau, état des canalisations, robinetterie…" />
+                          </Field>
+                        </SubSection>
                       </div>
                     )}
 
-                    {/* ══ ZONE TGBT ══ */}
+                    {/* ══ TGBT ══ */}
                     {zone.id === 'tgbt' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                         <PhotoSection visiteId={visiteId} photos={photos} onPhotosChange={handlePhotosChange} showCategories={zone.photoCats} />
@@ -610,13 +734,13 @@ export default function VisiteTechniqueDetail() {
                             <input style={INP} type="number" min="0" value={v('tgbt_puissance_a')} onChange={e => set('tgbt_puissance_a', e.target.value)} placeholder="Ex: 400" />
                           </Field>
                           <Field label="Observations TGBT" full>
-                            <textarea style={{ ...INP, resize: 'vertical', minHeight: 80 }} value={v('tgbt_observations')} onChange={e => set('tgbt_observations', e.target.value)} placeholder="Observations, état des disjoncteurs, disponibilité de départs…" />
+                            <textarea style={{ ...INP, resize: 'vertical', minHeight: 80 }} value={v('tgbt_observations')} onChange={e => set('tgbt_observations', e.target.value)} placeholder="État des disjoncteurs, disponibilité de départs…" />
                           </Field>
                         </div>
                       </div>
                     )}
 
-                    {/* ══ ZONE TD ══ */}
+                    {/* ══ TABLEAU DIVISIONNAIRE ══ */}
                     {zone.id === 'td' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                         <PhotoSection visiteId={visiteId} photos={photos} onPhotosChange={handlePhotosChange} showCategories={zone.photoCats} />
@@ -631,7 +755,89 @@ export default function VisiteTechniqueDetail() {
                       </div>
                     )}
 
-                    {/* ══ ZONE ÉQUIPEMENTS & CEE ══ */}
+                    {/* ══ VENTILATION ══ */}
+                    {zone.id === 'ventilation' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <PhotoSection visiteId={visiteId} photos={photos} onPhotosChange={handlePhotosChange} showCategories={zone.photoCats} />
+
+                        {/* Simple flux */}
+                        <SubSection title="→ Simple flux">
+                          <Field label="Quantité d'unités">
+                            <input style={INP} type="number" min="0" value={v('ventil_simple_qty')} onChange={e => set('ventil_simple_qty', e.target.value)} placeholder="Ex: 3" />
+                          </Field>
+                          <Field label="Marque">
+                            <input style={INP} value={v('ventil_simple_marque')} onChange={e => set('ventil_simple_marque', e.target.value)} placeholder="Ex: Atlantic, Aldes…" />
+                          </Field>
+                          <Field label="Débit d'air (m³/h)">
+                            <input style={INP} type="number" min="0" value={v('ventil_simple_debit')} onChange={e => set('ventil_simple_debit', e.target.value)} placeholder="Ex: 1500" />
+                          </Field>
+                          <Field label="Surface ventilée (m²)">
+                            <input style={INP} type="number" min="0" value={v('ventil_simple_surface')} onChange={e => set('ventil_simple_surface', e.target.value)} placeholder="Ex: 400" />
+                          </Field>
+                        </SubSection>
+
+                        {/* Double flux / CTA */}
+                        <SubSection title="⇄ Double flux / CTA">
+                          <Field label="Quantité d'unités">
+                            <input style={INP} type="number" min="0" value={v('ventil_double_qty')} onChange={e => set('ventil_double_qty', e.target.value)} placeholder="Ex: 1" />
+                          </Field>
+                          <Field label="Marque">
+                            <input style={INP} value={v('ventil_double_marque')} onChange={e => set('ventil_double_marque', e.target.value)} placeholder="Ex: Zehnder, Atlantic…" />
+                          </Field>
+                          <Field label="Débit d'air (m³/h)">
+                            <input style={INP} type="number" min="0" value={v('ventil_double_debit')} onChange={e => set('ventil_double_debit', e.target.value)} placeholder="Ex: 2000" />
+                          </Field>
+                          <Field label="Surface ventilée (m²)">
+                            <input style={INP} type="number" min="0" value={v('ventil_double_surface')} onChange={e => set('ventil_double_surface', e.target.value)} placeholder="Ex: 600" />
+                          </Field>
+                        </SubSection>
+                      </div>
+                    )}
+
+                    {/* ══ ISOLATION ══ */}
+                    {zone.id === 'isolation' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <PhotoSection visiteId={visiteId} photos={photos} onPhotosChange={handlePhotosChange} showCategories={zone.photoCats} />
+                        <div style={{ fontSize: 12, color: C.textSoft, marginBottom: 4 }}>
+                          Cochez les types d'isolation concernés et renseignez les surfaces.
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {ISOLATION_TYPES.map(type => {
+                            const checked = !!v(`isol_${type.id}`)
+                            return (
+                              <div key={type.id} style={{ border: `1px solid ${checked ? C.accent : C.border}`, borderRadius: 8, padding: '12px 14px', background: checked ? '#EFF6FF' : C.surface, transition: 'all .15s' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  <input type="checkbox" id={`isol_${type.id}`}
+                                    checked={checked}
+                                    onChange={e => set(`isol_${type.id}`, e.target.checked ? true : false)}
+                                    style={{ width: 16, height: 16, cursor: 'pointer', accentColor: C.accent }} />
+                                  <label htmlFor={`isol_${type.id}`} style={{ fontSize: 13, fontWeight: 700, color: checked ? C.accent : C.text, cursor: 'pointer', flex: 1 }}>
+                                    {type.label}
+                                  </label>
+                                  {checked && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <label style={{ fontSize: 12, color: C.textMid, whiteSpace: 'nowrap' }}>Surface (m²)</label>
+                                      <input
+                                        type="number" min="0"
+                                        value={v(`isol_${type.id}_surface`)}
+                                        onChange={e => set(`isol_${type.id}_surface`, e.target.value)}
+                                        placeholder="0"
+                                        style={{ ...INP, width: 100, padding: '6px 10px', fontSize: 13 }}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                        <Field label="Observations isolation" full>
+                          <textarea style={{ ...INP, resize: 'vertical', minHeight: 80 }} value={v('isolation_observations')} onChange={e => set('isolation_observations', e.target.value)} placeholder="État actuel, matériaux existants, contraintes de pose…" />
+                        </Field>
+                      </div>
+                    )}
+
+                    {/* ══ ÉQUIPEMENTS & CEE ══ */}
                     {zone.id === 'equipements' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                         <PhotoSection visiteId={visiteId} photos={photos} onPhotosChange={handlePhotosChange} showCategories={zone.photoCats} />
@@ -642,16 +848,10 @@ export default function VisiteTechniqueDetail() {
                           <Field label="Puissance radiatif à installer (kW)" hint="(panneaux rayonnants)">
                             <input style={INP} type="number" min="0" step="0.5" value={v('puissance_radiatif_kw')} onChange={e => set('puissance_radiatif_kw', e.target.value)} placeholder="Ex: 40" />
                           </Field>
-                          <Field label="Heures de fonctionnement / an">
-                            <input style={INP} type="number" min="0" max="8760" value={v('heures_fonctionnement')} onChange={e => set('heures_fonctionnement', e.target.value)} placeholder="Ex: 3000" />
-                          </Field>
-                          <Field label="Température de consigne (°C)">
-                            <input style={INP} type="number" min="5" max="30" value={v('temperature_consigne')} onChange={e => set('temperature_consigne', e.target.value)} placeholder="Ex: 16" />
-                          </Field>
                         </div>
 
-                        {/* kWh cumac en temps réel */}
-                        {v('zone_climatique') && (parseFloat(v('puissance_convectif_kw')) > 0 || parseFloat(v('puissance_radiatif_kw')) > 0) && (() => {
+                        {/* kWh cumac IND-BA-110 */}
+                        {selectedFiches.includes('IND-BA-110') && v('zone_climatique') && (parseFloat(v('puissance_convectif_kw')) > 0 || parseFloat(v('puissance_radiatif_kw')) > 0) && (() => {
                           const COEF = { convectif: { H1: 7200, H2: 8000, H3: 8500 }, radiatif: { H1: 2500, H2: 2800, H3: 3000 } }
                           const z    = v('zone_climatique')
                           const kwh  = Math.round((COEF.convectif[z] || 0) * (parseFloat(v('puissance_convectif_kw')) || 0) + (COEF.radiatif[z] || 0) * (parseFloat(v('puissance_radiatif_kw')) || 0))
@@ -669,24 +869,23 @@ export default function VisiteTechniqueDetail() {
                       </div>
                     )}
 
-                    {/* ══ ZONE OBSERVATIONS & APRÈS TRAVAUX ══ */}
+                    {/* ══ OBSERVATIONS ══ */}
                     {zone.id === 'observations' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                         <PhotoSection visiteId={visiteId} photos={photos} onPhotosChange={handlePhotosChange} showCategories={zone.photoCats} />
-                        <Field label="Observations générales" full>
-                          <textarea style={{ ...INP, resize: 'vertical', minHeight: 120 }} value={v('observations_generales')} onChange={e => set('observations_generales', e.target.value)} placeholder="Remarques, contraintes particulières, points d'attention, travaux à prévoir…" />
+                        <Field label="Observations" full>
+                          <textarea style={{ ...INP, resize: 'vertical', minHeight: 120 }} value={v('observations_generales')} onChange={e => set('observations_generales', e.target.value)} placeholder="Horaires d'accès, digicode, interlocuteur sur site, remarques, contraintes particulières, travaux à prévoir…" />
                         </Field>
                       </div>
                     )}
 
-                    {/* ══ ZONE RAPPORT & ENVOI ══ */}
+                    {/* ══ RAPPORT & ENVOI ══ */}
                     {zone.id === 'rapport' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        {/* Résumé */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                           {[
                             { label: 'Site', value: donnees.nom_site || donnees.raison_sociale || '—' },
-                            { label: 'Fiche CEE', value: 'IND-BA-110' },
+                            { label: 'Fiches CEE', value: selectedFiches.length ? selectedFiches.join(', ') : '—' },
                             { label: 'Statut', value: statut === 'validée' ? '✓ Validée' : '✏ Brouillon' },
                             { label: 'Photos', value: `${photos.length} photo${photos.length !== 1 ? 's' : ''}` },
                             { label: 'Zone climatique', value: donnees.zone_climatique || '—' },
@@ -699,7 +898,6 @@ export default function VisiteTechniqueDetail() {
                           ))}
                         </div>
 
-                        {/* PDF */}
                         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 18px' }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>📄 Rapport PDF</div>
                           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -711,7 +909,6 @@ export default function VisiteTechniqueDetail() {
                           </div>
                         </div>
 
-                        {/* Lien de partage */}
                         {token && (
                           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 18px' }}>
                             <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>🔗 Lien de partage</div>
@@ -725,7 +922,6 @@ export default function VisiteTechniqueDetail() {
                           </div>
                         )}
 
-                        {/* Email */}
                         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 18px' }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>✉️ Envoyer au prestataire</div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
@@ -746,21 +942,20 @@ export default function VisiteTechniqueDetail() {
                           {emailResult && (
                             <div style={{ marginTop: 10, background: emailResult.success ? '#DCFCE7' : '#FEF2F2', border: `1px solid ${emailResult.success ? '#86EFAC' : '#FCA5A5'}`, borderRadius: 8, padding: '10px 14px', fontSize: 13, color: emailResult.success ? '#15803D' : '#DC2626' }}>
                               {emailResult.success
-                                ? <></>
+                                ? <>✓ Brouillon créé — <a href={emailResult.gmailUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#15803D', fontWeight: 700 }}>Ouvrir dans Gmail →</a></>
                                 : `⚠ ${emailResult.error}`}
-                              {emailResult.success && <>✓ Brouillon créé — <a href={emailResult.gmailUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#15803D', fontWeight: 700 }}>Ouvrir dans Gmail →</a></>}
                             </div>
                           )}
                         </div>
                       </div>
                     )}
 
-                    {/* Bouton Suivant (sauf dernière zone) */}
-                    {zoneIdx < ZONES.length - 1 && (
+                    {/* Suivant */}
+                    {zoneIdx < zones.length - 1 && (
                       <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
                         <button onClick={() => nextZone(zone.id)}
                           style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-                          Suivant → {ZONES[zoneIdx + 1].icon} {ZONES[zoneIdx + 1].title}
+                          Suivant → {zones[zoneIdx + 1].icon} {zones[zoneIdx + 1].title}
                         </button>
                       </div>
                     )}
