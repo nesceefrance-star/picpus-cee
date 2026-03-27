@@ -155,11 +155,8 @@ const calculerNbDestrat = (hauteur, surface, debitUnitaire = 14000) => {
 const fmt = (n) => n == null || isNaN(n) ? '—' : Math.round(n).toLocaleString('fr')
 const fmtEur = (n) => {
   if (n == null || isNaN(n)) return '—'
-  const abs = Math.abs(Math.round(n))
-  const sign = n < 0 ? '-' : ''
-  if (abs >= 1000000) return sign + (abs / 1000000).toFixed(1).replace('.', ',') + ' M€'
-  if (abs >= 1000)    return sign + Math.round(abs / 1000) + ' k€'
-  return sign + abs + ' €'
+  const rounded = Math.round(n)
+  return rounded.toLocaleString('fr-FR') + ' €'
 }
 
 // ── État initial ─────────────────────────────────────────────────────────────

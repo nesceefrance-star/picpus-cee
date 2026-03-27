@@ -137,7 +137,8 @@ export default function Parametres() {
   }
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 720, mx: 'auto' }}>
+    <Box sx={{ minHeight: '100vh', background: DARK.bg, p: { xs: 2, md: 3 } }}>
+    <Box sx={{ maxWidth: 720, mx: 'auto' }}>
       <Box sx={{ mb: 4 }}>
         <Typography variant="h5" sx={{ fontWeight: 800, color: DARK.text, mb: 0.5 }}>
           Paramètres
@@ -248,6 +249,7 @@ export default function Parametres() {
           </Box>
         </Box>
       </Paper>
+    </Box>
     </Box>
   )
 }

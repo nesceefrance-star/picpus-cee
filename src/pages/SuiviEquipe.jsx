@@ -36,6 +36,7 @@ const C = {
   textSoft: '#94A3B8',
   hover:    '#F8FAFC',
 }
+const CL = C
 
 const STATUT_LABELS = {
   simulation: 'Simulation', prospect: 'Prospect', contacte: 'Contacté',
@@ -79,27 +80,27 @@ function DossierRow({ dossier, expanded, onToggleExpand }) {
   const statutColor = STATUT_COLORS[statut] || C.textSoft
 
   return (
-    <Paper elevation={0} sx={{ mb: 1.5, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 2, overflow: 'hidden', transition: 'box-shadow .15s', '&:hover': { boxShadow: '0 2px 8px rgba(0,0,0,.07)' } }}>
+    <Paper elevation={0} sx={{ mb: 1.5, background: CL.surface, border: `1px solid ${CL.border}`, borderRadius: 2, overflow: 'hidden', transition: 'box-shadow .15s', '&:hover': { boxShadow: '0 2px 8px rgba(0,0,0,.07)' } }}>
       {/* Header */}
       <Box
         onClick={() => onToggleExpand(dossierId)}
-        sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2.5, py: 1.5, cursor: 'pointer', '&:hover': { background: C.hover }, transition: 'background .12s' }}
+        sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2.5, py: 1.5, cursor: 'pointer', '&:hover': { background: CL.hover }, transition: 'background .12s' }}
       >
         {/* Barre couleur statut */}
         <Box sx={{ width: 3, height: 36, borderRadius: 2, background: statutColor, flexShrink: 0 }} />
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 700, color: C.text }}>{dossierRef}</Typography>
-            <Typography sx={{ fontSize: 13, color: C.textMid }}>{prospect?.raison_sociale}</Typography>
+            <Typography sx={{ fontSize: 13, fontWeight: 700, color: CL.text }}>{dossierRef}</Typography>
+            <Typography sx={{ fontSize: 13, color: CL.textMid }}>{prospect?.raison_sociale}</Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 1, mt: 0.2, flexWrap: 'wrap', alignItems: 'center' }}>
             {commercial && (
-              <Typography sx={{ fontSize: 11, color: C.textSoft }}>
+              <Typography sx={{ fontSize: 11, color: CL.textSoft }}>
                 {commercial.prenom} {commercial.nom} ·
               </Typography>
             )}
-            <Typography sx={{ fontSize: 11, color: C.textSoft }}>{ficheCee}</Typography>
+            <Typography sx={{ fontSize: 11, color: CL.textSoft }}>{ficheCee}</Typography>
           </Box>
         </Box>
 
@@ -127,29 +128,29 @@ function DossierRow({ dossier, expanded, onToggleExpand }) {
       {/* Détail */}
       <Collapse in={expanded}>
         <Box sx={{ px: 3, pb: 2.5, pt: 0.5 }}>
-          <Divider sx={{ borderColor: C.border, mb: 1.5 }} />
+          <Divider sx={{ borderColor: CL.border, mb: 1.5 }} />
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             {prospect?.contact_email && (
-              <Typography sx={{ fontSize: 12, color: C.textMid }}>📧 {prospect.contact_email}</Typography>
+              <Typography sx={{ fontSize: 12, color: CL.textMid }}>📧 {prospect.contact_email}</Typography>
             )}
             {prospect?.contact_tel && (
-              <Typography sx={{ fontSize: 12, color: C.textMid }}>📞 {prospect.contact_tel}</Typography>
+              <Typography sx={{ fontSize: 12, color: CL.textMid }}>📞 {prospect.contact_tel}</Typography>
             )}
           </Box>
           {/* Historique activités */}
           {activiteHistory.length > 0 && (
             <Box sx={{ mt: 1.5 }}>
-              <Typography sx={{ fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', mb: 1 }}>
+              <Typography sx={{ fontSize: 10, fontWeight: 700, color: CL.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', mb: 1 }}>
                 Historique
               </Typography>
               {activiteHistory.map((a, i) => {
                 const ICON = { note: '📝', appel: '📞', email: '✉️', rdv: '📅', statut: '🔄', document: '📎', devis: '📄' }
                 return (
-                  <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', py: 0.5, borderBottom: i < activiteHistory.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                    <Typography sx={{ fontSize: 12, color: a.type === 'statut' ? '#2563EB' : C.textMid }}>
+                  <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', py: 0.5, borderBottom: i < activiteHistory.length - 1 ? `1px solid ${CL.border}` : 'none' }}>
+                    <Typography sx={{ fontSize: 12, color: a.type === 'statut' ? '#2563EB' : CL.textMid }}>
                       {ICON[a.type] || '·'} {a.contenu}
                     </Typography>
-                    <Typography sx={{ fontSize: 10, color: C.textSoft, flexShrink: 0, ml: 1 }}>
+                    <Typography sx={{ fontSize: 10, color: CL.textSoft, flexShrink: 0, ml: 1 }}>
                       {new Date(a.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: '2-digit' })}
                     </Typography>
                   </Box>
@@ -161,27 +162,27 @@ function DossierRow({ dossier, expanded, onToggleExpand }) {
           {/* Emails générés */}
           {Object.keys(generations || {}).length > 0 && (
             <Box sx={{ mt: 1.5 }}>
-              <Typography sx={{ fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', mb: 1 }}>
+              <Typography sx={{ fontSize: 10, fontWeight: 700, color: CL.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', mb: 1 }}>
                 Emails générés
               </Typography>
               {Object.entries(generations).map(([type, gen]) => {
                 const typeConfig = EMAIL_TYPES.find(t => t.key === type)
                 return (
-                  <Box key={type} sx={{ mb: 1, p: 1.5, background: '#F8FAFC', borderRadius: 1.5, border: `1px solid ${C.border}` }}>
+                  <Box key={type} sx={{ mb: 1, p: 1.5, background: CL.hover, borderRadius: 1.5, border: `1px solid ${CL.border}` }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                       <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#2563EB' }}>
                         {typeConfig?.label || type}
                       </Typography>
-                      <Typography sx={{ fontSize: 11, color: C.textSoft }}>
+                      <Typography sx={{ fontSize: 11, color: CL.textSoft }}>
                         {new Date(gen.updated_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                       </Typography>
                     </Box>
                     {gen.subject && (
-                      <Typography sx={{ fontSize: 11, color: C.textMid, fontStyle: 'italic', mb: 0.3 }}>
+                      <Typography sx={{ fontSize: 11, color: CL.textMid, fontStyle: 'italic', mb: 0.3 }}>
                         Objet : {gen.subject}
                       </Typography>
                     )}
-                    <Typography sx={{ fontSize: 12, color: C.textMid, whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    <Typography sx={{ fontSize: 12, color: CL.textMid, whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                       {gen.body}
                     </Typography>
                   </Box>
@@ -251,7 +252,7 @@ function StyleExemplesTab({ session }) {
         <Typography sx={{ fontSize: 13, fontWeight: 700, color: C.text, mb: 1.5 }}>Guide rédactionnel global</Typography>
         <TextField fullWidth multiline minRows={6} value={guide} onChange={e => setGuide(e.target.value)}
           placeholder="Ton, formules clés, ce qu'il faut éviter…"
-          sx={{ '& textarea': { fontSize: 13, lineHeight: 1.6, color: C.text }, '& .MuiInputBase-root': { background: '#fff' } }} />
+          sx={{ '& textarea': { fontSize: 13, lineHeight: 1.6, color: C.text }, '& .MuiInputBase-root': { background: C.surface } }} />
       </Paper>
 
       <Typography sx={{ fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', mb: 1.5 }}>
@@ -263,7 +264,7 @@ function StyleExemplesTab({ session }) {
           <TextField fullWidth multiline minRows={4} value={exemples[t.key] || ''}
             onChange={e => setExemples(prev => ({ ...prev, [t.key]: e.target.value }))}
             placeholder={`Exemple d'email "${t.label}"…`}
-            sx={{ '& textarea': { fontSize: 13, lineHeight: 1.6, color: C.text }, '& .MuiInputBase-root': { background: '#fff' } }} />
+            sx={{ '& textarea': { fontSize: 13, lineHeight: 1.6, color: C.text }, '& .MuiInputBase-root': { background: C.surface } }} />
         </Paper>
       ))}
     </Box>
@@ -289,15 +290,15 @@ const fmtK = (n) => {
 function KpiCard({ label, value, sub, color, icon }) {
   return (
     <Paper elevation={0} sx={{
-      p: 2.5, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 2,
+      p: 2.5, background: CL.surface, border: `1px solid ${CL.border}`, borderRadius: 2,
       display: 'flex', flexDirection: 'column', gap: 0.5,
-      transition: 'box-shadow .15s', '&:hover': { boxShadow: '0 2px 8px rgba(0,0,0,.07)' }
+      transition: 'box-shadow .15s', '&:hover': { boxShadow: '0 2px 8px rgba(0,0,0,.12)' }
     }}>
-      <Typography sx={{ fontSize: 11, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 600 }}>
+      <Typography sx={{ fontSize: 11, color: CL.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 600 }}>
         {icon && <span style={{ marginRight: 4 }}>{icon}</span>}{label}
       </Typography>
-      <Typography sx={{ fontSize: 24, fontWeight: 800, color: color || C.text, lineHeight: 1.1 }}>{value}</Typography>
-      {sub && <Typography sx={{ fontSize: 11, color: C.textSoft }}>{sub}</Typography>}
+      <Typography sx={{ fontSize: 24, fontWeight: 800, color: color || CL.text, lineHeight: 1.1 }}>{value}</Typography>
+      {sub && <Typography sx={{ fontSize: 11, color: CL.textSoft }}>{sub}</Typography>}
     </Paper>
   )
 }
@@ -316,10 +317,24 @@ const sectionTitle = (label) => (
   </Typography>
 )
 
+const TABLE_COLS = [
+  { label: 'Commercial', key: 'nom',    align: 'left'  },
+  { label: 'Actifs',     key: 'actifs', align: 'right' },
+  { label: 'Visio',      key: 'visios', align: 'right' },
+  { label: 'Visite',     key: 'visites',align: 'right' },
+  { label: 'Devis',      key: 'devisN', align: 'right' },
+  { label: 'CA',         key: 'ca',     align: 'right' },
+  { label: 'Marge',      key: 'marge',  align: 'right' },
+  { label: 'Prime CEE',  key: 'prime',  align: 'right' },
+  { label: 'MWh cumac',  key: 'mwh',   align: 'right' },
+]
+
 function DashboardTab() {
   const [stats,   setStats]   = useState(null)
   const [loading, setLoading] = useState(true)
   const [periode, setPeriode] = useState('30j')
+  const [sortCol, setSortCol] = useState('ca')
+  const [sortDir, setSortDir] = useState('desc')
 
   useEffect(() => {
     const load = async () => {
@@ -397,10 +412,21 @@ function DashboardTab() {
       ca: myFin.ca, marge: myFin.marge, prime: myFin.prime, mwh: myMwh,
       total: myDossiers.length,
     }
-  }).sort((a, b) => b.ca - a.ca)
+  })
+
+  const handleSort = (key) => {
+    if (sortCol === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(key); setSortDir('desc') }
+  }
+
+  const perCommercialSorted = [...perCommercial].sort((a, b) => {
+    const av = a[sortCol], bv = b[sortCol]
+    if (typeof av === 'string') return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+    return sortDir === 'asc' ? av - bv : bv - av
+  })
 
   return (
-    <Box>
+    <Box sx={{ pb: 4 }}>
       {/* Filtre période */}
       <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
         {PERIODES.map(p => (
@@ -468,28 +494,35 @@ function DashboardTab() {
       {perCommercial.length > 0 && (
         <>
           {sectionTitle('Par commercial')}
-          <Paper elevation={0} sx={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 2, overflow: 'hidden' }}>
+          <Paper elevation={0} sx={{ background: CL.surface, border: `1px solid ${CL.border}`, borderRadius: 2, overflow: 'hidden' }}>
             <Box sx={{ overflowX: 'auto' }}>
               <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <Box component="thead">
-                  <Box component="tr" sx={{ background: '#F8FAFC', borderBottom: `1px solid ${C.border}` }}>
-                    {['Commercial','Actifs','Visio','Visite','Devis','CA','Marge','Prime CEE','MWh cumac'].map(h => (
-                      <Box component="th" key={h} sx={{
-                        textAlign: h === 'Commercial' ? 'left' : 'right',
-                        py: 1.2, px: 2, fontSize: 10, fontWeight: 700, color: C.textSoft,
-                        textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap'
-                      }}>{h}</Box>
-                    ))}
+                  <Box component="tr" sx={{ background: CL.hover, borderBottom: `1px solid ${CL.border}` }}>
+                    {TABLE_COLS.map(col => {
+                      const active = sortCol === col.key
+                      return (
+                        <Box component="th" key={col.key} onClick={() => handleSort(col.key)} sx={{
+                          textAlign: col.align, py: 1.2, px: 2, fontSize: 10, fontWeight: 700,
+                          color: active ? '#2563EB' : CL.textSoft,
+                          textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap',
+                          cursor: 'pointer', userSelect: 'none',
+                          '&:hover': { color: '#2563EB' },
+                        }}>
+                          {col.label}{active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                        </Box>
+                      )
+                    })}
                   </Box>
                 </Box>
                 <Box component="tbody">
-                  {perCommercial.map((p, idx) => (
+                  {perCommercialSorted.map((p, idx) => (
                     <Box component="tr" key={p.uid} sx={{
-                      borderBottom: idx < perCommercial.length - 1 ? `1px solid ${C.border}` : 'none',
-                      '&:hover': { background: C.hover }
+                      borderBottom: idx < perCommercialSorted.length - 1 ? `1px solid ${CL.border}` : 'none',
+                      '&:hover': { background: CL.hover }
                     }}>
                       {[
-                        { v: p.nom,    align: 'left',  color: C.text,   fw: 700 },
+                        { v: p.nom,    align: 'left',  color: CL.text,   fw: 700 },
                         { v: p.actifs, align: 'right', color: '#2563EB' },
                         { v: p.visios, align: 'right', color: '#0891B2' },
                         { v: p.visites,align: 'right', color: '#D97706' },
