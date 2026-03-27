@@ -314,29 +314,35 @@ export default async function handler(req, res) {
     return res.json({ eventLink: calEvent.htmlLink })
   }
 
-  // ── GET ?action=upcoming&days=30&targetUserId=xxx ─────────────────────────
-  // Retourne les N prochains jours d'événements avec type détecté
-  // targetUserId : admin uniquement — lit le token d'un autre utilisateur
+  // ── GET ?action=upcoming — événements à venir ────────────────────────────
+  // Params :
+  //   &days=N          → N prochains jours depuis maintenant (défaut 30, max 90)
+  //   &from=ISO&to=ISO → plage arbitraire (pour vues semaine/mois)
+  //   &targetUserId=id → admin only — lit le calendrier d'un autre utilisateur
+  // Les événements multi-jours sont expansés : une entrée par jour couvert.
   if (action === 'upcoming') {
-    const days    = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 90)
-    const now     = new Date()
-    const timeMin = now.toISOString()
-    const timeMax = new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString()
+    const now = new Date()
+    let timeMin, timeMax
+    if (req.query.from && req.query.to) {
+      timeMin = new Date(req.query.from).toISOString()
+      timeMax = new Date(req.query.to).toISOString()
+    } else {
+      const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 90)
+      timeMin = now.toISOString()
+      timeMax = new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString()
+    }
 
-    // Admin peut demander les événements d'un autre user
+    // Admin peut lire le calendrier d'un autre user
     let targetToken = accessToken
     let targetCalendarIds = calendarIds
     if (req.query.targetUserId && req.query.targetUserId !== user.id) {
-      // Vérifier que le demandeur est admin
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-      if (profile?.role !== 'admin') return res.status(403).json({ error: 'Accès refusé' })
+      const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (prof?.role !== 'admin') return res.status(403).json({ error: 'Accès refusé' })
       try {
         const result = await getValidToken(req.query.targetUserId)
         targetToken = result.token
         targetCalendarIds = result.calendarIds
-      } catch {
-        return res.json({ events: [] })
-      }
+      } catch { return res.json({ events: [] }) }
     }
 
     const rawEvents = await fetchAllEvents(targetToken, targetCalendarIds, timeMin, timeMax)
@@ -345,42 +351,81 @@ export default async function handler(req, res) {
       const text = ((e.summary || '') + ' ' + (e.description || '')).toLowerCase()
       if (/\bvt\b|visite.?tech|visite.?terrain/.test(text)) return 'VT'
       if (/teams/.test(text)) return 'Teams'
-      if (/meet\.google|google.?meet|hangout/.test(text) || e.hangoutLink || e.conferenceData?.conferenceSolution?.name?.toLowerCase().includes('meet')) return 'Meet'
+      if (/meet\.google|google.?meet|hangout/.test(text) || e.hangoutLink ||
+          e.conferenceData?.conferenceSolution?.name?.toLowerCase().includes('meet')) return 'Meet'
       if (/visio|zoom|webex|skype/.test(text)) return 'Visio'
       return 'Autre'
     }
 
-    const fmtParis = (dt, opts) => new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', ...opts }).format(dt)
+    const fmtParis = (dt, opts) =>
+      new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', ...opts }).format(dt)
 
-    const events = rawEvents
-      .filter(e => e.status !== 'cancelled')
-      .map(e => {
-        const isAllDay = !!e.start?.date && !e.start?.dateTime
-        const start    = isAllDay ? new Date(e.start.date + 'T00:00:00Z') : new Date(e.start.dateTime)
-        const end      = isAllDay ? new Date(e.end.date   + 'T00:00:00Z') : new Date(e.end.dateTime)
-        return {
-          id:          e.id,
-          summary:     e.summary || '(sans titre)',
-          description: e.description || '',
-          location:    e.location || '',
-          type:        detectType(e),
-          isAllDay,
+    const allEntries = []
+    for (const e of rawEvents) {
+      if (e.status === 'cancelled') continue
+      const isAllDay = !!e.start?.date && !e.start?.dateTime
+      const type = detectType(e)
+      const hangoutLink = e.hangoutLink ||
+        e.conferenceData?.entryPoints?.find(ep => ep.entryPointType === 'video')?.uri || ''
+      const base = {
+        summary:     e.summary || '(sans titre)',
+        description: e.description || '',
+        location:    e.location || '',
+        type,
+        htmlLink:    e.htmlLink || '',
+        hangoutLink,
+        attendees:   (e.attendees || []).map(a => a.email),
+        organizer:   e.organizer?.email || '',
+        creator:     e.creator?.email || '',
+      }
+
+      if (isAllDay) {
+        // Expansion : une entrée par jour dans la plage de l'événement
+        const startD = new Date(e.start.date + 'T00:00:00Z')
+        const endD   = new Date(e.end.date   + 'T00:00:00Z') // fin exclusive
+        const totalDays = Math.round((endD - startD) / 86400000)
+        let cur = new Date(startD)
+        let dayIdx = 0
+        while (cur < endD) {
+          const dayKey = cur.toISOString().split('T')[0]
+          allEntries.push({
+            id: totalDays > 1 ? `${e.id}_d${dayIdx}` : e.id,
+            ...base,
+            isAllDay:    true,
+            isMultiDay:  totalDays > 1,
+            start:       cur.toISOString(),
+            end:         endD.toISOString(),
+            startLabel:  '',
+            endLabel:    '',
+            dayLabel:    fmtParis(cur, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+            dayKey,
+          })
+          cur = new Date(cur.getTime() + 86400000)
+          dayIdx++
+        }
+      } else {
+        if (!e.start?.dateTime) continue
+        const start  = new Date(e.start.dateTime)
+        const end    = new Date(e.end.dateTime)
+        const dayKey = fmtParis(start, { year: 'numeric', month: '2-digit', day: '2-digit' })
+          .split('/').reverse().join('-')
+        allEntries.push({
+          id: e.id,
+          ...base,
+          isAllDay:    false,
+          isMultiDay:  false,
           start:       start.toISOString(),
           end:         end.toISOString(),
-          startLabel:  isAllDay ? fmtParis(start, { day: '2-digit', month: '2-digit', year: 'numeric' }) : fmtParis(start, { hour: '2-digit', minute: '2-digit' }),
-          endLabel:    isAllDay ? '' : fmtParis(end, { hour: '2-digit', minute: '2-digit' }),
+          startLabel:  fmtParis(start, { hour: '2-digit', minute: '2-digit' }),
+          endLabel:    fmtParis(end,   { hour: '2-digit', minute: '2-digit' }),
           dayLabel:    fmtParis(start, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-          dayKey:      isAllDay ? e.start.date : fmtParis(start, { year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-'),
-          htmlLink:    e.htmlLink || '',
-          hangoutLink: e.hangoutLink || e.conferenceData?.entryPoints?.find(ep => ep.entryPointType === 'video')?.uri || '',
-          attendees:   (e.attendees || []).map(a => a.email),
-          organizer:   e.organizer?.email || '',
-          creator:     e.creator?.email || '',
-        }
-      })
-      .sort((a, b) => new Date(a.start) - new Date(b.start))
+          dayKey,
+        })
+      }
+    }
 
-    return res.json({ events })
+    allEntries.sort((a, b) => new Date(a.start) - new Date(b.start))
+    return res.json({ events: allEntries })
   }
 
   return res.status(400).json({ error: 'action inconnue' })

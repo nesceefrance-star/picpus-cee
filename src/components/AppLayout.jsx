@@ -48,7 +48,7 @@ export default function AppLayout({ children }) {
         </Box>
 
         {/* Page rendue */}
-        <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', background: '#F1F5F9' }}>
           {children}
         </Box>
       </Box>
