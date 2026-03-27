@@ -50,6 +50,17 @@ const FICHES_V = {
   "BAT-TH-163":"BAT-TH-163 — PAC air/eau tertiaire",
 };
 
+// Fiches pour le générateur de devis
+const FICHES_DEVIS = {
+  "BAT-TH-142": "BAT-TH-142 — Déstratification tertiaire",
+  "IND-BA-110": "IND-BA-110 — Déstratification industrie",
+  "BAT-TH-163": "BAT-TH-163 — PAC air/eau tertiaire",
+  "BAT-TH-116": "BAT-TH-116 — Isolation combles/toitures",
+  "AUTRE":      "Autre fiche",
+};
+// Fiches nécessitant l'ajout automatique du destratificateur
+const FICHES_DESTRAT = ["BAT-TH-142", "IND-BA-110"];
+
 const NIV = {
   CRITIQUE: { bg:"#FEF2F2", border:"#FCA5A5", badge:"#DC2626", text:"#7F1D1D" },
   ATTENTION:{ bg:"#FFFBEB", border:"#FCD34D", badge:"#D97706", text:"#78350F" },
@@ -508,59 +519,124 @@ function ListeDevis({ devis, onCreate, onOpen, onDelete, confirmDeleteId, onCanc
   );
 }
 
+// ── Autocomplete client (SIRENE) ──────────────────────────────────────────
+function ClientAutocomplete({ value, onChange, onSelect, style }) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [open, setOpen] = useState(false);
+  const timer = useRef(null);
+
+  const search = (q) => {
+    onChange(q);
+    clearTimeout(timer.current);
+    if (q.length < 2) { setSuggestions([]); setOpen(false); return; }
+    timer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(q)}&limit=6`);
+        const data = await res.json();
+        setSuggestions(data.results || []);
+        setOpen(true);
+      } catch { setSuggestions([]); }
+    }, 350);
+  };
+
+  const select = (item) => {
+    const siege = item.siege || {};
+    const parts = [siege.numero_voie, siege.type_voie, siege.libelle_voie].filter(Boolean).join(' ');
+    const adresseSiege = siege.adresse_complete || [parts, siege.code_postal, siege.libelle_commune].filter(Boolean).join(' ');
+    onSelect({
+      nomClient: item.nom_complet || item.nom_raison_sociale || '',
+      siret: siege.siret || '',
+      adresseSiege,
+      codeNAF: item.activite_principale || '',
+    });
+    setSuggestions([]); setOpen(false);
+  };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <input value={value} onChange={e => search(e.target.value)}
+        onBlur={() => setTimeout(() => setOpen(false), 250)}
+        placeholder="KIABI LOGISTIQUE…" style={style} />
+      {open && suggestions.length > 0 && (
+        <div style={{ position:"absolute", top:"100%", left:0, right:0, background:"#FFF", border:`1px solid ${C.border}`, borderRadius:8, zIndex:300, boxShadow:"0 8px 24px rgba(0,0,0,.12)", maxHeight:210, overflowY:"auto" }}>
+          {suggestions.map((s, i) => (
+            <div key={i} onClick={() => select(s)}
+              style={{ padding:"9px 13px", cursor:"pointer", borderBottom:`1px solid ${C.border}` }}
+              onMouseEnter={e => e.currentTarget.style.background = C.bg}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              <div style={{ fontSize:13, fontWeight:600, color:C.text }}>{s.nom_complet || s.nom_raison_sociale}</div>
+              <div style={{ fontSize:11, color:C.textMid, marginTop:2 }}>SIRET {s.siege?.siret || '—'} · {s.siege?.libelle_commune || ''}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Étape 1 — Infos client ────────────────────────────────────────────────
 function ModalNouveauDevis({ onConfirm, onCancel }) {
-  const [nomClient, setNomClient]   = useState("");
-  const [siret, setSiret]           = useState("");
+  const [ficheDevis, setFicheDevis]   = useState("BAT-TH-142");
+  const [nomClient, setNomClient]     = useState("");
+  const [siret, setSiret]             = useState("");
   const [adresseSite, setAdresseSite] = useState("");
-  const [refDevis, setRefDevis]     = useState(refDefault);
+  const [refDevis, setRefDevis]       = useState(refDefault);
   useEffect(() => { nextRef('devis_hub', 'ref_devis').then(setRefDevis).catch(() => {}) }, []);
-  const [dateDevis, setDateDevis]   = useState(new Date().toLocaleDateString("fr-FR"));
-  const [nomContact, setNomContact] = useState("");
+  const [dateDevis, setDateDevis]     = useState(new Date().toLocaleDateString("fr-FR"));
+  const [nomContact, setNomContact]   = useState("");
   const [fonctionContact, setFonctionContact] = useState("");
   const [adresseSiege, setAdresseSiege] = useState("");
   const [telephoneClient, setTelephoneClient] = useState("");
   const [emailClient, setEmailClient] = useState("");
-  const [codeNAF, setCodeNAF] = useState("");
+  const [codeNAF, setCodeNAF]         = useState("");
+  const [destratDesignation, setDestratDesignation] = useState("DESTRATIFICATEUR TECH - 14000m3/h");
+  const [destratPrix, setDestratPrix] = useState(650);
 
-  const fetchEntreprise = async (siretVal) => {
-    if (!siretVal.trim()) return;
-    try {
-      const r = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(siretVal.trim())}&per_page=1`);
-      if (!r.ok) return;
-      const d = await r.json();
-      const e = d.results?.[0];
-      if (!e) return;
-      if (e.activite_principale && !codeNAF) setCodeNAF(e.activite_principale);
-      if (e.siege?.adresse_complete && !adresseSiege) setAdresseSiege(e.siege.adresse_complete);
-      if (!nomClient) setNomClient(e.nom_complet || e.nom_raison_sociale || "");
-    } catch (_) {}
-  };
+  const needsDestrat = FICHES_DESTRAT.includes(ficheDevis);
 
   const go = () => {
     if (!nomClient.trim()) return;
-    onConfirm({ nomClient, siret, adresseSite, refDevis, dateDevis, nomContact, fonctionContact, adresseSiege, telephoneClient, emailClient, codeNAF });
+    onConfirm({ ficheDevis, nomClient, siret, adresseSite, refDevis, dateDevis, nomContact, fonctionContact, adresseSiege, telephoneClient, emailClient, codeNAF, destratDesignation, destratPrix });
   };
 
   const INP = {width:"100%",boxSizing:"border-box",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit"};
+  const L = {display:"block",fontSize:11,fontWeight:600,color:C.textMid,marginBottom:4,textTransform:"uppercase",letterSpacing:.4};
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={onCancel}>
-      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"28px 32px",width:520,boxShadow:"0 25px 60px rgba(0,0,0,.4)"}} onClick={e=>e.stopPropagation()}>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"28px 32px",width:560,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 25px 60px rgba(0,0,0,.4)"}} onClick={e=>e.stopPropagation()}>
         {/* Steps */}
-        <div style={{display:"flex",gap:0,marginBottom:24,borderRadius:8,overflow:"hidden",border:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",gap:0,marginBottom:20,borderRadius:8,overflow:"hidden",border:`1px solid ${C.border}`}}>
           {["1 · Infos client","2 · Devis prestataire","3 · Marges & export"].map((s,i)=>(
             <div key={i} style={{flex:1,padding:"8px 6px",textAlign:"center",fontSize:11,fontWeight:i===0?700:500,background:i===0?C.accent:C.bg,color:i===0?"#fff":C.textSoft,borderRight:i<2?`1px solid ${C.border}`:"none"}}>
               {s}
             </div>
           ))}
         </div>
-        <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:20}}>📄 Nouveau devis</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:20}}>
+        <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:16}}>📄 Nouveau devis</div>
+
+        {/* Fiche CEE */}
+        <div style={{marginBottom:18,padding:"12px 14px",background:C.accentL,borderRadius:8,border:`1px solid #BFDBFE`}}>
+          <label style={L}>Fiche CEE</label>
+          <select value={ficheDevis} onChange={e=>setFicheDevis(e.target.value)} style={{...INP,background:C.surface,fontWeight:600}}>
+            {Object.entries(FICHES_DEVIS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
+          {/* Client avec autocomplete */}
+          <div style={{gridColumn:"1/-1"}}>
+            <label style={L}>Client * <span style={{fontSize:10,color:C.accent,fontWeight:400,textTransform:"none"}}>autocomplétion SIRET</span></label>
+            <ClientAutocomplete
+              value={nomClient}
+              onChange={setNomClient}
+              onSelect={s => { setNomClient(s.nomClient); if(s.siret) setSiret(s.siret); if(s.adresseSiege) setAdresseSiege(s.adresseSiege); if(s.codeNAF) setCodeNAF(s.codeNAF); }}
+              style={INP}
+            />
+          </div>
           {[
-            {l:"Client *",v:nomClient,set:setNomClient,ph:"KIABI LOGISTIQUE",full:true},
-            {l:"SIRET",v:siret,set:setSiret,ph:"347 727 950 00094",onBlur:(val)=>fetchEntreprise(val)},
-            {l:"Adresse site",v:adresseSite,set:setAdresseSite,ph:"771 Rue de la Plaine, 59553 Lauwin-Planque",full:true},
+            {l:"SIRET",v:siret,set:setSiret,ph:"347 727 950 00094"},
+            {l:"Adresse site",v:adresseSite,set:setAdresseSite,ph:"771 Rue de la Plaine, 59553",full:true},
             {l:"Référence devis",v:refDevis,set:setRefDevis,ph:"2025-0001"},
             {l:"Date devis",v:dateDevis,set:setDateDevis,ph:"22/07/2025"},
             {l:"Contact (nom)",v:nomContact,set:setNomContact,ph:"M. Dupont"},
@@ -571,14 +647,32 @@ function ModalNouveauDevis({ onConfirm, onCancel }) {
             {l:"Email",v:emailClient,set:setEmailClient,ph:"contact@societe.fr"},
           ].map(f=>(
             <div key={f.l} style={{gridColumn:f.full?"1/-1":"auto"}}>
-              <label style={{display:"block",fontSize:11,fontWeight:600,color:C.textMid,marginBottom:4,textTransform:"uppercase",letterSpacing:.4}}>{f.l}</label>
-              <input value={f.v} onChange={e=>f.set(e.target.value)} placeholder={f.ph} onBlur={f.onBlur ? e=>f.onBlur(e.target.value) : undefined} style={INP}/>
+              <label style={L}>{f.l}</label>
+              <input value={f.v} onChange={e=>f.set(e.target.value)} placeholder={f.ph} style={INP}/>
             </div>
           ))}
         </div>
+
+        {/* Config destratificateur — uniquement BAT-TH-142 / IND-BA-110 */}
+        {needsDestrat && (
+          <div style={{marginBottom:16,padding:"12px 14px",background:"#EFF6FF",borderRadius:8,border:"1px solid #BFDBFE"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#1D4ED8",marginBottom:10}}>⚙️ Destratificateur TECH (ajouté automatiquement)</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10}}>
+              <div>
+                <label style={{...L,color:"#1D4ED8"}}>Désignation</label>
+                <input value={destratDesignation} onChange={e=>setDestratDesignation(e.target.value)} style={{...INP,background:"#F8FAFF"}}/>
+              </div>
+              <div>
+                <label style={{...L,color:"#1D4ED8"}}>Prix achat (€/U)</label>
+                <input type="number" value={destratPrix} onChange={e=>setDestratPrix(Number(e.target.value)||0)} style={{...INP,width:90,background:"#F8FAFF"}}/>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div style={{display:"flex",gap:10}}>
           <button onClick={onCancel} style={{flex:1,padding:"11px",background:"transparent",border:`1px solid ${C.border}`,color:C.textMid,borderRadius:8,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
-          <button onClick={go} disabled={!nomClient.trim()} style={{flex:2,padding:"11px",background:C.accent,border:"none",color:"#fff",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",opacity:!nomClient.trim()?.5:1}}>
+          <button onClick={go} disabled={!nomClient.trim()} style={{flex:2,padding:"11px",background:C.accent,border:"none",color:"#fff",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",opacity:!nomClient.trim()?0.5:1}}>
             Suivant → Upload devis presta
           </button>
         </div>
@@ -589,13 +683,17 @@ function ModalNouveauDevis({ onConfirm, onCancel }) {
 
 // ── Étape 2 — Upload devis prestataire + extraction IA ────────────────────
 function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
-  const [file, setFile]       = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
-  const [preview, setPreview] = useState(null); // lignes extraites pour preview
+  const ficheCEE  = infosClient.ficheDevis || "BAT-TH-142";
+  const avecCat   = FICHES_DESTRAT.includes(ficheCEE); // BAT-TH-142 / IND-BA-110 → catégorisation MATÉRIEL/MO/DIVERS
+
+  const [file, setFile]           = useState(null);
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState("");
+  const [preview, setPreview]     = useState(null);
+  const [prestataire, setPrestataire] = useState(infosClient.sousTraitant || "DC LINK");
   const fileRef = useRef();
 
-  // Détecte la catégorie à partir de mots-clés dans la désignation
+  // Détecte la catégorie à partir de mots-clés (uniquement pour fiches avec destrat)
   const detectCat = txt => {
     const t = txt.toUpperCase();
     if (/POSE|INSTALL|CÂBLAGE|CABLAGE|MONTAGE|CRÉATION|CREATION|MAIN.D.OEUVRE|MO\b/.test(t)) return "MAIN D'ŒUVRE";
@@ -618,33 +716,43 @@ function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
       }
       const b64 = btoa(binary);
 
+      // Prompt adapté selon la fiche CEE
+      const promptTexte = avecCat
+        ? `Devis du prestataire "${prestataire}" pour la fiche CEE ${ficheCEE}.
+Analyse le tableau et extrais CHAQUE ligne produit/prestation (SAUF totaux, sous-totaux, TVA, acomptes, en-têtes).
+IMPORTANT : conserve la désignation COMPLÈTE sans tronquer, même si elle est longue.
+Pour chaque ligne, retourne un objet JSON avec :
+- designation : string (description COMPLÈTE, ne tronque pas)
+- qte : number
+- puAchat : number (prix unitaire HT en euros)
+- unite : string (U, ml, m², h, Forfait — "U" si non précisé)
+
+Réponds UNIQUEMENT avec un tableau JSON valide, sans texte avant ni après, sans markdown.
+Exemple : [{"designation":"Rail acier galvanisé 3m perforé","qte":30,"puAchat":62.47,"unite":"U"}]`
+        : `Devis du prestataire "${prestataire}" pour la fiche CEE ${ficheCEE}.
+Analyse le tableau et extrais CHAQUE ligne produit/prestation dans l'ORDRE du document (SAUF totaux, sous-totaux, TVA, acomptes, en-têtes).
+IMPORTANT : conserve la désignation COMPLÈTE sans tronquer, même si elle est très longue.
+Pour chaque ligne, retourne un objet JSON avec :
+- designation : string (description COMPLÈTE et fidèle au document, ne tronque pas)
+- qte : number
+- puAchat : number (prix unitaire HT en euros)
+- unite : string (U, ml, m², h, Forfait — "U" si non précisé)
+
+Ne regroupe pas et ne catégorise pas les lignes. Conserve la structure et l'ordre exact du devis.
+Réponds UNIQUEMENT avec un tableau JSON valide, sans texte avant ni après, sans markdown.
+Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de verre 200mm","qte":120,"puAchat":18.50,"unite":"m²"}]`;
+
       const resp = await fetch("/api/claude", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-haiku-4-5-20251001",
           max_tokens: 4096,
           messages: [{
             role: "user",
             content: [
-              {
-                type: "document",
-                source: { type: "base64", media_type: "application/pdf", data: b64 },
-              },
-              {
-                type: "text",
-                text: `Analyse le tableau de ce devis PDF et extrais chaque ligne produit/prestation.
-Pour chaque ligne du tableau (ignore les lignes de total, sous-total, TVA, acompte, en-tête), retourne un objet JSON avec :
-- designation : string (description complète du produit ou prestation)
-- qte : number (quantité, ex: 1, 2, 30)
-- puAchat : number (prix unitaire HT en euros, avec centimes, ex: 62.47)
-- unite : string (unité : U, ml, m², h, Forfait, Jours — "U" si non précisé)
-
-Réponds UNIQUEMENT avec un tableau JSON valide, sans texte avant ni après, sans markdown.
-Exemple : [{"designation":"Rail acier","qte":30,"puAchat":62.47,"unite":"U"}]`,
-              },
+              { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } },
+              { type: "text", text: promptTexte },
             ],
           }],
         }),
@@ -670,12 +778,12 @@ Exemple : [{"designation":"Rail acier","qte":30,"puAchat":62.47,"unite":"U"}]`,
       const lignes = items
         .filter(it => it.puAchat > 0 && it.designation?.length > 2)
         .map((it, idx) => {
-          const cat   = detectCat(it.designation);
-          const marge = cat === "MAIN D'ŒUVRE" ? 25 : cat === "DIVERS" ? 10 : 30;
+          const cat   = avecCat ? detectCat(it.designation) : "MATÉRIEL";
+          const marge = avecCat ? (cat === "MAIN D'ŒUVRE" ? 25 : cat === "DIVERS" ? 10 : 30) : 30;
           return {
             id: idx + 1,
             cat,
-            designation: String(it.designation).substring(0, 200),
+            designation: String(it.designation).substring(0, 500),
             qte:     cent(Number(it.qte)     || 1),
             unite:   it.unite || "U",
             puAchat: cent(Number(it.puAchat) || 0),
@@ -709,7 +817,22 @@ Exemple : [{"designation":"Rail acier","qte":30,"puAchat":62.47,"unite":"U"}]`,
         </div>
 
         <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>📎 Devis prestataire</div>
-        <div style={{fontSize:13,color:C.textMid,marginBottom:20}}>Client : <strong>{infosClient.nomClient}</strong> — {infosClient.refDevis}</div>
+        <div style={{fontSize:13,color:C.textMid,marginBottom:14}}>
+          Client : <strong>{infosClient.nomClient}</strong> — {infosClient.refDevis}
+          <span style={{marginLeft:10,background:C.accentL,color:C.accent,borderRadius:5,padding:"2px 8px",fontSize:11,fontWeight:700}}>{FICHES_DEVIS[ficheCEE] || ficheCEE}</span>
+        </div>
+
+        {/* Prestataire */}
+        {!preview && (
+          <div style={{marginBottom:14}}>
+            <label style={{display:"block",fontSize:11,fontWeight:600,color:C.textMid,marginBottom:4,textTransform:"uppercase",letterSpacing:.4}}>
+              Prestataire (sous-traitant)
+            </label>
+            <input value={prestataire} onChange={e=>setPrestataire(e.target.value)} placeholder="DC LINK, Nom du prestataire..."
+              style={{width:"100%",boxSizing:"border-box",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
+            <div style={{fontSize:11,color:C.textSoft,marginTop:4}}>Préciser le prestataire aide l'IA à mieux interpréter la structure du devis.</div>
+          </div>
+        )}
 
         {/* Zone upload */}
         {!preview && (
@@ -1209,6 +1332,7 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
     rgeValidite:      devis.rgeValidite      || "31/12/2026",
     adresseSite:      devis.adresseSite      || "",
     // Onglet Devis
+    ficheDevis:           devis.ficheDevis            || p.ficheDevis           || "BAT-TH-142",
     refDevis:             devis.refDevis             || "",
     dateDevis:            devis.dateDevis             || p.dateDevis            || "",
     dateVisiteTechnique:  p.dateVisiteTechnique       || "",
@@ -1252,6 +1376,7 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
       dateDevis:       form.dateDevis,
       pdfParams: {
         ...p,
+        ficheDevis:          form.ficheDevis,
         dateDevis:           form.dateDevis,
         dateVisiteTechnique: form.dateVisiteTechnique,
         validiteJours:       Number(form.validiteJours),
@@ -1342,6 +1467,12 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
           {/* ── Devis ── */}
           {activeTab === "devis" && (
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div>
+                <label style={L}>Fiche CEE</label>
+                <select value={form.ficheDevis} onChange={e => set("ficheDevis", e.target.value)} style={{...F, appearance:"auto", fontWeight:600}}>
+                  {Object.entries(FICHES_DEVIS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
               <div>
                 <label style={L}>Dossier associé</label>
                 <select value={form.dossierId || ""} onChange={e => set("dossierId", e.target.value || null)} style={{...F, appearance:"auto"}}>
@@ -1644,6 +1775,7 @@ const normalizeDevis = d => ({
   codeNAF: d.code_naf || "",
   pdfParams: d.pdf_params || {},
   dossierId: d.dossier_id || null,
+  ficheDevis: d.pdf_params?.ficheDevis || "BAT-TH-142",
 });
 
 function MargesDevis({ prefill }) {
@@ -1712,15 +1844,16 @@ function MargesDevis({ prefill }) {
   // ── Créer un nouveau devis ────────────────────────────────────────────
   const creerDevis = async (infos, lignes) => {
     const { data: { user } } = await supabase.auth.getUser();
-    // Si des destrats sont renseignés, on les injecte comme ligne MATÉRIEL normale
     let baseLignes = lignes ? [...lignes] : LIGNES_DEFAUT.map(l => ({...l}));
-    if ((infos.batQte || 0) > 0) {
-      const puAchat = 650;
+    // Ajouter la ligne destratificateur uniquement pour les fiches qui le nécessitent
+    const ficheDevis = infos.ficheDevis || infos.ficheCee || "BAT-TH-142";
+    if (FICHES_DESTRAT.includes(ficheDevis) && (infos.batQte || 0) > 0) {
+      const puAchat = Number(infos.destratPrix) || 650;
       baseLignes = [
         {
           id: baseLignes.length + 1,
           cat: "MATÉRIEL",
-          designation: `DESTRATIFICATEUR TECH - ${infos.batDebit || '14000'}m3/h`,
+          designation: infos.destratDesignation || `DESTRATIFICATEUR TECH - ${infos.batDebit || '14000'}m3/h`,
           qte: infos.batQte,
           unite: "U",
           puAchat,
@@ -1736,9 +1869,10 @@ function MargesDevis({ prefill }) {
       ...toRow({
         ...infos,
         lignes: baseLignes,
-        batQte: 0,       // désormais dans lignes, pas dans la ligne spéciale
+        batQte: 0,
         batPuVente: 0,
         prime: infos.prime || 0,
+        pdfParams: { ...(infos.pdfParams || {}), ficheDevis },
       }),
     };
     const { data, error } = await supabase.from("devis_hub").insert(row).select().single();
