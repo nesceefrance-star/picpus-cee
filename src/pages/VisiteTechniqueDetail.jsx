@@ -458,7 +458,7 @@ export default function VisiteTechniqueDetail() {
 
             return (
               <div key={zone.id} ref={el => zoneRefs.current[zone.id] = el}
-                style={{ background: C.surface, border: `1px solid ${isActive ? C.accent : C.border}`, borderRadius: 12, overflow: 'hidden', transition: 'border-color .2s' }}>
+                style={{ background: C.surface, border: `1px solid ${isActive ? C.accent : C.border}`, borderRadius: 12, transition: 'border-color .2s' }}>
 
                 <ZoneHeader zone={zone} photoCount={photoCnt} active={isActive}
                   onClick={() => setActiveZone(isActive ? '' : zone.id)} />
