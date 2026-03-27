@@ -45,19 +45,9 @@ const useStore = create((set, get) => ({
 
   deleteUser: async (id) => {
     if (get().profile?.role !== 'admin') throw new Error('Action réservée aux administrateurs')
-    const serviceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
-    if (serviceKey) {
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/admin/users/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'apikey': serviceKey,
-          'Authorization': `Bearer ${serviceKey}`,
-        },
-      })
-    }
-    const { error } = await supabase.from('profiles').delete().eq('id', id)
-    if (!error) set(s => ({ profiles: s.profiles.filter(p => p.id !== id) }))
-    return { error }
+    const { error } = await supabase.rpc('admin_delete_user', { target_id: id })
+    if (error) throw new Error(error.message)
+    set(s => ({ profiles: s.profiles.filter(p => p.id !== id) }))
   },
 
   updateUserEmail: async (id, newEmail) => {
