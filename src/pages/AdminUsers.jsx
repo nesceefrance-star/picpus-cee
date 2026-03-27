@@ -13,6 +13,8 @@ const ROLES = [
   { id: 'commercial', label: 'Commercial', color: '#2563EB', desc: 'Voit uniquement ses propres dossiers' },
 ]
 
+const AVATAR_EMOJIS = ['👤', '👨', '👩', '🧑', '👨‍💼', '👩‍💼', '🧑‍💼', '👷', '👷‍♀️', '🧑‍💻', '⭐', '🚀', '💼', '🔧', '⚡', '🌟']
+
 function RoleBadge({ role }) {
   const r = ROLES.find(x => x.id === role) || ROLES[1]
   return (
@@ -22,46 +24,158 @@ function RoleBadge({ role }) {
   )
 }
 
-// Modal pour modifier le profil d'un user existant
-function EditProfileModal({ profile, onClose, onSave }) {
-  const [nom, setNom]     = useState(profile.nom || '')
-  const [prenom, setPrenom] = useState(profile.prenom || '')
-  const [role, setRole]   = useState(profile.role || 'commercial')
-  const [saving, setSaving] = useState(false)
+function AvatarCircle({ profile, size = 34 }) {
+  const roleColor = profile.role === 'admin' ? '#F59E0B' : '#2563EB'
+  if (profile.avatar_emoji) {
+    return (
+      <div style={{ width: size, height: size, borderRadius: '50%', background: roleColor + '22', border: `1px solid ${roleColor}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.5, flexShrink: 0 }}>
+        {profile.avatar_emoji}
+      </div>
+    )
+  }
+  return (
+    <div style={{ width: size, height: size, borderRadius: '50%', background: roleColor + '22', border: `1px solid ${roleColor}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.4, fontWeight: 700, color: roleColor, flexShrink: 0 }}>
+      {(profile.prenom || profile.email || '?')[0].toUpperCase()}
+    </div>
+  )
+}
+
+function EditProfileModal({ profile, currentUserId, onClose, onSave, onDelete, onUpdateEmail, onResetPassword }) {
+  const [nom, setNom]         = useState(profile.nom || '')
+  const [prenom, setPrenom]   = useState(profile.prenom || '')
+  const [role, setRole]       = useState(profile.role || 'commercial')
+  const [avatar, setAvatar]   = useState(profile.avatar_emoji || '')
+  const [email, setEmail]     = useState(profile.email || '')
+  const [saving, setSaving]           = useState(false)
+  const [savingEmail, setSavingEmail] = useState(false)
+  const [resetting, setResetting]     = useState(false)
+  const [deleting, setDeleting]       = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [resetSent, setResetSent]     = useState(false)
+  const [msg, setMsg]                 = useState(null)
+
+  const isSelf = profile.id === currentUserId
+
+  const inputStyle = { width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }
+  const labelStyle = { display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }
 
   const save = async () => {
     setSaving(true)
-    await onSave(profile.id, { nom, prenom, role })
-    setSaving(false)
-    onClose()
+    setMsg(null)
+    try {
+      await onSave(profile.id, { nom, prenom, role, avatar_emoji: avatar })
+      onClose()
+    } catch (e) {
+      setMsg({ type: 'err', text: e.message })
+      setSaving(false)
+    }
+  }
+
+  const saveEmail = async () => {
+    const trimmed = email.trim()
+    if (!trimmed || trimmed === profile.email) return
+    setSavingEmail(true)
+    setMsg(null)
+    try {
+      await onUpdateEmail(profile.id, trimmed)
+      setMsg({ type: 'ok', text: 'Email mis à jour.' })
+    } catch (e) {
+      setMsg({ type: 'err', text: e.message })
+    }
+    setSavingEmail(false)
+  }
+
+  const resetPwd = async () => {
+    setResetting(true)
+    setMsg(null)
+    const { error } = await onResetPassword(profile.email)
+    if (error) {
+      setMsg({ type: 'err', text: error.message })
+    } else {
+      setResetSent(true)
+      setMsg({ type: 'ok', text: `Lien de réinitialisation envoyé à ${profile.email}` })
+    }
+    setResetting(false)
+  }
+
+  const doDelete = async () => {
+    setDeleting(true)
+    setMsg(null)
+    try {
+      await onDelete(profile.id)
+      onClose()
+    } catch (e) {
+      setMsg({ type: 'err', text: e.message })
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
   }
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
-      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '28px 32px', width: 420, boxShadow: '0 25px 50px rgba(0,0,0,.5)' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '28px 32px', width: 460, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,.5)' }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
         <div style={{ fontSize: 16, fontWeight: 800, color: C.text, marginBottom: 4 }}>Modifier le profil</div>
         <div style={{ fontSize: 12, color: C.textMid, marginBottom: 20 }}>{profile.email}</div>
 
+        {/* Feedback message */}
+        {msg && (
+          <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 8, fontSize: 12, background: msg.type === 'ok' ? '#052e16' : '#450a0a', color: msg.type === 'ok' ? '#4ade80' : '#f87171', border: `1px solid ${msg.type === 'ok' ? '#166534' : '#7f1d1d'}` }}>
+            {msg.text}
+          </div>
+        )}
+
+        {/* ── Avatar ── */}
+        <div style={{ marginBottom: 18 }}>
+          <label style={labelStyle}>Avatar</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {/* Option initiales */}
+            <button type="button" onClick={() => setAvatar('')} style={{
+              width: 38, height: 38, borderRadius: 8, cursor: 'pointer',
+              border: `2px ${avatar === '' ? 'solid' : 'dashed'} ${avatar === '' ? C.accent : C.border}`,
+              background: avatar === '' ? C.accent + '22' : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 13, fontWeight: 800, color: avatar === '' ? C.accent : C.textSoft,
+              fontFamily: 'inherit',
+            }}>
+              {(prenom || profile.email || '?')[0].toUpperCase()}
+            </button>
+            {AVATAR_EMOJIS.map(em => (
+              <button key={em} type="button" onClick={() => setAvatar(em)} style={{
+                width: 38, height: 38, borderRadius: 8, cursor: 'pointer', fontSize: 20,
+                border: `2px solid ${avatar === em ? C.accent : C.border}`,
+                background: avatar === em ? C.accent + '22' : C.bg,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'inherit',
+              }}>
+                {em}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Nom / Prénom ── */}
         {[
           { label: 'Prénom', val: prenom, set: setPrenom, ph: 'Jean' },
-          { label: 'Nom', val: nom, set: setNom, ph: 'DUPONT' },
+          { label: 'Nom',    val: nom,    set: setNom,    ph: 'DUPONT' },
         ].map(f => (
           <div key={f.label} style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>{f.label}</label>
-            <input value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
-              style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+            <label style={labelStyle}>{f.label}</label>
+            <input value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph} style={inputStyle} />
           </div>
         ))}
 
+        {/* ── Rôle ── */}
         <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>Rôle & droits d'accès</label>
+          <label style={labelStyle}>Rôle & droits d'accès</label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {ROLES.map(r => (
-              <button key={r.id} type="button" onClick={() => setRole(r.id)} style={{
-                padding: '12px 14px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+              <button key={r.id} type="button" onClick={() => !isSelf && setRole(r.id)} disabled={isSelf} style={{
+                padding: '12px 14px', borderRadius: 8, cursor: isSelf ? 'default' : 'pointer', fontFamily: 'inherit', textAlign: 'left',
                 background: role === r.id ? r.color + '15' : C.bg,
                 border: `1px solid ${role === r.id ? r.color : C.border}`,
-                display: 'flex', alignItems: 'center', gap: 12,
+                display: 'flex', alignItems: 'center', gap: 12, opacity: isSelf ? .5 : 1,
               }}>
                 <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${role === r.id ? r.color : C.border}`, background: role === r.id ? r.color : 'transparent', flexShrink: 0 }} />
                 <div>
@@ -73,12 +187,72 @@ function EditProfileModal({ profile, onClose, onSave }) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
+        {/* ── Boutons enregistrer ── */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
           <button onClick={onClose} style={{ flex: 1, padding: '11px', background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Annuler</button>
           <button onClick={save} disabled={saving} style={{ flex: 2, padding: '11px', background: C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
             {saving ? 'Sauvegarde…' : 'Enregistrer'}
           </button>
         </div>
+
+        {/* ── Séparateur ── */}
+        <div style={{ borderTop: `1px solid ${C.border}`, marginBottom: 20 }} />
+
+        {/* ── Email ── */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Adresse email</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input value={email} onChange={e => setEmail(e.target.value)} type="email"
+              style={{ ...inputStyle, flex: 1, width: 'auto' }} />
+            <button onClick={saveEmail} disabled={savingEmail || email.trim() === profile.email}
+              style={{ padding: '9px 16px', background: C.accent, border: 'none', color: '#fff', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: email.trim() === profile.email ? .4 : 1, whiteSpace: 'nowrap' }}>
+              {savingEmail ? '…' : 'Changer'}
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: C.textSoft, marginTop: 5 }}>
+            Nécessite VITE_SUPABASE_SERVICE_KEY pour mettre à jour l'authentification.
+          </div>
+        </div>
+
+        {/* ── Reset mot de passe ── */}
+        <div style={{ marginBottom: 24 }}>
+          <label style={labelStyle}>Mot de passe</label>
+          <button onClick={resetPwd} disabled={resetting || resetSent}
+            style={{ width: '100%', padding: '10px 14px', background: 'transparent', border: `1px solid ${resetSent ? '#166534' : C.border}`, color: resetSent ? '#4ade80' : C.textMid, borderRadius: 8, fontSize: 12, cursor: resetSent ? 'default' : 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
+            {resetSent ? '✅ Lien envoyé' : resetting ? 'Envoi…' : '🔑 Envoyer un lien de réinitialisation par email'}
+          </button>
+        </div>
+
+        {/* ── Zone dangereuse (pas pour soi-même) ── */}
+        {!isSelf && (
+          <>
+            <div style={{ borderTop: '1px solid #7f1d1d55', marginBottom: 14 }} />
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: .5, marginBottom: 10 }}>Zone dangereuse</div>
+            {!confirmDelete ? (
+              <button onClick={() => setConfirmDelete(true)}
+                style={{ width: '100%', padding: '10px', background: 'transparent', border: '1px solid #7f1d1d', color: '#ef4444', borderRadius: 8, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                🗑️ Supprimer cet utilisateur
+              </button>
+            ) : (
+              <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '14px 16px' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#fca5a5', marginBottom: 6 }}>Confirmer la suppression ?</div>
+                <div style={{ fontSize: 12, color: '#f87171', marginBottom: 14, lineHeight: 1.5 }}>
+                  Cette action est <strong>irréversible</strong>. Le compte de <strong>{profile.prenom || profile.nom || profile.email}</strong> sera définitivement supprimé.
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setConfirmDelete(false)}
+                    style={{ flex: 1, padding: '9px', background: 'transparent', border: '1px solid #7f1d1d', color: '#f87171', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Annuler
+                  </button>
+                  <button onClick={doDelete} disabled={deleting}
+                    style={{ flex: 2, padding: '9px', background: '#dc2626', border: 'none', color: '#fff', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {deleting ? 'Suppression…' : 'Oui, supprimer'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   )
@@ -137,9 +311,9 @@ function InviteHelpModal({ onClose }) {
 
 export default function AdminUsers() {
   const navigate = useNavigate()
-  const { user, profile, profiles, fetchProfiles, updateProfile } = useStore()
-  const [loading, setLoading]       = useState(true)
-  const [showHelp, setShowHelp]     = useState(false)
+  const { user, profile, profiles, fetchProfiles, updateProfile, deleteUser, updateUserEmail, resetUserPassword } = useStore()
+  const [loading, setLoading]         = useState(true)
+  const [showHelp, setShowHelp]       = useState(false)
   const [editProfile, setEditProfile] = useState(null)
 
   useEffect(() => {
@@ -150,6 +324,11 @@ export default function AdminUsers() {
 
   const handleSaveProfile = async (id, updates) => {
     await updateProfile(id, updates)
+    await fetchProfiles()
+  }
+
+  const handleDelete = async (id) => {
+    await deleteUser(id)
     await fetchProfiles()
   }
 
@@ -219,9 +398,7 @@ export default function AdminUsers() {
               >
                 {/* Avatar + nom */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: p.role === 'admin' ? '#F59E0B33' : '#2563EB33', border: `1px solid ${p.role === 'admin' ? '#F59E0B55' : '#2563EB55'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: p.role === 'admin' ? '#F59E0B' : '#60A5FA', flexShrink: 0 }}>
-                    {(p.prenom || p.email || '?')[0].toUpperCase()}
-                  </div>
+                  <AvatarCircle profile={p} size={34} />
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: C.text, display: 'flex', alignItems: 'center', gap: 6 }}>
                       {p.prenom || p.nom ? `${p.prenom || ''} ${p.nom || ''}`.trim() : <span style={{ color: C.textSoft, fontStyle: 'italic' }}>Sans nom</span>}
@@ -285,8 +462,18 @@ export default function AdminUsers() {
         </div>
       </div>
 
-      {showHelp   && <InviteHelpModal onClose={() => setShowHelp(false)} />}
-      {editProfile && <EditProfileModal profile={editProfile} onClose={() => setEditProfile(null)} onSave={handleSaveProfile} />}
+      {showHelp    && <InviteHelpModal onClose={() => setShowHelp(false)} />}
+      {editProfile && (
+        <EditProfileModal
+          profile={editProfile}
+          currentUserId={user?.id}
+          onClose={() => setEditProfile(null)}
+          onSave={handleSaveProfile}
+          onDelete={handleDelete}
+          onUpdateEmail={updateUserEmail}
+          onResetPassword={resetUserPassword}
+        />
+      )}
     </div>
   )
 }

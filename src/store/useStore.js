@@ -43,6 +43,49 @@ const useStore = create((set, get) => ({
     return data
   },
 
+  deleteUser: async (id) => {
+    if (get().profile?.role !== 'admin') throw new Error('Action réservée aux administrateurs')
+    const serviceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
+    if (serviceKey) {
+      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/admin/users/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': serviceKey,
+          'Authorization': `Bearer ${serviceKey}`,
+        },
+      })
+    }
+    const { error } = await supabase.from('profiles').delete().eq('id', id)
+    if (!error) set(s => ({ profiles: s.profiles.filter(p => p.id !== id) }))
+    return { error }
+  },
+
+  updateUserEmail: async (id, newEmail) => {
+    if (get().profile?.role !== 'admin') throw new Error('Action réservée aux administrateurs')
+    const serviceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
+    if (serviceKey) {
+      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/admin/users/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': serviceKey,
+          'Authorization': `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({ email: newEmail }),
+      })
+    }
+    const { data, error } = await supabase.from('profiles').update({ email: newEmail }).eq('id', id).select().single()
+    if (data) set(s => ({ profiles: s.profiles.map(p => p.id === id ? data : p) }))
+    return { data, error }
+  },
+
+  resetUserPassword: async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    })
+    return { error }
+  },
+
   inviteUser: async (email, nom, prenom, role) => {
     if (get().profile?.role !== 'admin') throw new Error('Action réservée aux administrateurs')
     const session = (await supabase.auth.getSession()).data.session
