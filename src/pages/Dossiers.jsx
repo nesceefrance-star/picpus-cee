@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import useStore from '../store/useStore'
 import NouveauDossierWizard from '../components/NouveauDossierWizard'
 import { supabase } from '../lib/supabase'
@@ -61,8 +61,14 @@ function StatutBadge({ statut }) {
 
 export default function Dossiers() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { dossiers, fetchDossiers, setCurrentDossier, deleteDossier, deleteDossiers, user, profile, profiles, fetchProfiles } = useStore()
-  const [showModal, setShowModal]               = useState(false)
+  const wizardPrefill = location.state?.openWizard ? {
+    fiche: location.state.prefillFiche,
+    tech:  location.state.prefillTech,
+    prixMwh: location.state.prefillPrixMwh,
+  } : null
+  const [showModal, setShowModal]               = useState(!!location.state?.openWizard)
   const [search, setSearch]                     = useState('')
   const [filtreStatut, setFiltreStatut]         = useState('all')
   const [filtreCommercial, setFiltreCommercial] = useState('all')
@@ -329,6 +335,9 @@ export default function Dossiers() {
         <NouveauDossierWizard
           onClose={() => setShowModal(false)}
           onCreate={(d) => d && openDossier(d)}
+          prefillFiche={wizardPrefill?.fiche}
+          prefillTech={wizardPrefill?.tech}
+          prefillPrixMwh={wizardPrefill?.prixMwh}
         />
       )}
     </div>

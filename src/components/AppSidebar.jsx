@@ -34,6 +34,7 @@ import ElectricBoltIcon from '@mui/icons-material/ElectricBolt'
 import EngineeringIcon from '@mui/icons-material/Engineering'
 import SettingsIcon from '@mui/icons-material/Settings'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
+import BoltIcon from '@mui/icons-material/Bolt'
 
 const DRAWER_OPEN  = 240
 const DRAWER_MINI  = 64
@@ -190,6 +191,7 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
             onToggle={() => setOutilsOpen(o => !o)}
           />
           <Collapse in={open ? outilsOpen : true} timeout="auto" unmountOnExit>
+            <Item icon={<BoltIcon fontSize="small" />}           label="Simulateur rapide"    path="/simulateur"                indent />
             <Item icon={<SearchIcon fontSize="small" />}        label="Vérificateur CEE"     path="/hub" module="verificateur" indent />
             <Item icon={<ReceiptLongIcon fontSize="small" />}  label="Générateur de devis"  path="/hub" module="marges"       indent />
             <Item icon={<EngineeringIcon fontSize="small" />}  label="Visites techniques"   path="/visites"                   indent />

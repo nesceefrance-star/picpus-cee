@@ -351,8 +351,8 @@ function LigneEquipement({ eq, onChange, onRemove, canRemove }) {
 }
 
 // ── Composant principal ───────────────────────────────────────────────────────
-export default function NouveauDossierWizard({ onClose, onCreate }) {
-  const [step, setStep] = useState(1)
+export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, prefillTech, prefillPrixMwh }) {
+  const [step, setStep] = useState(prefillFiche ? 2 : 1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const { createProspect, createDossier, createSimulation, user, profiles, fetchProfiles } = useStore()
@@ -368,7 +368,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
 
   // Étapes 1 + 3 — Données techniques
   const [tech, setTech] = useState({
-    fiche_cee: 'BAT-TH-142',
+    fiche_cee: prefillFiche || 'BAT-TH-142',
     type_local: 'sport_transport',
     adresse_site_label: '', adresse_site: '', code_postal_site: '', ville_site: '',
     zone_climatique: '',
@@ -398,6 +398,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
     surface_isolant_103: '',
     resistance_r_103: '',
     cout_installation_103: '',
+    ...(prefillTech || {}),
   })
   const setT = (k, v) => setTech(t => ({ ...t, [k]: v }))
 
@@ -433,7 +434,7 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
     }))
   }
 
-  const [prixMwh, setPrixMwh] = useState('7.5')
+  const [prixMwh, setPrixMwh] = useState(prefillPrixMwh || '7.5')
   const [bonification163, setBonification163] = useState(false)
   const [simulation, setSimulation] = useState(null)
   const [assigneA, setAssigneA] = useState(user?.id || '')
@@ -731,6 +732,15 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
           {/* ── Étape 2 : Client ── */}
           {step === 2 && (
             <>
+              {prefillFiche && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#EFF6FF', border: `1px solid ${C.accent}`, borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>
+                  <span style={{ fontSize: 16 }}>⚡</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#2563EB' }}>Données pré-remplies depuis le simulateur — fiche {prefillFiche}</div>
+                    <div style={{ fontSize: 11, color: '#475569', marginTop: 1 }}>Les données techniques sont déjà renseignées. Complétez les informations client ci-dessous.</div>
+                  </div>
+                </div>
+              )}
               <RaisonSocialeAutocomplete value={client.raison_sociale} onChange={v => setC('raison_sociale', v)}
                 onSelect={d => setClient(c => ({ ...c, raison_sociale: d.raison_sociale, siret: d.siret || c.siret, adresse: d.adresse || c.adresse, code_postal: d.code_postal || c.code_postal, ville: d.ville || c.ville }))} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
