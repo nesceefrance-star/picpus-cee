@@ -18,17 +18,19 @@ const C = {
 }
 
 const STATUTS = [
-  { id: 'simulation',       label: 'Simulation',        color: '#7C3AED', bg: '#EDE9FE' },
-  { id: 'prospect',         label: 'Prospect',          color: '#0369A1', bg: '#DBEAFE' },
-  { id: 'contacte',         label: 'Contacté',          color: '#0891B2', bg: '#CFFAFE' },
-  { id: 'visio_planifiee',  label: 'Visio planifiée',   color: '#0D9488', bg: '#CCFBF1' },
-  { id: 'visio_effectuee',  label: 'Visio effectuée',   color: '#059669', bg: '#D1FAE5' },
-  { id: 'visite_planifiee', label: 'Visite planifiée',  color: '#D97706', bg: '#FEF3C7' },
-  { id: 'visite_effectuee', label: 'Visite effectuée',  color: '#EA580C', bg: '#FFEDD5' },
-  { id: 'devis',            label: 'Devis envoyé',      color: '#9333EA', bg: '#F3E8FF' },
-  { id: 'ah',               label: 'AH en cours',       color: '#DC2626', bg: '#FEE2E2' },
-  { id: 'conforme',         label: 'Conforme',          color: '#16A34A', bg: '#DCFCE7' },
-  { id: 'facture',          label: 'Facturé',           color: '#64748B', bg: '#F1F5F9' },
+  { id: 'simulation',        label: 'Simulation',          color: '#7C3AED', bg: '#EDE9FE' },
+  { id: 'prospect',          label: 'Prospect',            color: '#0369A1', bg: '#DBEAFE' },
+  { id: 'contacte',          label: 'Contacté',            color: '#0891B2', bg: '#CFFAFE' },
+  { id: 'visio_planifiee',   label: 'Visio planifiée',     color: '#0D9488', bg: '#CCFBF1' },
+  { id: 'visio_effectuee',   label: 'Visio effectuée',     color: '#059669', bg: '#D1FAE5' },
+  { id: 'visite_planifiee',  label: 'Visite planifiée',    color: '#D97706', bg: '#FEF3C7' },
+  { id: 'visite_effectuee',  label: 'Visite effectuée',    color: '#EA580C', bg: '#FFEDD5' },
+  { id: 'devis',             label: 'Devis envoyé',        color: '#9333EA', bg: '#F3E8FF' },
+  { id: 'devis_valide',      label: 'Devis validé',        color: '#6D28D9', bg: '#EDE9FE' },
+  { id: 'travaux',           label: 'Travaux en cours',    color: '#C2410C', bg: '#FFEDD5' },
+  { id: 'depot_delegataire', label: 'Dépôt délégitaire',   color: '#1D4ED8', bg: '#DBEAFE' },
+  { id: 'conforme',          label: 'Conforme',            color: '#16A34A', bg: '#DCFCE7' },
+  { id: 'facture',           label: 'Facturé',             color: '#64748B', bg: '#F1F5F9' },
 ]
 
 export default function DossierDetail() {
