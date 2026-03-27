@@ -658,8 +658,9 @@ Exemple : [{"designation":"Rail acier","qte":30,"puAchat":62.47,"unite":"U"}]`,
       const result = await resp.json();
       const raw = result.content?.[0]?.text?.trim() || "";
 
-      // Extraire le JSON même si Claude ajoute du texte autour
-      const match = raw.match(/\[[\s\S]*\]/);
+      // Extraire le JSON même si Claude ajoute du texte ou des backticks markdown autour
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+      const match = cleaned.match(/\[[\s\S]*\]/);
       if (!match) throw new Error("Réponse Claude invalide : " + raw.substring(0, 200));
 
       const items = JSON.parse(match[0]);
