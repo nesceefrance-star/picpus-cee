@@ -314,5 +314,74 @@ export default async function handler(req, res) {
     return res.json({ eventLink: calEvent.htmlLink })
   }
 
+  // ── GET ?action=upcoming&days=30&targetUserId=xxx ─────────────────────────
+  // Retourne les N prochains jours d'événements avec type détecté
+  // targetUserId : admin uniquement — lit le token d'un autre utilisateur
+  if (action === 'upcoming') {
+    const days    = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 90)
+    const now     = new Date()
+    const timeMin = now.toISOString()
+    const timeMax = new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString()
+
+    // Admin peut demander les événements d'un autre user
+    let targetToken = accessToken
+    let targetCalendarIds = calendarIds
+    if (req.query.targetUserId && req.query.targetUserId !== user.id) {
+      // Vérifier que le demandeur est admin
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role !== 'admin') return res.status(403).json({ error: 'Accès refusé' })
+      try {
+        const result = await getValidToken(req.query.targetUserId)
+        targetToken = result.token
+        targetCalendarIds = result.calendarIds
+      } catch {
+        return res.json({ events: [] })
+      }
+    }
+
+    const rawEvents = await fetchAllEvents(targetToken, targetCalendarIds, timeMin, timeMax)
+
+    function detectType(e) {
+      const text = ((e.summary || '') + ' ' + (e.description || '')).toLowerCase()
+      if (/\bvt\b|visite.?tech|visite.?terrain/.test(text)) return 'VT'
+      if (/teams/.test(text)) return 'Teams'
+      if (/meet\.google|google.?meet|hangout/.test(text) || e.hangoutLink || e.conferenceData?.conferenceSolution?.name?.toLowerCase().includes('meet')) return 'Meet'
+      if (/visio|zoom|webex|skype/.test(text)) return 'Visio'
+      return 'Autre'
+    }
+
+    const fmtParis = (dt, opts) => new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', ...opts }).format(dt)
+
+    const events = rawEvents
+      .filter(e => e.status !== 'cancelled')
+      .map(e => {
+        const isAllDay = !!e.start?.date && !e.start?.dateTime
+        const start    = isAllDay ? new Date(e.start.date + 'T00:00:00Z') : new Date(e.start.dateTime)
+        const end      = isAllDay ? new Date(e.end.date   + 'T00:00:00Z') : new Date(e.end.dateTime)
+        return {
+          id:          e.id,
+          summary:     e.summary || '(sans titre)',
+          description: e.description || '',
+          location:    e.location || '',
+          type:        detectType(e),
+          isAllDay,
+          start:       start.toISOString(),
+          end:         end.toISOString(),
+          startLabel:  isAllDay ? fmtParis(start, { day: '2-digit', month: '2-digit', year: 'numeric' }) : fmtParis(start, { hour: '2-digit', minute: '2-digit' }),
+          endLabel:    isAllDay ? '' : fmtParis(end, { hour: '2-digit', minute: '2-digit' }),
+          dayLabel:    fmtParis(start, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+          dayKey:      isAllDay ? e.start.date : fmtParis(start, { year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-'),
+          htmlLink:    e.htmlLink || '',
+          hangoutLink: e.hangoutLink || e.conferenceData?.entryPoints?.find(ep => ep.entryPointType === 'video')?.uri || '',
+          attendees:   (e.attendees || []).map(a => a.email),
+          organizer:   e.organizer?.email || '',
+          creator:     e.creator?.email || '',
+        }
+      })
+      .sort((a, b) => new Date(a.start) - new Date(b.start))
+
+    return res.json({ events })
+  }
+
   return res.status(400).json({ error: 'action inconnue' })
 }

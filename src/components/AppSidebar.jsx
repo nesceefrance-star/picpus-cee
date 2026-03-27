@@ -33,6 +33,7 @@ import LogoutIcon from '@mui/icons-material/Logout'
 import ElectricBoltIcon from '@mui/icons-material/ElectricBolt'
 import EngineeringIcon from '@mui/icons-material/Engineering'
 import SettingsIcon from '@mui/icons-material/Settings'
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 
 const DRAWER_OPEN  = 240
 const DRAWER_MINI  = 64
@@ -175,6 +176,9 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
 
           {/* Dossiers */}
           <Item icon={<FolderIcon fontSize="small" />} label="Dossiers" path="/dossiers" />
+
+          {/* Planning */}
+          <Item icon={<CalendarMonthIcon fontSize="small" />} label="Planning" path="/planning" />
 
           <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
 

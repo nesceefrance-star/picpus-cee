@@ -7,7 +7,10 @@ import { nextRef } from '../lib/genRef'
 const FICHES = [
   { id: 'BAT-TH-142', label: 'BAT-TH-142', desc: 'Déstratification tertiaire', icon: '🌀' },
   { id: 'IND-BA-110', label: 'IND-BA-110', desc: 'Déstratification industrie', icon: '🏭' },
-  { id: 'BAT-TH-163', label: 'BAT-TH-163', desc: 'PAC air/eau tertiaire', icon: '♨️' },
+  { id: 'BAT-TH-163', label: 'BAT-TH-163', desc: 'PAC air/eau tertiaire',      icon: '♨️' },
+  { id: 'BAT-TH-125', label: 'BAT-TH-125', desc: 'Ventilation simple flux',    icon: '💨' },
+  { id: 'BAT-TH-126', label: 'BAT-TH-126', desc: 'Ventilation double flux',    icon: '🔄' },
+  { id: 'BAT-EN-103', label: 'BAT-EN-103', desc: 'Isolation plancher bas',      icon: '🧱' },
 ]
 
 // ── Tables officielles BAT-TH-142 vA54.3 (kWh cumac par kW de chauffage) ─────
@@ -101,6 +104,67 @@ const getZoneClimatique = (codePostal) => {
        43, 63, 3, 18, 58, 71, 21, 89, 10].includes(cp)) return 'H2'
   return 'H1'
 }
+
+// ── BAT-TH-125 — Ventilation simple flux ─────────────────────────────────────
+const COEFFICIENTS_125 = {
+  modulee_proportionnelle: { H1: 770,  H2: 630, H3: 420 },
+  modulee_presence:        { H1: 690,  H2: 560, H3: 380 },
+  debit_constant:          { H1: 400,  H2: 330, H3: 220 },
+}
+const FACTEURS_SECTEUR_125 = {
+  modulee_proportionnelle: { bureaux: 0.48, enseignement: 1, restauration: 0.59, autres: 0.54 },
+  modulee_presence:        { bureaux: 0.40, enseignement: 1, restauration: 0.45, autres: 0.51 },
+  debit_constant:          { bureaux: 0.40, enseignement: 1, restauration: 0.53, autres: 0.58 },
+}
+const calculerCumac125 = ({ zone, typeVentil, secteur, surface }) => {
+  const coeff        = COEFFICIENTS_125[typeVentil]?.[zone] || 0
+  const facteurSecteur = FACTEURS_SECTEUR_125[typeVentil]?.[secteur] || 1
+  const kwhCumac     = Math.round(coeff * facteurSecteur * surface)
+  return { kwhCumac, coeff, facteurSecteur }
+}
+
+// ── BAT-TH-126 — Ventilation double flux ─────────────────────────────────────
+const COEFFICIENTS_126 = {
+  modulee_proportionnelle: { H1: 1000, H2: 830, H3: 560 },
+  modulee_presence:        { H1: 970,  H2: 800, H3: 530 },
+  debit_constant:          { H1: 850,  H2: 700, H3: 460 },
+}
+const FACTEURS_SECTEUR_126 = {
+  modulee_proportionnelle: { bureaux: 0.53, enseignement: 1, restauration: 0.68, sportif: 0.22, autres: 0.71, salles_250: 1.88 },
+  modulee_presence:        { bureaux: 0.51, enseignement: 1, restauration: 0.63, sportif: 0.17, autres: 0.71 },
+  debit_constant:          { bureaux: 0.48, enseignement: 1, restauration: 0.61, sportif: 0.52, autres: 0.71, salles_250: 1.44 },
+}
+const calculerCumac126 = ({ zone, typeVentil, secteur, surface }) => {
+  const coeff        = COEFFICIENTS_126[typeVentil]?.[zone] || 0
+  const facteurSecteur = FACTEURS_SECTEUR_126[typeVentil]?.[secteur] || 1
+  const kwhCumac     = Math.round(coeff * facteurSecteur * surface)
+  return { kwhCumac, coeff, facteurSecteur }
+}
+
+// ── BAT-EN-103 — Isolation plancher bas ──────────────────────────────────────
+const COEFFICIENTS_103 = { H1: 5200, H2: 4200, H3: 2800 }
+const FACTEURS_SECTEUR_103 = {
+  bureaux_enseignement_commerces: 0.6,
+  hotellerie_restauration: 0.7,
+  sante: 1.2,
+  autres: 0.6,
+}
+const LABELS_SECTEUR_103 = {
+  bureaux_enseignement_commerces: 'Bureaux / Enseignement / Commerces',
+  hotellerie_restauration: 'Hôtellerie / Restauration',
+  sante: 'Santé',
+  autres: 'Autres secteurs',
+}
+const calculerCumac103 = ({ zone, secteur, surface }) => {
+  const coeff        = COEFFICIENTS_103[zone] || 0
+  const facteurSecteur = FACTEURS_SECTEUR_103[secteur] || 0.6
+  const kwhCumac     = Math.round(coeff * facteurSecteur * surface)
+  return { kwhCumac, coeff, facteurSecteur }
+}
+
+const FICHES_VENTIL = ['BAT-TH-125', 'BAT-TH-126']
+const FICHES_ISOLATION = ['BAT-EN-103']
+const FICHES_DESTRAT = ['BAT-TH-142', 'IND-BA-110']
 
 const calculerNbDestrat = (hauteur, surface, debitUnitaire = 14000) => {
   if (!hauteur || !surface) return 0
@@ -324,6 +388,16 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
     cop_bracket: 'cop_3_4_4_5',
     secteur_163: 'bureaux',
     cout_installation_163: '',
+    // BAT-TH-125 / BAT-TH-126 fields
+    type_ventil: 'modulee_proportionnelle',
+    secteur_ventil: 'enseignement',
+    surface_ventilee: '',
+    cout_installation_ventil: '',
+    // BAT-EN-103 fields
+    secteur_103: 'bureaux_enseignement_commerces',
+    surface_isolant_103: '',
+    resistance_r_103: '',
+    cout_installation_103: '',
   })
   const setT = (k, v) => setTech(t => ({ ...t, [k]: v }))
 
@@ -346,6 +420,16 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
       cop_bracket: 'cop_3_4_4_5',
       secteur_163: 'bureaux',
       cout_installation_163: '',
+      // reset ventilation fields
+      type_ventil: 'modulee_proportionnelle',
+      secteur_ventil: 'enseignement',
+      surface_ventilee: '',
+      cout_installation_ventil: '',
+      // reset isolation fields
+      secteur_103: 'bureaux_enseignement_commerces',
+      surface_isolant_103: '',
+      resistance_r_103: '',
+      cout_installation_103: '',
     }))
   }
 
@@ -408,6 +492,18 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
       kwhCumac = res.kwhCumac
       details = res
       coutTotal = parseFloat(tech.cout_installation_163) || 0
+    } else if (tech.fiche_cee === 'BAT-TH-125') {
+      const res = calculerCumac125({ zone: tech.zone_climatique || 'H2', typeVentil: tech.type_ventil, secteur: tech.secteur_ventil, surface: parseFloat(tech.surface_ventilee) || 0 })
+      kwhCumac = res.kwhCumac; details = res
+      coutTotal = parseFloat(tech.cout_installation_ventil) || 0
+    } else if (tech.fiche_cee === 'BAT-TH-126') {
+      const res = calculerCumac126({ zone: tech.zone_climatique || 'H2', typeVentil: tech.type_ventil, secteur: tech.secteur_ventil, surface: parseFloat(tech.surface_ventilee) || 0 })
+      kwhCumac = res.kwhCumac; details = res
+      coutTotal = parseFloat(tech.cout_installation_ventil) || 0
+    } else if (tech.fiche_cee === 'BAT-EN-103') {
+      const res = calculerCumac103({ zone: tech.zone_climatique || 'H2', secteur: tech.secteur_103, surface: parseFloat(tech.surface_isolant_103) || 0 })
+      kwhCumac = res.kwhCumac; details = res
+      coutTotal = parseFloat(tech.cout_installation_103) || 0
     } else {
       const res = calculerCumac142({ typeLocal: tech.type_local, zone: tech.zone_climatique || 'H2', hauteur, pConvectif, pRadiatif })
       kwhCumac = res.kwhCumac
@@ -443,7 +539,11 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
       ? true
       : tech.fiche_cee === 'BAT-TH-163'
         ? (tech.surface_m2 && parseFloat(tech.surface_m2) > 0)
-        : (tech.hauteur_m && parseFloat(tech.hauteur_m) >= 5)
+        : FICHES_VENTIL.includes(tech.fiche_cee)
+          ? (tech.surface_ventilee && parseFloat(tech.surface_ventilee) > 0)
+          : FICHES_ISOLATION.includes(tech.fiche_cee)
+            ? (tech.surface_isolant_103 && parseFloat(tech.surface_isolant_103) > 0)
+            : (tech.hauteur_m && parseFloat(tech.hauteur_m) >= 5)
   )
 
   const submit = async () => {
@@ -484,7 +584,10 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
       if (e2) throw new Error(e2.message || e2.details || JSON.stringify(e2))
       if (!dossier) throw new Error('Dossier non créé (vérifiez les permissions Supabase)')
 
-      const is163 = tech.fiche_cee === 'BAT-TH-163'
+      const is163  = tech.fiche_cee === 'BAT-TH-163'
+      const is125  = tech.fiche_cee === 'BAT-TH-125'
+      const is126  = tech.fiche_cee === 'BAT-TH-126'
+      const is103  = tech.fiche_cee === 'BAT-EN-103'
       const parametres = is163 ? {
         puissance_pac: tech.puissance_pac,
         etas_bracket: tech.etas_bracket,
@@ -508,6 +611,26 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
         nb_destrat_calcule: tech.nb_destrat_calcule,
         nb_destrat_manuel: tech.nb_destrat_manuel,
         cout_unitaire_destrat: tech.cout_unitaire_destrat,
+        cout_total: simulation?.coutTotal,
+        marge: simulation?.marge,
+      } : (is125 || is126) ? {
+        type_ventil: tech.type_ventil,
+        secteur: tech.secteur_ventil,
+        surface_ventilee: parseFloat(tech.surface_ventilee) || null,
+        coeff: simulation?.coeff,
+        facteur_secteur: simulation?.facteurSecteur,
+        kwh_cumac: simulation?.kwhCumac,
+        cout_installation: parseFloat(tech.cout_installation_ventil) || null,
+        cout_total: simulation?.coutTotal,
+        marge: simulation?.marge,
+      } : is103 ? {
+        secteur: tech.secteur_103,
+        surface_isolant: parseFloat(tech.surface_isolant_103) || null,
+        resistance_r: parseFloat(tech.resistance_r_103) || null,
+        coeff: simulation?.coeff,
+        facteur_secteur: simulation?.facteurSecteur,
+        kwh_cumac: simulation?.kwhCumac,
+        cout_installation: parseFloat(tech.cout_installation_103) || null,
         cout_total: simulation?.coutTotal,
         marge: simulation?.marge,
       } : {
@@ -586,10 +709,10 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
               <div style={{ fontSize: 13, color: C.textMid, marginBottom: 16 }}>
                 Sélectionnez la fiche CEE applicable. Elle détermine le calcul CUMAC et le formulaire technique.
               </div>
-              <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
                 {FICHES.map(f => (
                   <button key={f.id} type="button" onClick={() => switchFiche(f.id)}
-                    style={{ flex: 1, padding: '16px 8px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
+                    style={{ padding: '16px 12px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
                       background: tech.fiche_cee === f.id ? '#EFF6FF' : C.bg,
                       border: `2px solid ${tech.fiche_cee === f.id ? C.accent : C.border}` }}>
                     <div style={{ fontSize: 22, marginBottom: 6 }}>{f.icon}</div>
@@ -685,8 +808,15 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                   </div>
                   {tech.zone_climatique && <div style={{ fontSize: 10, color: '#2563EB', marginTop: 4 }}>✓ Zone {tech.zone_climatique} détectée</div>}
                 </div>
-                <Field label="Surface du site" value={tech.surface_m2} onChange={v => setT('surface_m2', v)} type="number" placeholder="5000" suffix="m²" />
-                <Field label="Hauteur sous plafond" value={tech.hauteur_m} onChange={v => setT('hauteur_m', v)} type="number" placeholder="12" suffix="m" required={tech.fiche_cee !== 'IND-BA-110'} />
+                {FICHES_VENTIL.includes(tech.fiche_cee)
+                  ? <Field label="Surface ventilée" value={tech.surface_ventilee} onChange={v => setT('surface_ventilee', v)} type="number" placeholder="800" suffix="m²" />
+                  : FICHES_ISOLATION.includes(tech.fiche_cee)
+                    ? <Field label="Surface d'isolant" value={tech.surface_isolant_103} onChange={v => setT('surface_isolant_103', v)} type="number" placeholder="500" suffix="m²" />
+                    : <Field label="Surface du site" value={tech.surface_m2} onChange={v => setT('surface_m2', v)} type="number" placeholder="5000" suffix="m²" />
+                }
+                {!FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && (
+                  <Field label="Hauteur sous plafond" value={tech.hauteur_m} onChange={v => setT('hauteur_m', v)} type="number" placeholder="12" suffix="m" required={tech.fiche_cee !== 'IND-BA-110'} />
+                )}
               </div>
 
               {/* ── Section spécifique BAT-TH-163 ── */}
@@ -789,8 +919,122 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                 </div>
               )}
 
+              {/* ── Section ventilation (BAT-TH-125 + BAT-TH-126) ── */}
+              {FICHES_VENTIL.includes(tech.fiche_cee) && (
+                <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', marginBottom: 14 }}>
+                    {tech.fiche_cee === 'BAT-TH-125' ? '💨 Ventilation simple flux' : '🔄 Ventilation double flux'}
+                  </div>
+
+                  {/* Type de ventilation */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>Type de ventilation *</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {[
+                        { id: 'modulee_proportionnelle', label: 'Modulée proportionnelle', desc: 'Variable selon CO₂ ou nombre d\'occupants' },
+                        { id: 'modulee_presence',        label: 'Modulée à détection de présence', desc: 'Asservie à des capteurs de présence' },
+                        { id: 'debit_constant',          label: 'Débit d\'air constant', desc: 'Débit fixe nominal' },
+                      ].filter(t => !(tech.fiche_cee === 'BAT-TH-126' && tech.secteur_ventil === 'salles_250' && t.id === 'modulee_presence'))
+                       .map(t => (
+                        <button key={t.id} type="button" onClick={() => setT('type_ventil', t.id)}
+                          style={{ padding: '9px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                            background: tech.type_ventil === t.id ? '#EFF6FF' : C.bg,
+                            border: `1px solid ${tech.type_ventil === t.id ? C.accent : C.border}` }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: tech.type_ventil === t.id ? '#2563EB' : C.text }}>{t.label}</div>
+                          <div style={{ fontSize: 10, color: C.textSoft, marginTop: 1 }}>{t.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Secteur d'activité */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>Secteur d'activité *</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                      {[
+                        { id: 'bureaux',      label: 'Bureaux' },
+                        { id: 'enseignement', label: 'Enseignement', ref: true },
+                        { id: 'restauration', label: 'Restauration' },
+                        ...(tech.fiche_cee === 'BAT-TH-126' ? [
+                          { id: 'sportif',    label: 'Établissement sportif' },
+                          { id: 'salles_250', label: 'Salles > 250 m³', disabled: tech.type_ventil === 'modulee_presence' },
+                        ] : []),
+                        { id: 'autres',       label: 'Autres locaux' },
+                      ].map(s => (
+                        <button key={s.id} type="button" disabled={s.disabled}
+                          onClick={() => !s.disabled && setT('secteur_ventil', s.id)}
+                          style={{ padding: '8px 10px', borderRadius: 7, cursor: s.disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit', textAlign: 'center', opacity: s.disabled ? .4 : 1,
+                            background: tech.secteur_ventil === s.id ? '#EFF6FF' : C.bg,
+                            border: `1px solid ${tech.secteur_ventil === s.id ? C.accent : C.border}` }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: tech.secteur_ventil === s.id ? '#2563EB' : C.text }}>
+                            {s.label}{s.ref ? ' (×1)' : ''}
+                          </div>
+                          <div style={{ fontSize: 10, color: C.textSoft, marginTop: 1 }}>
+                            ×{(tech.fiche_cee === 'BAT-TH-125' ? FACTEURS_SECTEUR_125 : FACTEURS_SECTEUR_126)[tech.type_ventil]?.[s.id] ?? '—'}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Coût installation */}
+                  <div style={{ position: 'relative' }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>Coût installation</label>
+                    <input type="number" value={tech.cout_installation_ventil} onChange={e => setT('cout_installation_ventil', e.target.value)} placeholder="ex : 25000"
+                      style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 28px 9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+                    <span style={{ position: 'absolute', right: 10, bottom: 10, fontSize: 12, color: C.textMid }}>€</span>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Section isolation (BAT-EN-103) ── */}
+              {FICHES_ISOLATION.includes(tech.fiche_cee) && (
+                <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', marginBottom: 14 }}>🧱 Isolation plancher bas</div>
+
+                  {/* Résistance thermique */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>
+                      Résistance thermique R (m².K/W) *
+                    </label>
+                    <input type="number" step="0.1" min="0" value={tech.resistance_r_103} onChange={e => setT('resistance_r_103', e.target.value)} placeholder="ex : 3.5"
+                      style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${parseFloat(tech.resistance_r_103) > 0 && parseFloat(tech.resistance_r_103) < 3 ? '#DC2626' : C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+                    {parseFloat(tech.resistance_r_103) > 0 && parseFloat(tech.resistance_r_103) < 3 && (
+                      <div style={{ fontSize: 11, color: '#DC2626', marginTop: 4 }}>⚠️ R doit être ≥ 3 m².K/W pour l'éligibilité CEE</div>
+                    )}
+                    {parseFloat(tech.resistance_r_103) >= 3 && (
+                      <div style={{ fontSize: 11, color: '#16A34A', marginTop: 4 }}>✓ R conforme (≥ 3 m².K/W)</div>
+                    )}
+                  </div>
+
+                  {/* Secteur d'activité */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>Secteur d'activité *</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                      {Object.entries(LABELS_SECTEUR_103).map(([id, label]) => (
+                        <button key={id} type="button" onClick={() => setT('secteur_103', id)}
+                          style={{ padding: '8px 10px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
+                            background: tech.secteur_103 === id ? '#EFF6FF' : C.bg,
+                            border: `1px solid ${tech.secteur_103 === id ? C.accent : C.border}` }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: tech.secteur_103 === id ? '#2563EB' : C.text }}>{label}</div>
+                          <div style={{ fontSize: 10, color: C.textSoft, marginTop: 1 }}>×{FACTEURS_SECTEUR_103[id]}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Coût installation */}
+                  <div style={{ position: 'relative' }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>Coût installation</label>
+                    <input type="number" value={tech.cout_installation_103} onChange={e => setT('cout_installation_103', e.target.value)} placeholder="ex : 18000"
+                      style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 28px 9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+                    <span style={{ position: 'absolute', right: 10, bottom: 10, fontSize: 12, color: C.textMid }}>€</span>
+                  </div>
+                </div>
+              )}
+
               {/* ── Section déstratificateurs (BAT-TH-142 + IND-BA-110) ── */}
-              {tech.fiche_cee !== 'BAT-TH-163' && (<>
+              {tech.fiche_cee !== 'BAT-TH-163' && !FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && (<>
               {/* Équipements convectifs */}
               <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -956,20 +1200,29 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
               <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: C.textMid, lineHeight: 1.7 }}>
                 <strong style={{ color: '#2563EB' }}>{tech.fiche_cee}</strong>
                 {' · '}Zone <strong style={{ color: C.text }}>{tech.zone_climatique}</strong>
-                {tech.hauteur_m && tech.fiche_cee !== 'BAT-TH-163' && <>{' · '}h = <strong style={{ color: C.text }}>{tech.hauteur_m} m</strong></>}
-                {tech.surface_m2 && <>{' · '}{tech.surface_m2} m²</>}
+                {tech.hauteur_m && !FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && tech.fiche_cee !== 'BAT-TH-163' && <>{' · '}h = <strong style={{ color: C.text }}>{tech.hauteur_m} m</strong></>}
+                {tech.surface_m2 && !FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && <>{' · '}{tech.surface_m2} m²</>}
                 {tech.fiche_cee === 'BAT-TH-142' && <>{' · '}{tech.type_local === 'sport_transport' ? 'Sport/Transport' : 'Commerce/Spectacles'}</>}
                 {tech.fiche_cee === 'BAT-TH-163' && <>
                   {' · '}{tech.puissance_pac === 'small' ? '≤400 kW' : '>400 kW'}
-                  {' · '}<span style={{ color: '#2563EB' }}>
-                    {tech.puissance_pac === 'small' ? tech.etas_bracket.replace(/_/g, ' ') : tech.cop_bracket.replace(/_/g, ' ')}
-                  </span>
+                  {' · '}<span style={{ color: '#2563EB' }}>{tech.puissance_pac === 'small' ? tech.etas_bracket.replace(/_/g, ' ') : tech.cop_bracket.replace(/_/g, ' ')}</span>
                   {' · '}{tech.secteur_163} (×{FACTEURS_SECTEUR_163[tech.secteur_163]})
                   {' · '}forfait = <strong style={{ color: C.text }}>{simulation.forfait} kWh/m²</strong>
                 </>}
-                {tech.fiche_cee !== 'BAT-TH-163' && pConvectif > 0 && <> · <span style={{ color: '#2563EB' }}>P_conv = {pConvectif} kW</span></>}
-                {tech.fiche_cee !== 'BAT-TH-163' && pRadiatif > 0  && <> · <span style={{ color: '#D97706' }}>P_rad = {pRadiatif} kW</span></>}
-                {tech.fiche_cee !== 'BAT-TH-163' && simulation.coeffConv > 0 && <> · coeff = <strong style={{ color: C.text }}>{simulation.coeffConv}</strong> kWh/kW{simulation.bracket ? ` (${simulation.bracket})` : ''}</>}
+                {FICHES_VENTIL.includes(tech.fiche_cee) && <>
+                  {' · '}{tech.surface_ventilee} m² ventilés
+                  {' · '}<span style={{ color: '#2563EB' }}>{tech.type_ventil.replace(/_/g, ' ')}</span>
+                  {' · '}coeff {simulation.coeff} kWh/m² × ×{simulation.facteurSecteur}
+                </>}
+                {FICHES_ISOLATION.includes(tech.fiche_cee) && <>
+                  {' · '}{tech.surface_isolant_103} m² isolés
+                  {' · '}R = {tech.resistance_r_103} m².K/W
+                  {' · '}<span style={{ color: '#2563EB' }}>{LABELS_SECTEUR_103[tech.secteur_103]}</span>
+                  {' · '}×{simulation.facteurSecteur}
+                </>}
+                {!FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && tech.fiche_cee !== 'BAT-TH-163' && pConvectif > 0 && <> · <span style={{ color: '#2563EB' }}>P_conv = {pConvectif} kW</span></>}
+                {!FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && tech.fiche_cee !== 'BAT-TH-163' && pRadiatif > 0  && <> · <span style={{ color: '#D97706' }}>P_rad = {pRadiatif} kW</span></>}
+                {!FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && tech.fiche_cee !== 'BAT-TH-163' && simulation.coeffConv > 0 && <> · coeff = <strong style={{ color: C.text }}>{simulation.coeffConv}</strong> kWh/kW{simulation.bracket ? ` (${simulation.bracket})` : ''}</>}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
@@ -980,7 +1233,11 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                   <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>
                     {tech.fiche_cee === 'BAT-TH-163'
                       ? `${simulation.forfait} × ${tech.surface_m2} m² × ${simulation.facteurSecteur}`
-                      : `${simulation.coeffConv||0} × ${pConvectif} kW${pRadiatif > 0 ? ` + ${simulation.coeffRad||0} × ${pRadiatif} kW` : ''}`}
+                      : FICHES_VENTIL.includes(tech.fiche_cee)
+                        ? `${simulation.coeff} kWh/m² × ×${simulation.facteurSecteur} × ${tech.surface_ventilee} m²`
+                        : FICHES_ISOLATION.includes(tech.fiche_cee)
+                          ? `${simulation.coeff} kWh/m² × ×${simulation.facteurSecteur} × ${tech.surface_isolant_103} m²`
+                          : `${simulation.coeffConv||0} × ${pConvectif} kW${pRadiatif > 0 ? ` + ${simulation.coeffRad||0} × ${pRadiatif} kW` : ''}`}
                   </div>
                 </div>
 
@@ -1003,7 +1260,13 @@ export default function NouveauDossierWizard({ onClose, onCreate }) {
                   <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 4 }}>🔧 Coût prestation</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: '#D97706' }}>{simulation.coutTotal?.toLocaleString('fr')} €</div>
                   <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>
-                    {tech.fiche_cee === 'BAT-TH-163' ? 'Coût installation PAC' : `${simulation.nbDestrat} destrats × ${parseFloat(tech.cout_unitaire_destrat).toLocaleString('fr')} €`}
+                    {tech.fiche_cee === 'BAT-TH-163'
+                      ? 'Coût installation PAC'
+                      : FICHES_VENTIL.includes(tech.fiche_cee)
+                        ? 'Coût installation ventilation'
+                        : FICHES_ISOLATION.includes(tech.fiche_cee)
+                          ? 'Coût installation isolation'
+                          : `${simulation.nbDestrat} destrats × ${parseFloat(tech.cout_unitaire_destrat).toLocaleString('fr')} €`}
                   </div>
                 </div>
 
