@@ -160,7 +160,7 @@ function ZoneHeader({ zone, photoCount, active, onClick }) {
 export default function VisiteTechniqueDetail() {
   const { id }               = useParams()
   const navigate             = useNavigate()
-  const { profile, session } = useStore()
+  const { profile, session, dossiers: storeDossiers, fetchDossiers } = useStore()
   const isNew                = id === 'new'
 
   const [visiteId,    setVisiteId]    = useState(isNew ? null : id)
@@ -190,23 +190,14 @@ export default function VisiteTechniqueDetail() {
 
   // ── Chargement ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    loadAllDossiers()
+    if (!storeDossiers.length) fetchDossiers()
     if (!isNew) loadVisite()
   }, [id])
 
-  const loadAllDossiers = async () => {
-    const { data: dos } = await supabase.from('dossiers')
-      .select('id, ref, prospect_id, adresse_site, type_fiche').order('created_at', { ascending: false }).limit(200)
-    if (!dos?.length) { setAllDossiers([]); return }
-    const prospectIds = [...new Set(dos.map(d => d.prospect_id).filter(Boolean))]
-    let prospectMap = {}
-    if (prospectIds.length) {
-      const { data: pros } = await supabase.from('prospects')
-        .select('id, raison_sociale, adresse, code_postal, ville, contact_nom, contact_tel, contact_email').in('id', prospectIds)
-      ;(pros || []).forEach(p => { prospectMap[p.id] = p })
-    }
-    setAllDossiers(dos.map(d => ({ ...d, prospects: prospectMap[d.prospect_id] || {} })))
-  }
+  // allDossiers — utilise le store (prospects déjà joints) avec fallback query si vide
+  useEffect(() => {
+    if (storeDossiers.length) setAllDossiers(storeDossiers)
+  }, [storeDossiers])
 
   const loadVisite = async () => {
     setLoading(true)
@@ -299,11 +290,11 @@ export default function VisiteTechniqueDetail() {
   }
 
   // ── Dossier ─────────────────────────────────────────────────────────────────
-  const dossierResults = dossierSearch.length > 1
+  const dossierResults = dossierSearch.length > 0
     ? allDossiers.filter(d =>
         d.ref?.toLowerCase().includes(dossierSearch.toLowerCase()) ||
         d.prospects?.raison_sociale?.toLowerCase().includes(dossierSearch.toLowerCase())
-      ).slice(0, 6)
+      ).slice(0, 8)
     : []
 
   const selectDossier = async (d) => {
@@ -524,10 +515,10 @@ export default function VisiteTechniqueDetail() {
                                 placeholder="Rechercher par référence ou raison sociale…"
                                 style={INP}
                               />
-                              {dossierOpen && dossierResults.length > 0 && (
+                              {dossierOpen && dossierSearch.length > 0 && (
                                 <div onMouseDown={e => e.preventDefault()}
-                                  style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 200, overflow: 'hidden' }}>
-                                  {dossierResults.map(d => (
+                                  style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 9999, overflow: 'hidden' }}>
+                                  {dossierResults.length > 0 ? dossierResults.map(d => (
                                     <div key={d.id}
                                       onClick={() => selectDossier(d)}
                                       onTouchEnd={e => { e.preventDefault(); selectDossier(d) }}
@@ -537,7 +528,11 @@ export default function VisiteTechniqueDetail() {
                                       <strong>{d.ref}</strong> — {d.prospects?.raison_sociale}
                                       {d.type_fiche && <span style={{ fontSize: 11, color: C.textSoft, marginLeft: 8 }}>{d.type_fiche}</span>}
                                     </div>
-                                  ))}
+                                  )) : (
+                                    <div style={{ padding: '10px 14px', fontSize: 13, color: C.textSoft, fontStyle: 'italic' }}>
+                                      Aucun dossier trouvé{allDossiers.length === 0 ? ' — chargement en cours…' : ''}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
