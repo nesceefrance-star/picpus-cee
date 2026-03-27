@@ -54,8 +54,7 @@ const FICHES_V = {
 const FICHES_DEVIS = {
   "BAT-TH-142": "BAT-TH-142 — Déstratification tertiaire",
   "IND-BA-110": "IND-BA-110 — Déstratification industrie",
-  "BAT-TH-163": "BAT-TH-163 — PAC air/eau tertiaire",
-  "BAT-TH-116": "BAT-TH-116 — Isolation combles/toitures",
+  "BAT-TH-116": "BAT-TH-116 — GTB",
   "AUTRE":      "Autre fiche",
 };
 // Fiches nécessitant l'ajout automatique du destratificateur
@@ -766,12 +765,12 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
       const result = await resp.json();
       const raw = result.content?.[0]?.text?.trim() || "";
 
-      // Extraire le JSON même si Claude ajoute du texte ou des backticks markdown autour
-      const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-      const match = cleaned.match(/\[[\s\S]*\]/);
-      if (!match) throw new Error("Réponse Claude invalide : " + raw.substring(0, 200));
+      // Extraire le JSON : chercher le premier [ et le dernier ] dans la réponse brute
+      const start = raw.indexOf('[');
+      const end   = raw.lastIndexOf(']');
+      if (start === -1 || end <= start) throw new Error("Réponse Claude invalide : " + raw.substring(0, 200));
 
-      const items = JSON.parse(match[0]);
+      const items = JSON.parse(raw.substring(start, end + 1));
       if (!Array.isArray(items) || items.length === 0) throw new Error("Aucune ligne extraite par Claude");
 
       const cent = v => Math.round(v * 100) / 100;
