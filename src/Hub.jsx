@@ -746,7 +746,7 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-haiku-4-5-20251001",
-          max_tokens: 4096,
+          max_tokens: 8192,
           messages: [{
             role: "user",
             content: [
@@ -768,7 +768,10 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
       // Extraire le JSON : chercher le premier [ et le dernier ] dans la réponse brute
       const start = raw.indexOf('[');
       const end   = raw.lastIndexOf(']');
-      if (start === -1 || end <= start) throw new Error("Réponse Claude invalide : " + raw.substring(0, 200));
+      if (start === -1 || end <= start) {
+        const hint = raw.length > 100 && end === -1 ? " (réponse tronquée — trop de lignes ?)" : "";
+        throw new Error("Réponse Claude invalide" + hint + " : " + raw.substring(0, 200));
+      }
 
       const items = JSON.parse(raw.substring(start, end + 1));
       if (!Array.isArray(items) || items.length === 0) throw new Error("Aucune ligne extraite par Claude");
