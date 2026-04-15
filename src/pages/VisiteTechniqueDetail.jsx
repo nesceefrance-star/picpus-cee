@@ -63,6 +63,65 @@ const ISOLATION_TYPES = [
 ]
 
 // ── Autocomplete adresse ─────────────────────────────────────────────────────
+// ── Autocomplete raison sociale (API Entreprises / SIRENE) ──────────────────
+function RaisonSocialeAutocomplete({ value, onChange, onSelect }) {
+  const [sugg, setSugg] = useState([])
+  const [open, setOpen] = useState(false)
+  const timer = useRef(null)
+
+  const search = (q) => {
+    onChange(q)
+    clearTimeout(timer.current)
+    if (q.length < 2) { setSugg([]); setOpen(false); return }
+    timer.current = setTimeout(async () => {
+      try {
+        const res  = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(q)}&limit=6`)
+        const data = await res.json()
+        setSugg(data.results || [])
+        setOpen((data.results || []).length > 0)
+      } catch { setSugg([]) }
+    }, 350)
+  }
+
+  const select = (item) => {
+    const siege = item.siege || {}
+    onSelect({
+      raison_sociale: item.nom_complet || item.nom_raison_sociale || '',
+      adresse: [siege.numero_voie, siege.type_voie, siege.libelle_voie].filter(Boolean).join(' '),
+      code_postal: siege.code_postal || '',
+      ville: siege.libelle_commune || '',
+    })
+    setSugg([]); setOpen(false)
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input value={value || ''} onChange={e => search(e.target.value)}
+        onBlur={() => setTimeout(() => setOpen(false), 350)}
+        placeholder="SARL Dupont Industrie…" style={INP} />
+      {open && sugg.length > 0 && (
+        <div onMouseDown={e => e.preventDefault()}
+          style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 200, overflow: 'hidden' }}>
+          {sugg.map((item, i) => {
+            const siege = item.siege || {}
+            return (
+              <div key={i} onClick={() => select(item)} onTouchEnd={e => { e.preventDefault(); select(item) }}
+                style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.bg}` }}
+                onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{item.nom_complet || item.nom_raison_sociale}</div>
+                <div style={{ fontSize: 11, color: C.textMid, marginTop: 2 }}>
+                  {siege.libelle_commune || ''} {siege.code_postal ? `(${siege.code_postal})` : ''}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AdresseAutocomplete({ value, onChange }) {
   const [sugg, setSugg]   = useState([])
   const [open, setOpen]   = useState(false)
@@ -272,7 +331,9 @@ export default function VisiteTechniqueDetail() {
     setSaveStatus('saving')
     try {
       const vid = await ensureCreated(donnees, newPhotos)
-      await supabase.from('visites_techniques').update({ photos: newPhotos, updated_at: new Date().toISOString() }).eq('id', vid)
+      // Ne sauvegarder que les photos réellement uploadées (sans _status = photos locales en attente)
+      const toSave = newPhotos.filter(p => !p._status).map(({ _status, ...p }) => p)
+      await supabase.from('visites_techniques').update({ photos: toSave, updated_at: new Date().toISOString() }).eq('id', vid)
       setSaveStatus('saved')
     } catch { setSaveStatus('error') }
   }
@@ -351,14 +412,26 @@ export default function VisiteTechniqueDetail() {
     try {
       const vid = await ensureCreated(donnees, photos)
       const blob = await pdf(<VisiteRapportPDF visite={{ id: vid, donnees, photos, statut }} dossierRef={dossierRef} />).toBlob()
+
+      // Téléchargement local immédiat (fonctionne même sans connexion)
+      const localUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = localUrl; a.download = `Rapport_Visite_${dossierRef || vid}.pdf`; a.click()
+      URL.revokeObjectURL(localUrl)
+
+      // Upload vers Supabase pour le lien de partage (optionnel — peut échouer sans connexion)
       const fileName = `rapport_${vid}_${Date.now()}.pdf`
-      await supabase.storage.from('visites-photos').upload(`${vid}/${fileName}`, blob, { contentType: 'application/pdf', upsert: true })
-      const { data: { publicUrl } } = supabase.storage.from('visites-photos').getPublicUrl(`${vid}/${fileName}`)
-      setRapportUrl(publicUrl)
-      await supabase.from('visites_techniques').update({ rapport_url: publicUrl }).eq('id', vid)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a'); a.href = url; a.download = `Rapport_Visite_${dossierRef || vid}.pdf`; a.click(); URL.revokeObjectURL(url)
-    } catch (e) { alert('Erreur PDF : ' + e.message) }
+      const { error: uploadError } = await supabase.storage
+        .from('visites-photos')
+        .upload(`${vid}/${fileName}`, blob, { contentType: 'application/pdf', upsert: true })
+
+      if (!uploadError) {
+        const { data: { publicUrl } } = supabase.storage.from('visites-photos').getPublicUrl(`${vid}/${fileName}`)
+        setRapportUrl(publicUrl)
+        await supabase.from('visites_techniques').update({ rapport_url: publicUrl }).eq('id', vid)
+      }
+      // Si upload échoue : le PDF est déjà téléchargé localement, pas d'alerte bloquante
+    } catch (e) { alert('Erreur génération PDF : ' + e.message) }
     finally { setGenerating(false) }
   }
 
@@ -541,8 +614,21 @@ export default function VisiteTechniqueDetail() {
 
                         {/* Champs */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-                          <Field label="Raison sociale">
-                            <input style={INP} value={v('raison_sociale')} onChange={e => set('raison_sociale', e.target.value)} placeholder="SARL Dupont Industrie" />
+                          <Field label="Raison sociale" hint="autocomplétion SIRET">
+                            <RaisonSocialeAutocomplete
+                              value={v('raison_sociale')}
+                              onChange={val => set('raison_sociale', val)}
+                              onSelect={({ raison_sociale, adresse, code_postal, ville }) => {
+                                const adresseSite = [adresse, code_postal, ville].filter(Boolean).join(', ')
+                                const nd = {
+                                  ...donnees,
+                                  raison_sociale,
+                                  adresse_site: donnees.adresse_site || adresseSite,
+                                }
+                                setDonnees(nd)
+                                scheduleSave(nd)
+                              }}
+                            />
                           </Field>
                           <Field label="Nom du site">
                             <input style={INP} value={v('nom_site')} onChange={e => set('nom_site', e.target.value)} placeholder="Atelier principal" />
