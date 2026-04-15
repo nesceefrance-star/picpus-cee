@@ -8,6 +8,7 @@ const FICHES = [
   { id: 'BAT-TH-142', label: 'BAT-TH-142', desc: 'Déstratification tertiaire', icon: '🌀' },
   { id: 'IND-BA-110', label: 'IND-BA-110', desc: 'Déstratification industrie', icon: '🏭' },
   { id: 'BAT-TH-163', label: 'BAT-TH-163', desc: 'PAC air/eau tertiaire',      icon: '♨️' },
+  { id: 'BAT-TH-116', label: 'BAT-TH-116', desc: 'GTB / BMS tertiaire',        icon: '🖥️' },
   { id: 'BAT-TH-125', label: 'BAT-TH-125', desc: 'Ventilation simple flux',    icon: '💨' },
   { id: 'BAT-TH-126', label: 'BAT-TH-126', desc: 'Ventilation double flux',    icon: '🔄' },
   { id: 'BAT-EN-103', label: 'BAT-EN-103', desc: 'Isolation plancher bas',      icon: '🧱' },
@@ -51,6 +52,44 @@ const calculerCumac110 = ({ zone, pConvectif, pRadiatif }) => {
   const coeffRad  = COEFFICIENTS_IND_110.radiatif[zone]  || 0
   const kwhCumac  = Math.round(coeffConv * pConvectif + coeffRad * pRadiatif)
   return { kwhCumac, coeffConv, coeffRad }
+}
+
+// ── BAT-TH-116 — GTB / BMS tertiaire ─────────────────────────────────────────
+const COEFFICIENTS_116 = {
+  A: {
+    bureaux:                 { chauffage: 400, refroidissement: 260, ecs: 16,  eclairage: 190, auxiliaires: 19 },
+    enseignement:            { chauffage: 200, refroidissement: 71,  ecs: 89,  eclairage: 49,  auxiliaires: 8  },
+    commerce:                { chauffage: 560, refroidissement: 160, ecs: 32,  eclairage: 23,  auxiliaires: 8  },
+    hotellerie_restauration: { chauffage: 420, refroidissement: 71,  ecs: 34,  eclairage: 74,  auxiliaires: 8  },
+    sante:                   { chauffage: 200, refroidissement: 71,  ecs: 95,  eclairage: 12,  auxiliaires: 28 },
+    autres:                  { chauffage: 200, refroidissement: 71,  ecs: 16,  eclairage: 12,  auxiliaires: 8  },
+  },
+  B: {
+    bureaux:                 { chauffage: 300, refroidissement: 130, ecs: 8,   eclairage: 100, auxiliaires: 10 },
+    enseignement:            { chauffage: 120, refroidissement: 35,  ecs: 45,  eclairage: 24,  auxiliaires: 5  },
+    commerce:                { chauffage: 300, refroidissement: 66,  ecs: 3,   eclairage: 23,  auxiliaires: 5  },
+    hotellerie_restauration: { chauffage: 230, refroidissement: 35,  ecs: 17,  eclairage: 40,  auxiliaires: 5  },
+    sante:                   { chauffage: 140, refroidissement: 35,  ecs: 48,  eclairage: 12,  auxiliaires: 18 },
+    autres:                  { chauffage: 120, refroidissement: 35,  ecs: 3,   eclairage: 12,  auxiliaires: 5  },
+  },
+}
+const ZONE_COEFF_116    = { H1: 1.1, H2: 0.9, H3: 0.6 }
+const USAGES_116_LABELS = {
+  chauffage: 'Chauffage', refroidissement: 'Refroidissement / Climatisation',
+  ecs: 'Eau chaude sanitaire (ECS)', eclairage: 'Éclairage', auxiliaires: 'Auxiliaires',
+}
+const BONIF_COEFF_116 = { none: 1, creation: 2, amelioration: 1.5 }
+
+const calculerCumac116 = ({ classe, secteur, zone, surfaces }) => {
+  const coeffs = COEFFICIENTS_116[classe]?.[secteur]
+  if (!coeffs) return { kwhCumac: 0 }
+  const zoneCoeff = ZONE_COEFF_116[zone] || 0.9
+  let kwhCumac = 0
+  Object.keys(USAGES_116_LABELS).forEach(usage => {
+    const surf = parseFloat(surfaces?.[usage]) || 0
+    if (surf > 0) kwhCumac += Math.round(coeffs[usage] * surf * zoneCoeff)
+  })
+  return { kwhCumac: Math.round(kwhCumac), zoneCoeff116: zoneCoeff }
 }
 
 // ── BAT-TH-163 PAC air/eau tertiaire ─────────────────────────────────────────
@@ -388,6 +427,15 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
     cop_bracket: 'cop_3_4_4_5',
     secteur_163: 'bureaux',
     cout_installation_163: '',
+    // BAT-TH-116 fields
+    classe_116: 'A',
+    secteur_116: 'bureaux',
+    surf_116_chauffage: '',
+    surf_116_refroidissement: '',
+    surf_116_ecs: '',
+    surf_116_eclairage: '',
+    surf_116_auxiliaires: '',
+    cout_installation_116: '',
     // BAT-TH-125 / BAT-TH-126 fields
     type_ventil: 'modulee_proportionnelle',
     secteur_ventil: 'enseignement',
@@ -421,6 +469,15 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
       cop_bracket: 'cop_3_4_4_5',
       secteur_163: 'bureaux',
       cout_installation_163: '',
+      // reset 116 fields
+      classe_116: 'A',
+      secteur_116: 'bureaux',
+      surf_116_chauffage: '',
+      surf_116_refroidissement: '',
+      surf_116_ecs: '',
+      surf_116_eclairage: '',
+      surf_116_auxiliaires: '',
+      cout_installation_116: '',
       // reset ventilation fields
       type_ventil: 'modulee_proportionnelle',
       secteur_ventil: 'enseignement',
@@ -436,6 +493,7 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
 
   const [prixMwh, setPrixMwh] = useState(prefillPrixMwh || '7.5')
   const [bonification163, setBonification163] = useState(false)
+  const [bonification116, setBonification116] = useState('none') // 'none' | 'creation' | 'amelioration'
   const [simulation, setSimulation] = useState(null)
   const [assigneA, setAssigneA] = useState(user?.id || '')
 
@@ -493,6 +551,18 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
       kwhCumac = res.kwhCumac
       details = res
       coutTotal = parseFloat(tech.cout_installation_163) || 0
+    } else if (tech.fiche_cee === 'BAT-TH-116') {
+      const surfaces = {
+        chauffage:        parseFloat(tech.surf_116_chauffage) || 0,
+        refroidissement:  parseFloat(tech.surf_116_refroidissement) || 0,
+        ecs:              parseFloat(tech.surf_116_ecs) || 0,
+        eclairage:        parseFloat(tech.surf_116_eclairage) || 0,
+        auxiliaires:      parseFloat(tech.surf_116_auxiliaires) || 0,
+      }
+      const res = calculerCumac116({ classe: tech.classe_116, secteur: tech.secteur_116, zone: tech.zone_climatique || 'H2', surfaces })
+      kwhCumac = res.kwhCumac
+      details = res
+      coutTotal = parseFloat(tech.cout_installation_116) || 0
     } else if (tech.fiche_cee === 'BAT-TH-125') {
       const res = calculerCumac125({ zone: tech.zone_climatique || 'H2', typeVentil: tech.type_ventil, secteur: tech.secteur_ventil, surface: parseFloat(tech.surface_ventilee) || 0 })
       kwhCumac = res.kwhCumac; details = res
@@ -513,12 +583,16 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
     }
 
     const kwhCumacBase = kwhCumac
-    const kwhCumacFinal = (tech.fiche_cee === 'BAT-TH-163' && bonification163) ? kwhCumacBase * 3 : kwhCumacBase
+    const kwhCumacFinal = (tech.fiche_cee === 'BAT-TH-163' && bonification163)
+      ? kwhCumacBase * 3
+      : (tech.fiche_cee === 'BAT-TH-116' && bonification116 !== 'none')
+        ? Math.round(kwhCumacBase * BONIF_COEFF_116[bonification116])
+        : kwhCumacBase
     const prime = Math.round(kwhCumacFinal * (prix / 1000) * 100) / 100
     const primeNette = Math.round(prime * 0.9 * 100) / 100
     const marge = Math.round((prime - coutTotal) * 100) / 100
     const margeNette = Math.round((primeNette - coutTotal) * 100) / 100
-    setSimulation({ kwhCumac: kwhCumacFinal, kwhCumacBase, mwhCumac: Math.round(kwhCumacFinal / 100) / 10, prixMwh: prix, prime, primeNette, coutTotal, marge, margeNette, rentable: margeNette > 0, nbDestrat: nbDestratEffectif, pConvectif, pRadiatif, bonification: tech.fiche_cee === 'BAT-TH-163' && bonification163, ...details })
+    setSimulation({ kwhCumac: kwhCumacFinal, kwhCumacBase, mwhCumac: Math.round(kwhCumacFinal / 100) / 10, prixMwh: prix, prime, primeNette, coutTotal, marge, margeNette, rentable: margeNette > 0, nbDestrat: nbDestratEffectif, pConvectif, pRadiatif, bonification: tech.fiche_cee === 'BAT-TH-163' && bonification163, bonification116: tech.fiche_cee === 'BAT-TH-116' ? bonification116 : 'none', ...details })
     setStep(4)
   }
 
@@ -535,16 +609,31 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
     setSimulation(s => ({ ...s, kwhCumac: kwhCumacFinal, kwhCumacBase: base, mwhCumac: Math.round(kwhCumacFinal / 100) / 10, prime, primeNette, marge, margeNette, rentable: margeNette > 0, bonification: v }))
   }
 
+  const toggleBonification116 = (v) => {
+    setBonification116(v)
+    if (!simulation) return
+    const base = simulation.kwhCumacBase ?? simulation.kwhCumac
+    const kwhCumacFinal = Math.round(base * (BONIF_COEFF_116[v] || 1))
+    const prix = parseFloat(prixMwh) || 7.5
+    const prime = Math.round(kwhCumacFinal * (prix / 1000) * 100) / 100
+    const primeNette = Math.round(prime * 0.9 * 100) / 100
+    const marge = Math.round((prime - simulation.coutTotal) * 100) / 100
+    const margeNette = Math.round((primeNette - simulation.coutTotal) * 100) / 100
+    setSimulation(s => ({ ...s, kwhCumac: kwhCumacFinal, kwhCumacBase: base, mwhCumac: Math.round(kwhCumacFinal / 100) / 10, prime, primeNette, marge, margeNette, rentable: margeNette > 0, bonification116: v }))
+  }
+
   const canCalculer = tech.zone_climatique && (
     tech.fiche_cee === 'IND-BA-110'
       ? true
       : tech.fiche_cee === 'BAT-TH-163'
         ? (tech.surface_m2 && parseFloat(tech.surface_m2) > 0)
-        : FICHES_VENTIL.includes(tech.fiche_cee)
-          ? (tech.surface_ventilee && parseFloat(tech.surface_ventilee) > 0)
-          : FICHES_ISOLATION.includes(tech.fiche_cee)
-            ? (tech.surface_isolant_103 && parseFloat(tech.surface_isolant_103) > 0)
-            : (tech.hauteur_m && parseFloat(tech.hauteur_m) >= 5)
+        : tech.fiche_cee === 'BAT-TH-116'
+          ? ['chauffage','refroidissement','ecs','eclairage','auxiliaires'].some(u => parseFloat(tech[`surf_116_${u}`]) > 0)
+          : FICHES_VENTIL.includes(tech.fiche_cee)
+            ? (tech.surface_ventilee && parseFloat(tech.surface_ventilee) > 0)
+            : FICHES_ISOLATION.includes(tech.fiche_cee)
+              ? (tech.surface_isolant_103 && parseFloat(tech.surface_isolant_103) > 0)
+              : (tech.hauteur_m && parseFloat(tech.hauteur_m) >= 5)
   )
 
   const submit = async () => {
@@ -586,6 +675,7 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
       if (!dossier) throw new Error('Dossier non créé (vérifiez les permissions Supabase)')
 
       const is163  = tech.fiche_cee === 'BAT-TH-163'
+      const is116  = tech.fiche_cee === 'BAT-TH-116'
       const is125  = tech.fiche_cee === 'BAT-TH-125'
       const is126  = tech.fiche_cee === 'BAT-TH-126'
       const is103  = tech.fiche_cee === 'BAT-EN-103'
@@ -601,6 +691,22 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
         kwh_cumac_base: simulation?.kwhCumacBase,
         bonification_x3: bonification163,
         cout_installation: tech.cout_installation_163,
+        cout_total: simulation?.coutTotal,
+        marge: simulation?.marge,
+      } : is116 ? {
+        classe: tech.classe_116,
+        secteur: tech.secteur_116,
+        surfaces: {
+          chauffage:       parseFloat(tech.surf_116_chauffage) || null,
+          refroidissement: parseFloat(tech.surf_116_refroidissement) || null,
+          ecs:             parseFloat(tech.surf_116_ecs) || null,
+          eclairage:       parseFloat(tech.surf_116_eclairage) || null,
+          auxiliaires:     parseFloat(tech.surf_116_auxiliaires) || null,
+        },
+        bonification: bonification116,
+        kwh_cumac: simulation?.kwhCumac,
+        kwh_cumac_base: simulation?.kwhCumacBase,
+        cout_installation: parseFloat(tech.cout_installation_116) || null,
         cout_total: simulation?.coutTotal,
         marge: simulation?.marge,
       } : is110 ? {
@@ -653,8 +759,8 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
         fiche_cee: tech.fiche_cee,
         hauteur_m: parseFloat(tech.hauteur_m) || null,
         zone_climatique: tech.zone_climatique,
-        nb_equipements: is163 ? 1 : nbDestratEffectif,
-        puissance_kw: is163 ? null : pTotal,
+        nb_equipements: (is163 || is116) ? 1 : nbDestratEffectif,
+        puissance_kw: (is163 || is116) ? null : pTotal,
         mwh_cumac: simulation?.mwhCumac,
         prime_estimee: simulation?.prime,
         prix_mwh: simulation?.prixMwh,
@@ -818,13 +924,16 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
                   </div>
                   {tech.zone_climatique && <div style={{ fontSize: 10, color: '#2563EB', marginTop: 4 }}>✓ Zone {tech.zone_climatique} détectée</div>}
                 </div>
+                {/* Surface / hauteur — masqués pour BAT-TH-116 (surfaces dans la section dédiée) */}
                 {FICHES_VENTIL.includes(tech.fiche_cee)
                   ? <Field label="Surface ventilée" value={tech.surface_ventilee} onChange={v => setT('surface_ventilee', v)} type="number" placeholder="800" suffix="m²" />
                   : FICHES_ISOLATION.includes(tech.fiche_cee)
                     ? <Field label="Surface d'isolant" value={tech.surface_isolant_103} onChange={v => setT('surface_isolant_103', v)} type="number" placeholder="500" suffix="m²" />
-                    : <Field label="Surface du site" value={tech.surface_m2} onChange={v => setT('surface_m2', v)} type="number" placeholder="5000" suffix="m²" />
+                    : tech.fiche_cee === 'BAT-TH-116'
+                      ? null
+                      : <Field label="Surface du site" value={tech.surface_m2} onChange={v => setT('surface_m2', v)} type="number" placeholder="5000" suffix="m²" />
                 }
-                {!FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && (
+                {!FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && tech.fiche_cee !== 'BAT-TH-116' && (
                   <Field label="Hauteur sous plafond" value={tech.hauteur_m} onChange={v => setT('hauteur_m', v)} type="number" placeholder="12" suffix="m" required={tech.fiche_cee !== 'IND-BA-110'} />
                 )}
               </div>
@@ -923,6 +1032,85 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
                   <div style={{ position: 'relative' }}>
                     <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>Coût installation</label>
                     <input type="number" value={tech.cout_installation_163} onChange={e => setT('cout_installation_163', e.target.value)} placeholder="ex : 45000"
+                      style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 28px 9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+                    <span style={{ position: 'absolute', right: 10, bottom: 10, fontSize: 12, color: C.textMid }}>€</span>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Section spécifique BAT-TH-116 ── */}
+              {tech.fiche_cee === 'BAT-TH-116' && (
+                <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', marginBottom: 14 }}>🖥️ GTB / Système de gestion technique du bâtiment</div>
+
+                  {/* Classe GTB */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>Classe d'automatisation GTB *</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[
+                        { id: 'A', label: 'Classe A', desc: 'Automatisation haute performance' },
+                        { id: 'B', label: 'Classe B', desc: 'Automatisation avancée' },
+                      ].map(c => (
+                        <button key={c.id} type="button" onClick={() => setT('classe_116', c.id)}
+                          style={{ flex: 1, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
+                            background: tech.classe_116 === c.id ? '#EFF6FF' : C.bg,
+                            border: `1px solid ${tech.classe_116 === c.id ? C.accent : C.border}` }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: tech.classe_116 === c.id ? '#2563EB' : C.text }}>{c.label}</div>
+                          <div style={{ fontSize: 10, color: C.textSoft, marginTop: 2 }}>{c.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Secteur d'activité */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>Secteur d'activité *</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                      {[
+                        { id: 'bureaux',                 label: 'Bureaux' },
+                        { id: 'enseignement',            label: 'Enseignement' },
+                        { id: 'commerce',                label: 'Commerce' },
+                        { id: 'hotellerie_restauration', label: 'Hôtellerie / Restau.' },
+                        { id: 'sante',                   label: 'Santé' },
+                        { id: 'autres',                  label: 'Autres' },
+                      ].map(s => (
+                        <button key={s.id} type="button" onClick={() => setT('secteur_116', s.id)}
+                          style={{ padding: '8px 6px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
+                            background: tech.secteur_116 === s.id ? '#EFF6FF' : C.bg,
+                            border: `1px solid ${tech.secteur_116 === s.id ? C.accent : C.border}` }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: tech.secteur_116 === s.id ? '#2563EB' : C.text }}>{s.label}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Surfaces par usage */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: .4 }}>Surfaces gérées par usage (m²) — au moins 1 *</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {[
+                        { key: 'chauffage',        label: '🔥 Chauffage' },
+                        { key: 'refroidissement',  label: '❄️ Refroidissement / Climatisation' },
+                        { key: 'ecs',              label: '🚿 Eau chaude sanitaire (ECS)' },
+                        { key: 'eclairage',        label: '💡 Éclairage' },
+                        { key: 'auxiliaires',      label: '⚙️ Auxiliaires' },
+                      ].map(u => (
+                        <div key={u.key} style={{ display: 'grid', gridTemplateColumns: '1fr 100px', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 12, color: C.text }}>{u.label}</span>
+                          <div style={{ position: 'relative' }}>
+                            <input type="number" min="0" value={tech[`surf_116_${u.key}`]} onChange={e => setT(`surf_116_${u.key}`, e.target.value)} placeholder="0"
+                              style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 28px 7px 8px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+                            <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: C.textMid }}>m²</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Coût installation */}
+                  <div style={{ position: 'relative' }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>Coût installation GTB</label>
+                    <input type="number" value={tech.cout_installation_116} onChange={e => setT('cout_installation_116', e.target.value)} placeholder="ex : 25000"
                       style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 28px 9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
                     <span style={{ position: 'absolute', right: 10, bottom: 10, fontSize: 12, color: C.textMid }}>€</span>
                   </div>
@@ -1191,6 +1379,34 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
                 </div>
               </div>
 
+              {/* Bonification — BAT-TH-116 : ×2 création / ×1,5 amélioration */}
+              {tech.fiche_cee === 'BAT-TH-116' && (
+                <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 16px', marginBottom: 14 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 10 }}>Bonification GTB</div>
+                  {[
+                    { value: 'none',         label: 'Aucune bonification',                            coeff: null,   desc: 'Calcul de base' },
+                    { value: 'creation',     label: 'Création (installation neuve)',                  coeff: '×2',   desc: 'Nouveau système GTB installé de zéro' },
+                    { value: 'amelioration', label: 'Amélioration (système classe C existant)',       coeff: '×1,5', desc: 'Mise à niveau depuis un système classe C ou inférieur' },
+                  ].map(opt => (
+                    <div key={opt.value} onClick={() => toggleBonification116(opt.value)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 12px', borderRadius: 7, marginBottom: 6, cursor: 'pointer', userSelect: 'none',
+                        background: bonification116 === opt.value ? '#EFF6FF' : 'transparent',
+                        border: `1px solid ${bonification116 === opt.value ? C.accent : C.border}` }}>
+                      <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${bonification116 === opt.value ? C.accent : C.border}`, background: bonification116 === opt.value ? C.accent : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {bonification116 === opt.value && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: bonification116 === opt.value ? C.accent : C.text }}>{opt.label}</div>
+                        <div style={{ fontSize: 10, color: C.textSoft, marginTop: 1 }}>{opt.desc}</div>
+                      </div>
+                      {opt.coeff && (
+                        <span style={{ fontSize: 12, fontWeight: 700, color: bonification116 === opt.value ? '#16A34A' : C.textSoft, background: bonification116 === opt.value ? '#DCFCE7' : C.bg, borderRadius: 5, padding: '2px 8px' }}>{opt.coeff}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Bonification ×3 — BAT-TH-163 uniquement */}
               {tech.fiche_cee === 'BAT-TH-163' && (
                 <div onClick={() => toggleBonification(!bonification163)}
@@ -1210,14 +1426,20 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
               <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: C.textMid, lineHeight: 1.7 }}>
                 <strong style={{ color: '#2563EB' }}>{tech.fiche_cee}</strong>
                 {' · '}Zone <strong style={{ color: C.text }}>{tech.zone_climatique}</strong>
-                {tech.hauteur_m && !FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && tech.fiche_cee !== 'BAT-TH-163' && <>{' · '}h = <strong style={{ color: C.text }}>{tech.hauteur_m} m</strong></>}
-                {tech.surface_m2 && !FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && <>{' · '}{tech.surface_m2} m²</>}
+                {tech.hauteur_m && !FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && tech.fiche_cee !== 'BAT-TH-163' && tech.fiche_cee !== 'BAT-TH-116' && <>{' · '}h = <strong style={{ color: C.text }}>{tech.hauteur_m} m</strong></>}
+                {tech.surface_m2 && !FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && tech.fiche_cee !== 'BAT-TH-116' && <>{' · '}{tech.surface_m2} m²</>}
                 {tech.fiche_cee === 'BAT-TH-142' && <>{' · '}{tech.type_local === 'sport_transport' ? 'Sport/Transport' : 'Commerce/Spectacles'}</>}
                 {tech.fiche_cee === 'BAT-TH-163' && <>
                   {' · '}{tech.puissance_pac === 'small' ? '≤400 kW' : '>400 kW'}
                   {' · '}<span style={{ color: '#2563EB' }}>{tech.puissance_pac === 'small' ? tech.etas_bracket.replace(/_/g, ' ') : tech.cop_bracket.replace(/_/g, ' ')}</span>
                   {' · '}{tech.secteur_163} (×{FACTEURS_SECTEUR_163[tech.secteur_163]})
                   {' · '}forfait = <strong style={{ color: C.text }}>{simulation.forfait} kWh/m²</strong>
+                </>}
+                {tech.fiche_cee === 'BAT-TH-116' && <>
+                  {' · '}Classe <strong style={{ color: C.text }}>{tech.classe_116}</strong>
+                  {' · '}<span style={{ color: '#2563EB' }}>{tech.secteur_116}</span>
+                  {' · '}zone ×{ZONE_COEFF_116[tech.zone_climatique]}
+                  {bonification116 !== 'none' && <>{' · '}<span style={{ color: '#16A34A', fontWeight: 700 }}>bonif. {bonification116 === 'creation' ? '×2' : '×1,5'}</span></>}
                 </>}
                 {FICHES_VENTIL.includes(tech.fiche_cee) && <>
                   {' · '}{tech.surface_ventilee} m² ventilés
@@ -1243,11 +1465,13 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
                   <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>
                     {tech.fiche_cee === 'BAT-TH-163'
                       ? `${simulation.forfait} × ${tech.surface_m2} m² × ${simulation.facteurSecteur}`
-                      : FICHES_VENTIL.includes(tech.fiche_cee)
-                        ? `${simulation.coeff} kWh/m² × ×${simulation.facteurSecteur} × ${tech.surface_ventilee} m²`
-                        : FICHES_ISOLATION.includes(tech.fiche_cee)
-                          ? `${simulation.coeff} kWh/m² × ×${simulation.facteurSecteur} × ${tech.surface_isolant_103} m²`
-                          : `${simulation.coeffConv||0} × ${pConvectif} kW${pRadiatif > 0 ? ` + ${simulation.coeffRad||0} × ${pRadiatif} kW` : ''}`}
+                      : tech.fiche_cee === 'BAT-TH-116'
+                        ? `Σ(coeff × surface) × ×${simulation.zoneCoeff116} | classe ${tech.classe_116}`
+                        : FICHES_VENTIL.includes(tech.fiche_cee)
+                          ? `${simulation.coeff} kWh/m² × ×${simulation.facteurSecteur} × ${tech.surface_ventilee} m²`
+                          : FICHES_ISOLATION.includes(tech.fiche_cee)
+                            ? `${simulation.coeff} kWh/m² × ×${simulation.facteurSecteur} × ${tech.surface_isolant_103} m²`
+                            : `${simulation.coeffConv||0} × ${pConvectif} kW${pRadiatif > 0 ? ` + ${simulation.coeffRad||0} × ${pRadiatif} kW` : ''}`}
                   </div>
                 </div>
 
@@ -1272,11 +1496,13 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
                   <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>
                     {tech.fiche_cee === 'BAT-TH-163'
                       ? 'Coût installation PAC'
-                      : FICHES_VENTIL.includes(tech.fiche_cee)
-                        ? 'Coût installation ventilation'
-                        : FICHES_ISOLATION.includes(tech.fiche_cee)
-                          ? 'Coût installation isolation'
-                          : `${simulation.nbDestrat} destrats × ${parseFloat(tech.cout_unitaire_destrat).toLocaleString('fr')} €`}
+                      : tech.fiche_cee === 'BAT-TH-116'
+                        ? 'Coût installation GTB'
+                        : FICHES_VENTIL.includes(tech.fiche_cee)
+                          ? 'Coût installation ventilation'
+                          : FICHES_ISOLATION.includes(tech.fiche_cee)
+                            ? 'Coût installation isolation'
+                            : `${simulation.nbDestrat} destrats × ${parseFloat(tech.cout_unitaire_destrat).toLocaleString('fr')} €`}
                   </div>
                 </div>
 

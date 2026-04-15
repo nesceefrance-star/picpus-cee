@@ -86,6 +86,46 @@ export const calculerCumac163 = ({ zone, puissancePac, etasBracket, copBracket, 
   return { kwhCumac, forfait, facteurSecteur }
 }
 
+// BAT-TH-116 — Système GTB / BMS tertiaire
+export const COEFFICIENTS_116 = {
+  A: {
+    bureaux:                 { chauffage: 400, refroidissement: 260, ecs: 16,  eclairage: 190, auxiliaires: 19 },
+    enseignement:            { chauffage: 200, refroidissement: 71,  ecs: 89,  eclairage: 49,  auxiliaires: 8  },
+    commerce:                { chauffage: 560, refroidissement: 160, ecs: 32,  eclairage: 23,  auxiliaires: 8  },
+    hotellerie_restauration: { chauffage: 420, refroidissement: 71,  ecs: 34,  eclairage: 74,  auxiliaires: 8  },
+    sante:                   { chauffage: 200, refroidissement: 71,  ecs: 95,  eclairage: 12,  auxiliaires: 28 },
+    autres:                  { chauffage: 200, refroidissement: 71,  ecs: 16,  eclairage: 12,  auxiliaires: 8  },
+  },
+  B: {
+    bureaux:                 { chauffage: 300, refroidissement: 130, ecs: 8,   eclairage: 100, auxiliaires: 10 },
+    enseignement:            { chauffage: 120, refroidissement: 35,  ecs: 45,  eclairage: 24,  auxiliaires: 5  },
+    commerce:                { chauffage: 300, refroidissement: 66,  ecs: 3,   eclairage: 23,  auxiliaires: 5  },
+    hotellerie_restauration: { chauffage: 230, refroidissement: 35,  ecs: 17,  eclairage: 40,  auxiliaires: 5  },
+    sante:                   { chauffage: 140, refroidissement: 35,  ecs: 48,  eclairage: 12,  auxiliaires: 18 },
+    autres:                  { chauffage: 120, refroidissement: 35,  ecs: 3,   eclairage: 12,  auxiliaires: 5  },
+  },
+}
+export const ZONE_COEFF_116 = { H1: 1.1, H2: 0.9, H3: 0.6 }
+export const USAGES_116 = ['chauffage', 'refroidissement', 'ecs', 'eclairage', 'auxiliaires']
+export const BONIF_COEFF_116 = { none: 1, creation: 2, amelioration: 1.5 }
+
+export const calculerCumac116 = ({ classe, secteur, zone, surfaces }) => {
+  const coeffs = COEFFICIENTS_116[classe]?.[secteur]
+  if (!coeffs) return { kwhCumac: 0, zoneCoeff: 0, details: {} }
+  const zoneCoeff = ZONE_COEFF_116[zone] || 0.9
+  const details = {}
+  let kwhCumac = 0
+  USAGES_116.forEach(usage => {
+    const surf = parseFloat(surfaces?.[usage]) || 0
+    if (surf > 0) {
+      const kwh = Math.round(coeffs[usage] * surf * zoneCoeff)
+      kwhCumac += kwh
+      details[`kwh_${usage}`] = kwh
+    }
+  })
+  return { kwhCumac: Math.round(kwhCumac), zoneCoeff, details }
+}
+
 export const eqPuissance = (eq) => {
   if (eq.puissance_unitaire_kw != null && eq.quantite != null) {
     return (parseFloat(eq.quantite) || 0) * (parseFloat(eq.puissance_unitaire_kw) || 0)
