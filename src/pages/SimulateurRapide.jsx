@@ -12,9 +12,13 @@ const FICHES = [
   { id: 'BAT-TH-142', label: 'BAT-TH-142', desc: 'Déstratification tertiaire', icon: '🌀' },
   { id: 'IND-BA-110', label: 'IND-BA-110', desc: 'Déstratification industrie', icon: '🏭' },
   { id: 'BAT-TH-163', label: 'BAT-TH-163', desc: 'PAC air/eau tertiaire',      icon: '♨️' },
+  { id: 'BAT-TH-116', label: 'BAT-TH-116', desc: 'GTB / BMS tertiaire',        icon: '🖥️' },
   { id: 'BAT-TH-125', label: 'BAT-TH-125', desc: 'Ventilation simple flux',    icon: '💨' },
   { id: 'BAT-TH-126', label: 'BAT-TH-126', desc: 'Ventilation double flux',    icon: '🔄' },
   { id: 'BAT-EN-103', label: 'BAT-EN-103', desc: 'Isolation plancher bas',      icon: '🧱' },
+  { id: 'BAT-TH-139', label: 'BAT-TH-139', desc: 'Récup. chaleur groupes froids', icon: '🧊', coming: true },
+  { id: 'BAT-TH-134', label: 'BAT-TH-134', desc: 'Haute pression flottante',      icon: '🔵', coming: true },
+  { id: 'BAT-EN-107', label: 'BAT-EN-107', desc: 'Isolation toiture terrasse',    icon: '🏠', coming: true },
 ]
 
 // ── Formules CEE ────────────────────────────────────────────────────────────
@@ -144,6 +148,52 @@ const calculerCumac103 = ({ zone, secteur, surface }) => {
   return { kwhCumac: Math.round(coeff * fs * surface), coeff, facteurSecteur: fs }
 }
 
+// BAT-TH-116 — GTB / BMS tertiaire
+const COEFFICIENTS_116 = {
+  A: {
+    bureaux:                 { chauffage:400, refroidissement:260, ecs:16,  eclairage:190, auxiliaires:19 },
+    enseignement:            { chauffage:200, refroidissement:71,  ecs:89,  eclairage:49,  auxiliaires:8  },
+    commerce:                { chauffage:560, refroidissement:160, ecs:32,  eclairage:23,  auxiliaires:8  },
+    hotellerie_restauration: { chauffage:420, refroidissement:71,  ecs:34,  eclairage:74,  auxiliaires:8  },
+    sante:                   { chauffage:200, refroidissement:71,  ecs:95,  eclairage:12,  auxiliaires:28 },
+    autres:                  { chauffage:200, refroidissement:71,  ecs:16,  eclairage:12,  auxiliaires:8  },
+  },
+  B: {
+    bureaux:                 { chauffage:300, refroidissement:130, ecs:8,   eclairage:100, auxiliaires:10 },
+    enseignement:            { chauffage:120, refroidissement:35,  ecs:45,  eclairage:24,  auxiliaires:5  },
+    commerce:                { chauffage:300, refroidissement:66,  ecs:3,   eclairage:23,  auxiliaires:5  },
+    hotellerie_restauration: { chauffage:230, refroidissement:35,  ecs:17,  eclairage:40,  auxiliaires:5  },
+    sante:                   { chauffage:140, refroidissement:35,  ecs:48,  eclairage:12,  auxiliaires:18 },
+    autres:                  { chauffage:120, refroidissement:35,  ecs:3,   eclairage:12,  auxiliaires:5  },
+  },
+}
+const ZONE_COEFF_116 = { H1:1.1, H2:0.9, H3:0.6 }
+const BONIF_COEFF_116 = { none:1, creation:2, amelioration:1.5 }
+const USAGES_116 = [
+  { key:'chauffage',       label:'🔥 Chauffage' },
+  { key:'refroidissement', label:'❄️ Refroid.' },
+  { key:'ecs',             label:'🚿 ECS' },
+  { key:'eclairage',       label:'💡 Éclairage' },
+  { key:'auxiliaires',     label:'⚙️ Auxiliaires' },
+]
+const SECTEURS_116 = [
+  { id:'bureaux',                 label:'Bureaux' },
+  { id:'enseignement',            label:'Enseignement' },
+  { id:'commerce',                label:'Commerce' },
+  { id:'hotellerie_restauration', label:'Hôtellerie / Restau.' },
+  { id:'sante',                   label:'Santé' },
+  { id:'autres',                  label:'Autres' },
+]
+const calculerCumac116 = ({ classe, secteur, zone, surfaces }) => {
+  const coeffs = COEFFICIENTS_116[classe]?.[secteur]
+  if (!coeffs) return { kwhCumac: 0 }
+  const zc = ZONE_COEFF_116[zone] || 0.9
+  const kwhCumac = Math.round(
+    Object.keys(surfaces).reduce((s, u) => s + (coeffs[u] || 0) * (parseFloat(surfaces[u]) || 0) * zc, 0)
+  )
+  return { kwhCumac }
+}
+
 const puissanceTotale = (eqs) =>
   eqs.reduce((s, e) => s + (parseInt(e.quantite) || 0) * (parseFloat(e.puissance_unitaire_kw) || 0), 0)
 
@@ -192,6 +242,16 @@ const INIT_FORM = {
   surface_isolant_103: '',
   resistance_r_103: '',
   cout_installation_103: '',
+  // BAT-TH-116
+  classe_116: 'A',
+  secteur_116: 'bureaux',
+  bonif_116: 'none',
+  surf_116_chauffage: '',
+  surf_116_refroidissement: '',
+  surf_116_ecs: '',
+  surf_116_eclairage: '',
+  surf_116_auxiliaires: '',
+  cout_installation_116: '',
 }
 
 const RESET_PER_FICHE = {
@@ -210,6 +270,9 @@ const RESET_PER_FICHE = {
   surface_ventilee: '', cout_installation_ventil: '',
   secteur_103: 'bureaux_enseignement_commerces', surface_isolant_103: '',
   resistance_r_103: '', cout_installation_103: '',
+  classe_116: 'A', secteur_116: 'bureaux', bonif_116: 'none',
+  surf_116_chauffage: '', surf_116_refroidissement: '', surf_116_ecs: '',
+  surf_116_eclairage: '', surf_116_auxiliaires: '', cout_installation_116: '',
 }
 
 // ── Sous-composants ──────────────────────────────────────────────────────────
@@ -334,6 +397,17 @@ export default function SimulateurRapide() {
       const r = calculerCumac103({ zone, secteur: form.secteur_103, surface: parseFloat(form.surface_isolant_103) || 0 })
       kwhCumac = r.kwhCumac
       coutTotal = parseFloat(form.cout_installation_103) || 0
+    } else if (form.fiche_cee === 'BAT-TH-116') {
+      const surfaces = {
+        chauffage:       parseFloat(form.surf_116_chauffage) || 0,
+        refroidissement: parseFloat(form.surf_116_refroidissement) || 0,
+        ecs:             parseFloat(form.surf_116_ecs) || 0,
+        eclairage:       parseFloat(form.surf_116_eclairage) || 0,
+        auxiliaires:     parseFloat(form.surf_116_auxiliaires) || 0,
+      }
+      const r = calculerCumac116({ classe: form.classe_116, secteur: form.secteur_116, zone, surfaces })
+      kwhCumac = Math.round(r.kwhCumac * (BONIF_COEFF_116[form.bonif_116] || 1))
+      coutTotal = parseFloat(form.cout_installation_116) || 0
     }
 
     const mwhCumac   = Math.round(kwhCumac / 100) / 10
@@ -360,6 +434,7 @@ export default function SimulateurRapide() {
   const is163       = form.fiche_cee === 'BAT-TH-163'
   const isVentil    = form.fiche_cee === 'BAT-TH-125' || form.fiche_cee === 'BAT-TH-126'
   const isIsolation = form.fiche_cee === 'BAT-EN-103'
+  const is116       = form.fiche_cee === 'BAT-TH-116'
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, padding: '24px 24px 40px', fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" }}>
@@ -380,14 +455,24 @@ export default function SimulateurRapide() {
           {/* Sélection fiche */}
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '18px 20px', marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>1. Sélectionnez la fiche CEE</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
               {FICHES.map(f => (
-                <button key={f.id} type="button" onClick={() => switchFiche(f.id)}
-                  style={{ padding: '14px 10px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
+                <button key={f.id} type="button"
+                  onClick={() => !f.coming && switchFiche(f.id)}
+                  disabled={!!f.coming}
+                  style={{ padding: '14px 10px', borderRadius: 9, cursor: f.coming ? 'default' : 'pointer',
+                    fontFamily: 'inherit', textAlign: 'center', position: 'relative',
+                    opacity: f.coming ? 0.55 : 1,
                     background: form.fiche_cee === f.id ? '#EFF6FF' : C.bg,
                     border: `2px solid ${form.fiche_cee === f.id ? C.accent : C.border}` }}>
+                  {f.coming && (
+                    <span style={{ position: 'absolute', top: 4, right: 4, background: '#E2E8F0', color: '#64748B',
+                      borderRadius: 4, fontSize: 8, fontWeight: 700, padding: '1px 4px', textTransform: 'uppercase', letterSpacing: .3 }}>
+                      Bientôt
+                    </span>
+                  )}
                   <div style={{ fontSize: 20, marginBottom: 5 }}>{f.icon}</div>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: form.fiche_cee === f.id ? '#2563EB' : C.text }}>{f.label}</div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: form.fiche_cee === f.id ? '#2563EB' : f.coming ? C.textSoft : C.text }}>{f.label}</div>
                   <div style={{ fontSize: 10, color: C.textSoft, marginTop: 2, lineHeight: 1.3 }}>{f.desc}</div>
                 </button>
               ))}
@@ -691,6 +776,88 @@ export default function SimulateurRapide() {
                   <Label>Coût installation</Label>
                   <NumInput value={form.cout_installation_ventil} onChange={v => setF('cout_installation_ventil', v)} placeholder="ex : 25000" suffix="€" />
                 </div>
+              </div>
+            </>)}
+
+            {/* ── GTB / BMS (BAT-TH-116) ── */}
+            {is116 && (<>
+              {/* Classe A / B */}
+              <div style={{ marginBottom: 14 }}>
+                <Label>Classe GTB</Label>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {['A', 'B'].map(c => (
+                    <button key={c} type="button" onClick={() => setF('classe_116', c)}
+                      style={{ flex: 1, padding: '9px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700,
+                        background: form.classe_116 === c ? '#BFDBFE' : C.bg,
+                        border: `1px solid ${form.classe_116 === c ? C.accent : C.border}`,
+                        color: form.classe_116 === c ? '#2563EB' : C.textMid }}>
+                      Classe {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Secteur */}
+              <div style={{ marginBottom: 14 }}>
+                <Label>Secteur d'activité</Label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  {SECTEURS_116.map(s => (
+                    <button key={s.id} type="button" onClick={() => setF('secteur_116', s.id)}
+                      style={{ padding: '8px 10px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
+                        background: form.secteur_116 === s.id ? '#EFF6FF' : C.bg,
+                        border: `1px solid ${form.secteur_116 === s.id ? C.accent : C.border}` }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: form.secteur_116 === s.id ? '#2563EB' : C.text }}>{s.label}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Surfaces par usage avec badges coefficients */}
+              <div style={{ marginBottom: 14 }}>
+                <Label>Surfaces gérées par usage (m²) — au moins 1</Label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {USAGES_116.map(u => {
+                    const coeff = COEFFICIENTS_116[form.classe_116]?.[form.secteur_116]?.[u.key]
+                    return (
+                      <div key={u.key} style={{ display: 'grid', gridTemplateColumns: '1fr 110px', alignItems: 'center', gap: 10 }}>
+                        <div>
+                          <span style={{ fontSize: 12, color: C.text }}>{u.label}</span>
+                          {coeff != null && (
+                            <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 700, color: '#2563EB', background: '#EFF6FF', borderRadius: 4, padding: '1px 5px' }}>
+                              {coeff} kWh/m²
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ position: 'relative' }}>
+                          <input type="number" min="0" value={form[`surf_116_${u.key}`]}
+                            onChange={e => setF(`surf_116_${u.key}`, e.target.value)} placeholder="0"
+                            style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 30px 7px 8px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+                          <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: C.textMid }}>m²</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Bonification */}
+              <div style={{ marginBottom: 14 }}>
+                <Label>Bonification</Label>
+                <BtnGroup
+                  options={[
+                    { id: 'none',        label: 'Aucune ×1' },
+                    { id: 'creation',    label: 'Création ×2' },
+                    { id: 'amelioration',label: 'Amélioration ×1,5' },
+                  ]}
+                  value={form.bonif_116}
+                  onChange={v => setF('bonif_116', v)}
+                />
+              </div>
+
+              {/* Coût installation */}
+              <div>
+                <Label>Coût installation GTB</Label>
+                <NumInput value={form.cout_installation_116} onChange={v => setF('cout_installation_116', v)} placeholder="ex : 25000" suffix="€" />
               </div>
             </>)}
 
