@@ -40,32 +40,52 @@ export default async function handler(req, res) {
   const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
   if (authErr || !user) return res.status(401).json({ error: 'unauthorized' })
 
-  const { dossierId, type, selectedSlots } = req.body
-  if (!dossierId || !type) return res.status(400).json({ error: 'dossierId et type requis' })
+  const { dossierId, contactNom, entreprise, ville: villeFreform, type, selectedSlots } = req.body
+  if (!type) return res.status(400).json({ error: 'type requis' })
   if (!EMAIL_TYPE_LABELS[type]) return res.status(400).json({ error: 'Type inconnu' })
+  if (!dossierId && !contactNom && !entreprise) return res.status(400).json({ error: 'dossierId ou contactNom/entreprise requis' })
 
-  // Récupérer dossier + prospect en parallèle avec guide + exemple
-  const [
-    { data: dossier, error: dossierErr },
-    { data: guides },
-    { data: exemple },
-    { data: profile },
-  ] = await Promise.all([
-    supabase.from('dossiers').select(`
-      id, ref, fiche_cee, statut, statut_date,
-      prime_estimee, montant_devis,
-      prospect:prospects(raison_sociale, contact_nom, contact_email, contact_tel, ville)
-    `).eq('id', dossierId).single(),
+  // Récupérer les ressources partagées (guide, exemple, profil)
+  const sharedPromises = [
     supabase.from('style_guide').select('contenu').order('updated_at', { ascending: false }).limit(1),
     supabase.from('email_exemples').select('contenu').eq('type', type).maybeSingle(),
     supabase.from('profiles').select('nom, prenom').eq('id', user.id).single(),
-  ])
+  ]
 
-  if (dossierErr || !dossier) return res.status(404).json({ error: 'Dossier introuvable' })
+  let dossier = null
+  let dossierErr = null
 
-  const styleGuide   = guides?.[0]?.contenu || ''
-  const exempleEmail = exemple?.contenu || ''
-  const commercialName = profile ? `${profile.prenom || ''} ${profile.nom || ''}`.trim() : 'le commercial'
+  if (dossierId) {
+    const [
+      { data: dos, error: dErr },
+      { data: guides },
+      { data: exemple },
+      { data: profile },
+    ] = await Promise.all([
+      supabase.from('dossiers').select(`
+        id, ref, fiche_cee, statut, statut_date,
+        prime_estimee, montant_devis,
+        prospect:prospects(raison_sociale, contact_nom, contact_email, contact_tel, ville)
+      `).eq('id', dossierId).single(),
+      ...sharedPromises,
+    ])
+    dossier = dos; dossierErr = dErr
+    if (dossierErr || !dossier) return res.status(404).json({ error: 'Dossier introuvable' })
+
+    var styleGuide   = guides?.[0]?.contenu || ''
+    var exempleEmail = exemple?.contenu || ''
+    var commercialName = profile ? `${profile.prenom || ''} ${profile.nom || ''}`.trim() : 'le commercial'
+  } else {
+    const [
+      { data: guides },
+      { data: exemple },
+      { data: profile },
+    ] = await Promise.all(sharedPromises)
+
+    var styleGuide   = guides?.[0]?.contenu || ''
+    var exempleEmail = exemple?.contenu || ''
+    var commercialName = profile ? `${profile.prenom || ''} ${profile.nom || ''}`.trim() : 'le commercial'
+  }
 
   // Construire les blocs système avec prompt caching
   const systemParts = []
@@ -93,25 +113,35 @@ export default async function handler(req, res) {
     })
   }
 
-  // Préparer le contexte dossier
-  const p = dossier.prospect || {}
+  // Préparer le contexte
   const fmt = n => n ? Number(n).toLocaleString('fr-FR') + ' €' : 'Non défini'
 
   const slotsText = selectedSlots?.length
     ? '\nCréneaux à proposer :\n' + selectedSlots.map(s => `- ${s.label}`).join('\n')
     : ''
 
-  const userMessage = `Type : ${EMAIL_TYPE_LABELS[type]}
-Instructions : ${EMAIL_TYPE_INSTRUCTIONS[type]}
-
-Dossier :
+  let contextLines
+  if (dossier) {
+    const p = dossier.prospect || {}
+    contextLines = `Dossier :
 - Entreprise : ${p.raison_sociale || 'N/A'}
 - Contact : ${p.contact_nom || 'N/A'}
 - Ville : ${p.ville || 'N/A'}
 - Fiche CEE : ${dossier.fiche_cee}
 - Prime CEE : ${fmt(dossier.prime_estimee)}
 - Montant devis : ${fmt(dossier.montant_devis)}
-- Commercial : ${commercialName}${slotsText}
+- Commercial : ${commercialName}`
+  } else {
+    contextLines = `Contact :
+- Entreprise : ${entreprise || 'N/A'}
+- Contact : ${contactNom || 'N/A'}${villeFreform ? `\n- Ville : ${villeFreform}` : ''}
+- Commercial : ${commercialName}`
+  }
+
+  const userMessage = `Type : ${EMAIL_TYPE_LABELS[type]}
+Instructions : ${EMAIL_TYPE_INSTRUCTIONS[type]}
+
+${contextLines}${slotsText}
 
 CONTRAINTES ABSOLUES :
 - Maximum 10 lignes de corps
@@ -158,14 +188,16 @@ SUJET: [objet court]
     body    = fullText.slice(sepIdx + 5).trim()
   }
 
-  // Sauvegarder dans email_generations (upsert)
-  await supabase.from('email_generations').upsert({
-    dossier_id: dossierId,
-    type,
-    subject,
-    body,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'dossier_id,type' })
+  // Sauvegarder dans email_generations uniquement si dossier lié
+  if (dossierId) {
+    await supabase.from('email_generations').upsert({
+      dossier_id: dossierId,
+      type,
+      subject,
+      body,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'dossier_id,type' })
+  }
 
   return res.json({ subject, body })
 }
