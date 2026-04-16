@@ -1094,16 +1094,26 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
                         { key: 'ecs',              label: '🚿 Eau chaude sanitaire (ECS)' },
                         { key: 'eclairage',        label: '💡 Éclairage' },
                         { key: 'auxiliaires',      label: '⚙️ Auxiliaires' },
-                      ].map(u => (
+                      ].map(u => {
+                        const coeff = COEFFICIENTS_116[tech.classe_116]?.[tech.secteur_116]?.[u.key]
+                        return (
                         <div key={u.key} style={{ display: 'grid', gridTemplateColumns: '1fr 100px', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontSize: 12, color: C.text }}>{u.label}</span>
+                          <div>
+                            <span style={{ fontSize: 12, color: C.text }}>{u.label}</span>
+                            {coeff != null && (
+                              <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: '#2563EB', background: '#EFF6FF', borderRadius: 4, padding: '1px 5px' }}>
+                                {coeff} kWh/m²
+                              </span>
+                            )}
+                          </div>
                           <div style={{ position: 'relative' }}>
                             <input type="number" min="0" value={tech[`surf_116_${u.key}`]} onChange={e => setT(`surf_116_${u.key}`, e.target.value)} placeholder="0"
                               style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 28px 7px 8px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
                             <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: C.textMid }}>m²</span>
                           </div>
                         </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
 
@@ -1232,7 +1242,7 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
               )}
 
               {/* ── Section déstratificateurs (BAT-TH-142 + IND-BA-110) ── */}
-              {tech.fiche_cee !== 'BAT-TH-163' && !FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && (<>
+              {tech.fiche_cee !== 'BAT-TH-163' && tech.fiche_cee !== 'BAT-TH-116' && !FICHES_VENTIL.includes(tech.fiche_cee) && !FICHES_ISOLATION.includes(tech.fiche_cee) && (<>
               {/* Équipements convectifs */}
               <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>

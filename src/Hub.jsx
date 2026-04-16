@@ -60,6 +60,49 @@ const FICHES_DEVIS = {
 // Fiches nécessitant l'ajout automatique du destratificateur
 const FICHES_DESTRAT = ["BAT-TH-142", "IND-BA-110"];
 
+// BAT-TH-116 — coefficients kWh/m² par classe, secteur, usage
+const COEFFICIENTS_116 = {
+  A: {
+    bureaux:                 { chauffage:400, refroidissement:260, ecs:16,  eclairage:190, auxiliaires:19 },
+    enseignement:            { chauffage:200, refroidissement:71,  ecs:89,  eclairage:49,  auxiliaires:8  },
+    commerce:                { chauffage:560, refroidissement:160, ecs:32,  eclairage:23,  auxiliaires:8  },
+    hotellerie_restauration: { chauffage:420, refroidissement:71,  ecs:34,  eclairage:74,  auxiliaires:8  },
+    sante:                   { chauffage:200, refroidissement:71,  ecs:95,  eclairage:12,  auxiliaires:28 },
+    autres:                  { chauffage:200, refroidissement:71,  ecs:16,  eclairage:12,  auxiliaires:8  },
+  },
+  B: {
+    bureaux:                 { chauffage:300, refroidissement:130, ecs:8,   eclairage:100, auxiliaires:10 },
+    enseignement:            { chauffage:120, refroidissement:35,  ecs:45,  eclairage:24,  auxiliaires:5  },
+    commerce:                { chauffage:300, refroidissement:66,  ecs:3,   eclairage:23,  auxiliaires:5  },
+    hotellerie_restauration: { chauffage:230, refroidissement:35,  ecs:17,  eclairage:40,  auxiliaires:5  },
+    sante:                   { chauffage:140, refroidissement:35,  ecs:48,  eclairage:12,  auxiliaires:18 },
+    autres:                  { chauffage:120, refroidissement:35,  ecs:3,   eclairage:12,  auxiliaires:5  },
+  },
+};
+const ZONE_COEFF_116 = { H1:1.1, H2:0.9, H3:0.6 };
+const BONIF_COEFF_116 = { none:1, creation:2, amelioration:1.5 };
+const USAGES_116 = [
+  { key:'chauffage',       label:'🔥 Chauffage' },
+  { key:'refroidissement', label:'❄️ Refroid. / Clim.' },
+  { key:'ecs',             label:'🚿 ECS' },
+  { key:'eclairage',       label:'💡 Éclairage' },
+  { key:'auxiliaires',     label:'⚙️ Auxiliaires' },
+];
+const SECTEURS_116 = [
+  { id:'bureaux',                 label:'Bureaux' },
+  { id:'enseignement',            label:'Enseignement' },
+  { id:'commerce',                label:'Commerce' },
+  { id:'hotellerie_restauration', label:'Hôtellerie / Restauration' },
+  { id:'sante',                   label:'Santé' },
+  { id:'autres',                  label:'Autres' },
+];
+const calculerCumac116Hub = ({ classe, secteur, zone, surfaces }) => {
+  const coeffs = COEFFICIENTS_116[classe]?.[secteur];
+  if (!coeffs) return 0;
+  const zc = ZONE_COEFF_116[zone] || 0.9;
+  return Math.round(Object.keys(surfaces).reduce((s, u) => s + (coeffs[u] || 0) * (parseFloat(surfaces[u]) || 0) * zc, 0));
+};
+
 const NIV = {
   CRITIQUE: { bg:"#FEF2F2", border:"#FCA5A5", badge:"#DC2626", text:"#7F1D1D" },
   ATTENTION:{ bg:"#FFFBEB", border:"#FCD34D", badge:"#D97706", text:"#78350F" },
@@ -591,11 +634,23 @@ function ModalNouveauDevis({ onConfirm, onCancel }) {
   const [destratDesignation, setDestratDesignation] = useState("DESTRATIFICATEUR TECH - 14000m3/h");
   const [destratPrix, setDestratPrix] = useState(650);
 
+  // BAT-TH-116 simulation
+  const [classe116, setClasse116]   = useState("A");
+  const [secteur116, setSecteur116] = useState("bureaux");
+  const [zone116, setZone116]       = useState("H2");
+  const [bonif116, setBonif116]     = useState("none");
+  const [surfs116, setSurfs116]     = useState({ chauffage:'', refroidissement:'', ecs:'', eclairage:'', auxiliaires:'' });
+  const setSurf116 = (k, v) => setSurfs116(s => ({...s, [k]:v}));
+  const kwhBase116 = calculerCumac116Hub({ classe:classe116, secteur:secteur116, zone:zone116, surfaces:surfs116 });
+  const kwh116     = Math.round(kwhBase116 * BONIF_COEFF_116[bonif116]);
+
   const needsDestrat = FICHES_DESTRAT.includes(ficheDevis);
 
   const go = () => {
     if (!nomClient.trim()) return;
-    onConfirm({ ficheDevis, nomClient, siret, adresseSite, refDevis, dateDevis, nomContact, fonctionContact, adresseSiege, telephoneClient, emailClient, codeNAF, destratDesignation, destratPrix });
+    onConfirm({ ficheDevis, nomClient, siret, adresseSite, refDevis, dateDevis, nomContact, fonctionContact, adresseSiege, telephoneClient, emailClient, codeNAF, destratDesignation, destratPrix,
+      ...(ficheDevis === 'BAT-TH-116' ? { prime: kwh116, sim116: { classe:classe116, secteur:secteur116, zone:zone116, bonif:bonif116, surfs:surfs116, kwh:kwh116 } } : {}),
+    });
   };
 
   const INP = {width:"100%",boxSizing:"border-box",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit"};
@@ -666,6 +721,109 @@ function ModalNouveauDevis({ onConfirm, onCancel }) {
                 <input type="number" value={destratPrix} onChange={e=>setDestratPrix(Number(e.target.value)||0)} style={{...INP,width:90,background:"#F8FAFF"}}/>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Simulation CEE — BAT-TH-116 */}
+        {ficheDevis === 'BAT-TH-116' && (
+          <div style={{marginBottom:16,padding:"14px 16px",background:"#F0F9FF",borderRadius:8,border:"1px solid #BAE6FD"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#0369A1",marginBottom:12}}>🖥️ Simulation CEE — GTB (BAT-TH-116)</div>
+
+            {/* Classe A / B */}
+            <div style={{marginBottom:10}}>
+              <label style={{...L,color:"#0369A1"}}>Classe GTB</label>
+              <div style={{display:"flex",gap:6}}>
+                {["A","B"].map(c=>(
+                  <button key={c} type="button" onClick={()=>setClasse116(c)}
+                    style={{flex:1,padding:"7px",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700,
+                      background:classe116===c?"#BFDBFE":C.bg,border:`1px solid ${classe116===c?"#2563EB":C.border}`,color:classe116===c?"#2563EB":C.textMid}}>
+                    Classe {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Secteur */}
+            <div style={{marginBottom:10}}>
+              <label style={{...L,color:"#0369A1"}}>Secteur d'activité</label>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+                {SECTEURS_116.map(s=>(
+                  <button key={s.id} type="button" onClick={()=>setSecteur116(s.id)}
+                    style={{padding:"6px 8px",borderRadius:7,cursor:"pointer",fontFamily:"inherit",textAlign:"center",
+                      background:secteur116===s.id?"#EFF6FF":C.bg,border:`1px solid ${secteur116===s.id?"#2563EB":C.border}`}}>
+                    <div style={{fontSize:11,fontWeight:700,color:secteur116===s.id?"#2563EB":C.text}}>{s.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Zone climatique */}
+            <div style={{marginBottom:10}}>
+              <label style={{...L,color:"#0369A1"}}>Zone climatique</label>
+              <div style={{display:"flex",gap:6}}>
+                {["H1","H2","H3"].map(z=>(
+                  <button key={z} type="button" onClick={()=>setZone116(z)}
+                    style={{flex:1,padding:"7px",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700,
+                      background:zone116===z?"#BFDBFE":C.bg,border:`1px solid ${zone116===z?"#2563EB":C.border}`,color:zone116===z?"#2563EB":C.textMid}}>
+                    {z}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Surfaces par usage avec badges coefficient */}
+            <div style={{marginBottom:10}}>
+              <label style={{...L,color:"#0369A1"}}>Surfaces gérées par usage (m²)</label>
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                {USAGES_116.map(u => {
+                  const coeff = COEFFICIENTS_116[classe116]?.[secteur116]?.[u.key];
+                  return (
+                    <div key={u.key} style={{display:"grid",gridTemplateColumns:"1fr 90px",alignItems:"center",gap:8}}>
+                      <div>
+                        <span style={{fontSize:12,color:C.text}}>{u.label}</span>
+                        {coeff != null && (
+                          <span style={{marginLeft:6,fontSize:10,fontWeight:700,color:"#0369A1",background:"#E0F2FE",borderRadius:4,padding:"1px 5px"}}>
+                            {coeff} kWh/m²
+                          </span>
+                        )}
+                      </div>
+                      <div style={{position:"relative"}}>
+                        <input type="number" min="0" value={surfs116[u.key]} onChange={e=>setSurf116(u.key,e.target.value)} placeholder="0"
+                          style={{...INP,padding:"6px 26px 6px 8px",fontSize:12,background:C.surface}}/>
+                        <span style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",fontSize:10,color:C.textMid}}>m²</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Bonification */}
+            <div style={{marginBottom:10}}>
+              <label style={{...L,color:"#0369A1"}}>Bonification</label>
+              <div style={{display:"flex",gap:5}}>
+                {[{v:"none",l:"Aucune ×1"},{v:"creation",l:"Création ×2"},{v:"amelioration",l:"Amélioration ×1,5"}].map(b=>(
+                  <button key={b.v} type="button" onClick={()=>setBonif116(b.v)}
+                    style={{flex:1,padding:"6px 4px",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700,textAlign:"center",
+                      background:bonif116===b.v?"#BFDBFE":C.bg,border:`1px solid ${bonif116===b.v?"#2563EB":C.border}`,color:bonif116===b.v?"#2563EB":C.textMid}}>
+                    {b.l}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Résultat kWh cumac */}
+            {kwh116 > 0 && (
+              <div style={{background:"#DCFCE7",border:"1px solid #86EFAC",borderRadius:7,padding:"10px 14px",textAlign:"center"}}>
+                <div style={{fontSize:11,color:"#15803D",marginBottom:2,textTransform:"uppercase",fontWeight:700}}>kWh cumac estimés</div>
+                <div style={{fontSize:20,fontWeight:800,color:"#15803D"}}>{kwh116.toLocaleString("fr")} kWh</div>
+                {bonif116 !== 'none' && (
+                  <div style={{fontSize:10,color:"#4ADE80",marginTop:2}}>
+                    Base : {kwhBase116.toLocaleString("fr")} × {BONIF_COEFF_116[bonif116]}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
