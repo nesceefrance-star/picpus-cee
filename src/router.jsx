@@ -18,6 +18,7 @@ import VisiteTechniqueDetail from './pages/VisiteTechniqueDetail'
 import RapportPublic from './pages/RapportPublic'
 import Planning from './pages/Planning'
 import SimulateurRapide from './pages/SimulateurRapide'
+import EmailGenerateur from './pages/EmailGenerateur'
 import AppLayout from './components/AppLayout'
 import { createTheme, ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
@@ -98,6 +99,7 @@ export default function AppRouter() {
           <Route path="/visites/:id"     element={<WithLayout><VisiteTechniqueDetail /></WithLayout>} />
           <Route path="/planning"        element={<WithLayout><Planning /></WithLayout>} />
           <Route path="/simulateur"      element={<WithLayout><SimulateurRapide /></WithLayout>} />
+          <Route path="/emails"          element={<WithLayout><EmailGenerateur /></WithLayout>} />
           <Route path="/rapport/:token"  element={<RapportPublic />} />
           <Route path="*"               element={<Navigate to="/" replace />} />
         </Routes>

@@ -192,6 +192,7 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
           />
           <Collapse in={open ? outilsOpen : true} timeout="auto" unmountOnExit>
             <Item icon={<BoltIcon fontSize="small" />}           label="Simulateur rapide"    path="/simulateur"                indent />
+            <Item icon={<ForwardToInboxIcon fontSize="small" />} label="Générateur d'emails" path="/emails"                   indent />
             <Item icon={<SearchIcon fontSize="small" />}        label="Vérificateur CEE"     path="/hub" module="verificateur" indent />
             <Item icon={<ReceiptLongIcon fontSize="small" />}  label="Générateur de devis"  path="/hub" module="marges"       indent />
             <Item icon={<EngineeringIcon fontSize="small" />}  label="Visites techniques"   path="/visites"                   indent />
