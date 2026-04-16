@@ -12,6 +12,9 @@ const FICHES = [
   { id: 'BAT-TH-125', label: 'BAT-TH-125', desc: 'Ventilation simple flux',    icon: '💨' },
   { id: 'BAT-TH-126', label: 'BAT-TH-126', desc: 'Ventilation double flux',    icon: '🔄' },
   { id: 'BAT-EN-103', label: 'BAT-EN-103', desc: 'Isolation plancher bas',      icon: '🧱' },
+  { id: 'BAT-TH-139', label: 'BAT-TH-139', desc: 'Récup. chaleur groupes froids', icon: '🧊', coming: true },
+  { id: 'BAT-TH-134', label: 'BAT-TH-134', desc: 'Haute pression flottante',       icon: '🔵', coming: true },
+  { id: 'BAT-EN-107', label: 'BAT-EN-107', desc: 'Isolation toiture terrasse',     icon: '🏠', coming: true },
 ]
 
 // ── Tables officielles BAT-TH-142 vA54.3 (kWh cumac par kW de chauffage) ─────
@@ -818,12 +821,22 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
                 {FICHES.map(f => (
-                  <button key={f.id} type="button" onClick={() => switchFiche(f.id)}
-                    style={{ padding: '16px 12px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
+                  <button key={f.id} type="button"
+                    onClick={() => !f.coming && switchFiche(f.id)}
+                    disabled={!!f.coming}
+                    style={{ padding: '16px 12px', borderRadius: 10, cursor: f.coming ? 'default' : 'pointer',
+                      fontFamily: 'inherit', textAlign: 'center', position: 'relative',
+                      opacity: f.coming ? 0.55 : 1,
                       background: tech.fiche_cee === f.id ? '#EFF6FF' : C.bg,
                       border: `2px solid ${tech.fiche_cee === f.id ? C.accent : C.border}` }}>
+                    {f.coming && (
+                      <span style={{ position: 'absolute', top: 5, right: 5, background: '#E2E8F0', color: '#64748B',
+                        borderRadius: 4, fontSize: 8, fontWeight: 700, padding: '1px 4px', textTransform: 'uppercase', letterSpacing: .3 }}>
+                        Bientôt
+                      </span>
+                    )}
                     <div style={{ fontSize: 22, marginBottom: 6 }}>{f.icon}</div>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: tech.fiche_cee === f.id ? '#2563EB' : C.text }}>{f.label}</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: tech.fiche_cee === f.id ? '#2563EB' : f.coming ? C.textSoft : C.text }}>{f.label}</div>
                     <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>{f.desc}</div>
                   </button>
                 ))}
