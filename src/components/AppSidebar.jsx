@@ -35,6 +35,7 @@ import EngineeringIcon from '@mui/icons-material/Engineering'
 import SettingsIcon from '@mui/icons-material/Settings'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import BoltIcon from '@mui/icons-material/Bolt'
+import TravelExploreIcon from '@mui/icons-material/TravelExplore'
 
 const DRAWER_OPEN  = 240
 const DRAWER_MINI  = 64
@@ -56,8 +57,9 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
   const { profile, signOut } = useStore()
   const isAdmin    = profile?.role === 'admin'
 
-  const [outilsOpen, setOutilsOpen] = useState(true)
-  const [adminOpen,  setAdminOpen]  = useState(true)
+  const [outilsOpen,       setOutilsOpen]       = useState(true)
+  const [prospectionOpen,  setProspectionOpen]  = useState(true)
+  const [adminOpen,        setAdminOpen]        = useState(true)
 
   const currentPath   = location.pathname
   const currentModule = location.state?.module || null
@@ -180,6 +182,19 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
 
           {/* Planning */}
           <Item icon={<CalendarMonthIcon fontSize="small" />} label="Planning" path="/planning" />
+
+          <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
+
+          {/* Prospection */}
+          <SectionHeader
+            icon={<TravelExploreIcon fontSize="small" />}
+            label="Prospection"
+            expanded={prospectionOpen}
+            onToggle={() => setProspectionOpen(o => !o)}
+          />
+          <Collapse in={open ? prospectionOpen : true} timeout="auto" unmountOnExit>
+            <Item icon={<TravelExploreIcon fontSize="small" />} label="Qualification leads" path="/leads" indent />
+          </Collapse>
 
           <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
 
