@@ -1434,7 +1434,7 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
               {tech.fiche_cee === 'BAT-TH-163' && (
                 <div onClick={() => toggleBonification(!bonification163)}
                   style={{ display: 'flex', alignItems: 'center', gap: 12, background: bonification163 ? '#F0FDF4' : '#F8FAFC', border: `1px solid ${bonification163 ? '#86EFAC' : C.border}`, borderRadius: 8, padding: '11px 16px', marginBottom: 14, cursor: 'pointer', userSelect: 'none' }}>
-                  <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${bonification163 ? '#16A34A' : C.border}`, transition: 'all .15s', background: bonification163 ? '#16A34A' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${bonification163 ? '#16A34A' : C.border}`, transition: 'all .15s', background: bonification163 ? '#16A34A' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     {bonification163 && <span style={{ color: '#fff', fontSize: 13, fontWeight: 900, lineHeight: 1 }}>✓</span>}
                   </div>
                   <div style={{ flex: 1 }}>
