@@ -295,7 +295,7 @@ export default function VisiteTechniqueDetail() {
     const fiches = d.fiches || []
     const typeFiche = fiches[0] || 'IND-BA-110'
     const { data, error } = await supabase.from('visites_techniques').insert({
-      created_by: profile?.id, type_fiche: typeFiche, statut: 'brouillon', donnees: d, photos: p,
+      created_by: profile?.id, assigne_a: profile?.id, type_fiche: typeFiche, statut: 'brouillon', donnees: d, photos: p,
     }).select().single()
     if (error) throw error
     setVisiteId(data.id)

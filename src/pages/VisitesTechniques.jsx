@@ -37,10 +37,12 @@ export default function VisitesTechniques() {
 
   const loadVisites = async () => {
     setLoading(true)
-    const { data: vData } = await supabase
+    let query = supabase
       .from('visites_techniques')
       .select('id, created_at, updated_at, statut, type_fiche, donnees, photos, dossier_id')
       .order('updated_at', { ascending: false })
+    if (profile?.role !== 'admin') query = query.eq('assigne_a', profile.id)
+    const { data: vData } = await query
     if (!vData?.length) { setVisites([]); setLoading(false); return }
 
     // Charge les dossiers liés + leurs prospects séparément
