@@ -189,10 +189,10 @@ async function fetchBatiments({ lat, lon, rayon = 120 }) {
 // ─── API LUSHA (via proxy /api/lusha) ────────────────────────────
 async function fetchLusha({ prenom, nom, societe, linkedinUrl }) {
   const body = linkedinUrl
-    ? { linkedin_url: linkedinUrl }
-    : { first_name: prenom, last_name: nom, company: societe };
+    ? { action: 'lusha', linkedin_url: linkedinUrl }
+    : { action: 'lusha', first_name: prenom, last_name: nom, company: societe };
 
-  const res = await fetch('/api/lusha', {
+  const res = await fetch('/api/claude', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify(body),
