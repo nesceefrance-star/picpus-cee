@@ -57,7 +57,7 @@ async function detectColumnMapping(headers) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-3-5-haiku-20241022',
       max_tokens: 600,
       messages: [{
         role: 'user',
