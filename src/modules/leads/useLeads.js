@@ -327,10 +327,11 @@ export function useLeads() {
       await new Promise(r => setTimeout(r, IGN_DELAY_MS));
       const bati = await fetchBatiments({ lat: geo.lat, lon: geo.lon });
       const lienGeoportail = `https://www.geoportail.gouv.fr/carte?c=${geo.lon},${geo.lat}&z=19&l0=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&l1=ORTHOIMAGERY.ORTHOPHOTOS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes`;
+      const lienGoogleMaps = `https://www.google.com/maps/@${geo.lat},${geo.lon},19z/data=!3m1!1e3`;
       const patch = {
         cadastre_fetched: true, cadastre_fetched_at: new Date().toISOString(),
         lat: geo.lat, lon: geo.lon, geocode_score: geo.score, adresse_normalisee: geo.label,
-        lien_geoportail: lienGeoportail, ...(parcelle ?? {}), ...(bati ?? {}),
+        lien_geoportail: lienGeoportail, lien_googlemaps: lienGoogleMaps, ...(parcelle ?? {}), ...(bati ?? {}),
       };
       const { error: eUp } = await supabase.from('leads_import').update(patch).eq('id', importId);
       if (eUp) throw eUp;
