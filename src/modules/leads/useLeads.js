@@ -148,26 +148,32 @@ async function fetchParcelle({ lat, lon }) {
   return { id_parcelle: p.id ?? '', section_cadastrale: p.section ?? '', numero_parcelle: p.numero ?? '', surface_parcelle_m2: p.contenance ?? null };
 }
 
-// Trouve LE bâtiment qui contient exactement le point GPS (point-in-polygon)
+// Bbox 10 m — équivalent point-in-polygon, compatible CORS
 async function fetchBatimentExact({ lat, lon }) {
-  const url = new URL('https://data.geopf.fr/wfs/ows');
-  url.searchParams.set('SERVICE', 'WFS'); url.searchParams.set('VERSION', '2.0.0');
-  url.searchParams.set('REQUEST', 'GetFeature'); url.searchParams.set('TYPENAMES', 'BDTOPO_V3:batiment');
-  url.searchParams.set('CQL_FILTER', `INTERSECTS(geometrie,POINT(${lon} ${lat}))`);
-  url.searchParams.set('OUTPUTFORMAT', 'application/json'); url.searchParams.set('COUNT', '5');
-  const res = await fetch(url.toString());
-  if (!res.ok) return null;
-  const data = await res.json();
-  const feats = data.features ?? [];
-  if (!feats.length) return null;
-  const surfaces = feats.map(f => f.properties?.superficie_au_sol ?? 0).filter(s => s > 0);
-  return {
-    nb_batiments: feats.length,
-    surface_bati_m2: Math.round(surfaces.reduce((a, b) => a + b, 0)),
-    surface_bati_max_m2: surfaces.length ? Math.round(Math.max(...surfaces)) : 0,
-    batiment_usage: feats[0]?.properties?.usage_1 ?? null,
-    geocode_methode: 'exact',
-  };
+  try {
+    const r = 10;
+    const dLat = r / 111320;
+    const dLon = r / (111320 * Math.cos((lat * Math.PI) / 180));
+    const bbox = `${lon - dLon},${lat - dLat},${lon + dLon},${lat + dLat}`;
+    const url = new URL('https://data.geopf.fr/wfs/ows');
+    url.searchParams.set('SERVICE', 'WFS'); url.searchParams.set('VERSION', '2.0.0');
+    url.searchParams.set('REQUEST', 'GetFeature'); url.searchParams.set('TYPENAMES', 'BDTOPO_V3:batiment');
+    url.searchParams.set('BBOX', `${bbox},EPSG:4326`);
+    url.searchParams.set('OUTPUTFORMAT', 'application/json'); url.searchParams.set('COUNT', '5');
+    const res = await fetch(url.toString());
+    if (!res.ok) return null;
+    const data = await res.json();
+    const feats = data.features ?? [];
+    if (!feats.length) return null;
+    const surfaces = feats.map(f => f.properties?.superficie_au_sol ?? 0).filter(s => s > 0);
+    return {
+      nb_batiments: feats.length,
+      surface_bati_m2: Math.round(surfaces.reduce((a, b) => a + b, 0)),
+      surface_bati_max_m2: surfaces.length ? Math.round(Math.max(...surfaces)) : 0,
+      batiment_usage: feats[0]?.properties?.usage_1 ?? null,
+      geocode_methode: 'exact',
+    };
+  } catch { return null; }
 }
 
 // Fallback : rayon réduit (30 m) si le point est hors bâtiment (rue, parking…)
