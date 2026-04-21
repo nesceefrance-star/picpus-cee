@@ -36,6 +36,8 @@ import SettingsIcon from '@mui/icons-material/Settings'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import BoltIcon from '@mui/icons-material/Bolt'
 import TravelExploreIcon from '@mui/icons-material/TravelExplore'
+import LightModeIcon from '@mui/icons-material/LightMode'
+import DarkModeIcon from '@mui/icons-material/DarkMode'
 
 const DRAWER_OPEN  = 240
 const DRAWER_MINI  = 64
@@ -54,7 +56,7 @@ const DARK = {
 export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }) {
   const navigate   = useNavigate()
   const location   = useLocation()
-  const { profile, signOut } = useStore()
+  const { profile, signOut, theme, toggleTheme } = useStore()
   const isAdmin    = profile?.role === 'admin'
 
   const [outilsOpen,       setOutilsOpen]       = useState(true)
@@ -233,6 +235,35 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
 
       {/* Footer — paramètres + profil + déconnexion */}
       <Box sx={{ borderTop: `1px solid ${DARK.border}`, p: 1, flexShrink: 0 }}>
+
+        {/* Toggle thème */}
+        {open ? (
+          <Box
+            onClick={toggleTheme}
+            sx={{
+              display: 'flex', alignItems: 'center', gap: 1.2,
+              px: 1.5, py: 0.8, mb: 0.3, borderRadius: '8px', mx: 1,
+              cursor: 'pointer',
+              '&:hover': { background: DARK.bgHover },
+            }}
+          >
+            <Box sx={{ minWidth: 36, display: 'flex', alignItems: 'center', color: DARK.textSoft }}>
+              {theme === 'dark'
+                ? <LightModeIcon sx={{ fontSize: 18 }} />
+                : <DarkModeIcon sx={{ fontSize: 18 }} />}
+            </Box>
+            <Typography sx={{ fontSize: 13, fontWeight: 500, color: DARK.text, fontFamily: 'inherit' }}>
+              {theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+            </Typography>
+          </Box>
+        ) : (
+          <Tooltip title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'} placement="right">
+            <IconButton onClick={toggleTheme} size="small" sx={{ mx: 'auto', display: 'flex', color: DARK.textSoft, mb: 0.5, '&:hover': { color: '#fff', background: DARK.bgHover } }}>
+              {theme === 'dark' ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+        )}
+
         <Item icon={<SettingsIcon fontSize="small" />} label="Paramètres" path="/parametres" />
         {open ? (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, px: 1, py: 0.8, borderRadius: 2, '&:hover': { background: DARK.bgHover }, cursor: 'default' }}>

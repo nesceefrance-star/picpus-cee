@@ -3,6 +3,14 @@ import { supabase } from '../lib/supabase'
 
 const useStore = create((set, get) => ({
 
+  // ─── THEME ───────────────────────────────────────────────
+  theme: localStorage.getItem('app-theme') || 'light',
+  toggleTheme: () => set(s => {
+    const next = s.theme === 'light' ? 'dark' : 'light'
+    localStorage.setItem('app-theme', next)
+    return { theme: next }
+  }),
+
   // ─── AUTH ────────────────────────────────────────────────
   user: null,
   session: null,

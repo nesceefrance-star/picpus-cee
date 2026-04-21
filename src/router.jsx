@@ -23,11 +23,7 @@ import AppLayout from './components/AppLayout'
 const LeadsModule = lazy(() => import('./modules/leads/LeadsModule'))
 import { createTheme, ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
-
-const muiTheme = createTheme({
-  palette: { mode: 'dark', primary: { main: '#3B82F6' }, background: { default: '#0F172A', paper: '#1E293B' } },
-  typography: { fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" },
-})
+import { PALETTES } from './lib/theme'
 
 function AuthGuard({ children }) {
   const { session, setSession, fetchProfile } = useStore()
@@ -80,6 +76,16 @@ function WithLayout({ children }) {
 }
 
 export default function AppRouter() {
+  const appTheme = useStore(s => s.theme)
+  const P = PALETTES[appTheme]
+  const muiTheme = createTheme({
+    palette: {
+      mode: appTheme,
+      primary: { main: appTheme === 'dark' ? '#60A5FA' : '#2563EB' },
+      background: { default: P.bg, paper: P.surface },
+    },
+    typography: { fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" },
+  })
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />

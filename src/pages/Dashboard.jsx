@@ -4,6 +4,7 @@ import useStore from '../store/useStore'
 import NouveauDossierWizard from '../components/NouveauDossierWizard'
 import { nextRef } from '../lib/genRef'
 import { supabase } from '../lib/supabase'
+import { useAppTheme } from '../lib/theme'
 
 const STATUTS = [
   { id: 'simulation',       label: 'Simulation',        color: '#7C3AED', bg: '#EDE9FE' },
@@ -28,23 +29,6 @@ const TACHES = [
   { icon: '🏠', label: 'Visite à venir',      color: '#D97706', bg: '#FFFBEB', border: '#FDE68A', statuts: ['visite_planifiee'] },
 ]
 
-const C = {
-  bg: '#F1F5F9', surface: '#FFFFFF', border: '#E2E8F0', borderMid: '#CBD5E1',
-  text: '#0F172A', textMid: '#475569', textSoft: '#94A3B8',
-  accent: '#2563EB', nav: '#1E293B',
-}
-
-const INP = {
-  width: '100%', boxSizing: 'border-box',
-  background: C.bg, border: `1px solid ${C.border}`,
-  borderRadius: 7, padding: '9px 12px',
-  color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit',
-}
-const LBL = {
-  display: 'block', fontSize: 11, fontWeight: 600,
-  color: C.textMid, marginBottom: 5,
-  textTransform: 'uppercase', letterSpacing: .4,
-}
 
 const fmtK = (n) => {
   if (n == null || isNaN(n) || n === 0) return '—'
@@ -66,7 +50,8 @@ function daysSince(dateStr) {
 }
 
 function StatutBadge({ statut }) {
-  const s = STATUTS.find(x => x.id === statut) || { label: statut, color: C.textSoft, bg: C.bg }
+  const C = useAppTheme()
+  const s = STATUTS.find(x => x.id === statut) || { label: statut, color: C.textSoft, bg: C.surface }
   return (
     <span style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}44`, borderRadius: 20, padding: '2px 9px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
       {s.label}
@@ -77,6 +62,18 @@ function StatutBadge({ statut }) {
 // ── Dashboard principal ───────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate()
+  const C = useAppTheme()
+  const INP = {
+    width: '100%', boxSizing: 'border-box',
+    background: C.surface, border: `1px solid ${C.border}`,
+    borderRadius: 7, padding: '9px 12px',
+    color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit',
+  }
+  const LBL = {
+    display: 'block', fontSize: 11, fontWeight: 600,
+    color: C.textMid, marginBottom: 5,
+    textTransform: 'uppercase', letterSpacing: .4,
+  }
   const { dossiers, fetchDossiers, setCurrentDossier, deleteDossier, deleteDossiers, user, profile, signOut, profiles, fetchProfiles } = useStore()
   const [showModal, setShowModal]               = useState(false)
   const [search, setSearch]                     = useState('')
