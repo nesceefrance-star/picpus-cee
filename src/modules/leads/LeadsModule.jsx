@@ -357,17 +357,19 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, onCadastre, onLusha, 
           </div>
 
           {soc.cadastre_fetched && (
-            <div style={{ display: 'flex', gap: 16, padding: '10px 18px', background: `${C.yellow}08`, borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 16, padding: '10px 18px', background: `${C.yellow}08`, borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap', alignItems: 'flex-start' }}>
               {[
                 { label: 'Parcelle', value: `${soc.section_cadastrale ?? '?'}${soc.numero_parcelle ?? '?'}` },
                 { label: 'Surface parcelle', value: soc.surface_parcelle_m2 ? `${soc.surface_parcelle_m2.toLocaleString()} m²` : '—' },
-                { label: 'Emprise bâtie', value: soc.surface_bati_m2 ? `${soc.surface_bati_m2.toLocaleString()} m²` : '—' },
+                { label: soc.geocode_methode === 'exact' ? 'Emprise bâtiment ✓' : 'Emprise zone 30m', value: soc.surface_bati_m2 ? `${soc.surface_bati_m2.toLocaleString()} m²` : '—' },
                 { label: 'Bâtiments', value: soc.nb_batiments ?? '—' },
-                { label: 'Adresse', value: soc.adresse_normalisee ?? '—' },
+                { label: 'SIRET', value: soc.siret ?? '—' },
+                { label: 'Source GPS', value: soc.geocode_source === 'sirene' ? '📍 SIRENE' : '📍 BAN' },
+                { label: 'Adresse normalisée', value: soc.adresse_normalisee ?? '—' },
               ].map(({ label, value }) => (
                 <div key={label} style={{ minWidth: 110 }}>
                   <div style={{ fontSize: 10, color: C.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>{label}</div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginTop: 2 }}>{value}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: label.includes('SIRENE') || label === 'Source GPS' ? C.green : C.text, marginTop: 2 }}>{value}</div>
                 </div>
               ))}
             </div>

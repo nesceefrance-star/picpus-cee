@@ -100,7 +100,28 @@ export function parseExcelFile(file) {
   });
 }
 
-// ─── IGN & LUSHA (inchangés) ─────────────────────────────────────
+// ─── GEOCODAGE ───────────────────────────────────────────────────
+
+// 1. SIRENE — GPS officiel de l'établissement (plus précis que BAN pour les entreprises)
+async function geocodeSirene({ raison_sociale, cp }) {
+  try {
+    const q = encodeURIComponent(raison_sociale.trim());
+    const res = await fetch(
+      `https://recherche-entreprises.api.gouv.fr/search?q=${q}&code_postal=${cp}&per_page=3&limite_matching_etablissements=1`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const etab = data.results?.[0]?.matching_etablissements?.[0];
+    if (!etab?.latitude) return null;
+    return {
+      lat: parseFloat(etab.latitude), lon: parseFloat(etab.longitude),
+      score: 1.0, label: etab.adresse ?? '',
+      siret: etab.siret ?? null, source: 'sirene',
+    };
+  } catch { return null; }
+}
+
+// 2. BAN — fallback adresse textuelle
 async function geocodeAdresse({ adresse, cp, ville }) {
   const q = `${adresse} ${cp} ${ville}`.trim();
   const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&postcode=${cp}&limit=1`);
@@ -109,11 +130,16 @@ async function geocodeAdresse({ adresse, cp, ville }) {
   const feat = data.features?.[0];
   if (!feat) return null;
   const [lon, lat] = feat.geometry.coordinates;
-  return { lat, lon, score: feat.properties.score, label: feat.properties.label };
+  return { lat, lon, score: feat.properties.score, label: feat.properties.label, source: 'ban' };
 }
 
+// ─── CADASTRE ────────────────────────────────────────────────────
+
 async function fetchParcelle({ lat, lon }) {
-  const res = await fetch(`https://apicarto.ign.fr/api/cadastre/parcelle?lon=${lon}&lat=${lat}&_limit=1`, { headers: { 'User-Agent': 'CEE-CRM/1.0' } });
+  const res = await fetch(
+    `https://apicarto.ign.fr/api/cadastre/parcelle?lon=${lon}&lat=${lat}&_limit=1`,
+    { headers: { 'User-Agent': 'CEE-CRM/1.0' } }
+  );
   if (!res.ok) throw new Error(`Parcelle HTTP ${res.status}`);
   const data = await res.json();
   const feat = data.features?.[0];
@@ -122,20 +148,43 @@ async function fetchParcelle({ lat, lon }) {
   return { id_parcelle: p.id ?? '', section_cadastrale: p.section ?? '', numero_parcelle: p.numero ?? '', surface_parcelle_m2: p.contenance ?? null };
 }
 
-async function fetchBatiments({ lat, lon, rayon = 120 }) {
+// Trouve LE bâtiment qui contient exactement le point GPS (point-in-polygon)
+async function fetchBatimentExact({ lat, lon }) {
+  const url = new URL('https://data.geopf.fr/wfs/ows');
+  url.searchParams.set('SERVICE', 'WFS'); url.searchParams.set('VERSION', '2.0.0');
+  url.searchParams.set('REQUEST', 'GetFeature'); url.searchParams.set('TYPENAMES', 'BDTOPO_V3:batiment');
+  url.searchParams.set('CQL_FILTER', `INTERSECTS(geometrie,POINT(${lon} ${lat}))`);
+  url.searchParams.set('OUTPUTFORMAT', 'application/json'); url.searchParams.set('COUNT', '5');
+  const res = await fetch(url.toString());
+  if (!res.ok) return null;
+  const data = await res.json();
+  const feats = data.features ?? [];
+  if (!feats.length) return null;
+  const surfaces = feats.map(f => f.properties?.superficie_au_sol ?? 0).filter(s => s > 0);
+  return {
+    nb_batiments: feats.length,
+    surface_bati_m2: Math.round(surfaces.reduce((a, b) => a + b, 0)),
+    surface_bati_max_m2: surfaces.length ? Math.round(Math.max(...surfaces)) : 0,
+    batiment_usage: feats[0]?.properties?.usage_1 ?? null,
+    geocode_methode: 'exact',
+  };
+}
+
+// Fallback : rayon réduit (30 m) si le point est hors bâtiment (rue, parking…)
+async function fetchBatimentsProches({ lat, lon, rayon = 30 }) {
   const dLat = rayon / 111320;
   const dLon = rayon / (111320 * Math.cos((lat * Math.PI) / 180));
-  const bbox = `${lon-dLon},${lat-dLat},${lon+dLon},${lat+dLat}`;
+  const bbox = `${lon - dLon},${lat - dLat},${lon + dLon},${lat + dLat}`;
   const url = new URL('https://data.geopf.fr/wfs/ows');
-  url.searchParams.set('SERVICE','WFS'); url.searchParams.set('VERSION','2.0.0');
-  url.searchParams.set('REQUEST','GetFeature'); url.searchParams.set('TYPENAMES','BDTOPO_V3:batiment');
-  url.searchParams.set('BBOX',`${bbox},EPSG:4326`); url.searchParams.set('OUTPUTFORMAT','application/json');
-  url.searchParams.set('COUNT','50');
+  url.searchParams.set('SERVICE', 'WFS'); url.searchParams.set('VERSION', '2.0.0');
+  url.searchParams.set('REQUEST', 'GetFeature'); url.searchParams.set('TYPENAMES', 'BDTOPO_V3:batiment');
+  url.searchParams.set('BBOX', `${bbox},EPSG:4326`); url.searchParams.set('OUTPUTFORMAT', 'application/json');
+  url.searchParams.set('COUNT', '10');
   const res = await fetch(url.toString());
   if (!res.ok) throw new Error(`BDTOPO HTTP ${res.status}`);
   const data = await res.json();
   const feats = data.features ?? [];
-  if (!feats.length) return { nb_batiments: 0, surface_bati_m2: 0, surface_bati_max_m2: 0 };
+  if (!feats.length) return { nb_batiments: 0, surface_bati_m2: 0, surface_bati_max_m2: 0, geocode_methode: 'rayon_30m' };
   const surfaces = feats.map(f => {
     const s = f.properties?.superficie_au_sol ?? f.properties?.surface_au_sol;
     if (s && s > 0) return s;
@@ -147,21 +196,30 @@ async function fetchBatiments({ lat, lon, rayon = 120 }) {
         area += coords[i][0] * coords[j][1];
         area -= coords[j][0] * coords[i][1];
       }
-      const m2 = Math.abs(area) / 2 * 111320 ** 2 * Math.cos((lat * Math.PI) / 180);
-      return m2 > 10 ? Math.round(m2) : 0;
+      return Math.abs(area) / 2 * 111320 ** 2 * Math.cos((lat * Math.PI) / 180) > 10
+        ? Math.round(Math.abs(area) / 2 * 111320 ** 2 * Math.cos((lat * Math.PI) / 180))
+        : 0;
     }
     return 0;
   }).filter(s => s > 0);
-  return { nb_batiments: feats.length, surface_bati_m2: Math.round(surfaces.reduce((a,b)=>a+b,0)), surface_bati_max_m2: surfaces.length ? Math.round(Math.max(...surfaces)) : 0 };
+  return {
+    nb_batiments: feats.length,
+    surface_bati_m2: Math.round(surfaces.reduce((a, b) => a + b, 0)),
+    surface_bati_max_m2: surfaces.length ? Math.round(Math.max(...surfaces)) : 0,
+    geocode_methode: 'rayon_30m',
+  };
 }
+
+// ─── LUSHA ───────────────────────────────────────────────────────
 
 async function fetchLusha({ prenom, nom, societe, linkedinUrl }) {
   const body = linkedinUrl
     ? { action: 'lusha', linkedin_url: linkedinUrl }
-    : { action: 'lusha', first_name: prenom, last_name: nom, company: societe };
+    : { action: 'lusha', firstName: prenom, lastName: nom, company: societe };
   const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(`Lusha HTTP ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? data.message ?? `Lusha HTTP ${res.status} — ${JSON.stringify(data)}`);
+  return data;
 }
 
 // ─── HOOK PRINCIPAL ──────────────────────────────────────────────
@@ -320,18 +378,35 @@ export function useLeads() {
     try {
       const soc = societes.find(s => s.id === importId);
       if (!soc) throw new Error('Société non trouvée');
-      const geo = await geocodeAdresse({ adresse: soc.adresse, cp: soc.cp, ville: soc.ville });
-      if (!geo) throw new Error('Adresse introuvable');
+
+      // 1. Géocodage : SIRENE d'abord (GPS officiel), sinon BAN
+      let geo = await geocodeSirene({ raison_sociale: soc.raison_sociale, cp: soc.cp });
+      if (!geo) geo = await geocodeAdresse({ adresse: soc.adresse, cp: soc.cp, ville: soc.ville });
+      if (!geo) throw new Error('Adresse introuvable (SIRENE + BAN)');
+
       await new Promise(r => setTimeout(r, IGN_DELAY_MS));
+
+      // 2. Parcelle cadastrale au point exact
       const parcelle = await fetchParcelle({ lat: geo.lat, lon: geo.lon });
+
       await new Promise(r => setTimeout(r, IGN_DELAY_MS));
-      const bati = await fetchBatiments({ lat: geo.lat, lon: geo.lon });
+
+      // 3. Bâtiment : point-in-polygon d'abord, rayon 30m en fallback
+      let bati = await fetchBatimentExact({ lat: geo.lat, lon: geo.lon });
+      if (!bati || bati.surface_bati_m2 === 0) {
+        bati = await fetchBatimentsProches({ lat: geo.lat, lon: geo.lon, rayon: 30 });
+      }
+
       const lienGeoportail = `https://www.geoportail.gouv.fr/carte?c=${geo.lon},${geo.lat}&z=19&l0=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&l1=ORTHOIMAGERY.ORTHOPHOTOS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes`;
       const lienGoogleMaps = `https://www.google.com/maps/@${geo.lat},${geo.lon},19z/data=!3m1!1e3`;
+
       const patch = {
         cadastre_fetched: true, cadastre_fetched_at: new Date().toISOString(),
         lat: geo.lat, lon: geo.lon, geocode_score: geo.score, adresse_normalisee: geo.label,
-        lien_geoportail: lienGeoportail, lien_googlemaps: lienGoogleMaps, ...(parcelle ?? {}), ...(bati ?? {}),
+        geocode_source: geo.source ?? 'ban',
+        siret: geo.siret ?? null,
+        lien_geoportail: lienGeoportail, lien_googlemaps: lienGoogleMaps,
+        ...(parcelle ?? {}), ...(bati ?? {}),
       };
       const { error: eUp } = await supabase.from('leads_import').update(patch).eq('id', importId);
       if (eUp) throw eUp;
