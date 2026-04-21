@@ -1,14 +1,9 @@
 // src/modules/leads/useLeads.js
-// ═══════════════════════════════════════════════════════════════════
-//  Hook central du module Qualification Leads
-//  Gère : import Excel · Supabase CRUD · Cadastre IGN · Lusha API
-// ═══════════════════════════════════════════════════════════════════
-
 import { useState, useCallback, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
+import useStore from '../../store/useStore';
 
-// ─── CONFIG ──────────────────────────────────────────────────────
 const IGN_DELAY_MS = 400;
 
 // ─── SCORING POSTES CEE ──────────────────────────────────────────
@@ -59,13 +54,11 @@ export function parseExcelFile(file) {
         const wb   = XLSX.read(e.target.result, { type: 'array' });
         const ws   = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-
         const normalized = rows.map(row => {
           const r = {};
           Object.keys(row).forEach(k => { r[k.trim().toUpperCase()] = row[k]; });
           return r;
         });
-
         const societeMap = {};
         normalized.forEach(row => {
           const raison = (row['RAISON_SOCIALE'] || row['RAISON SOCIALE'] || '').trim();
@@ -95,27 +88,22 @@ export function parseExcelFile(file) {
             });
           }
         });
-
         Object.values(societeMap).forEach(s => {
           s.contacts.sort((a, b) => b.score_poste - a.score_poste);
           s.contacts.forEach((c, i) => { c.rang_poste = i + 1; });
         });
-
         resolve(Object.values(societeMap));
-      } catch (err) {
-        reject(err);
-      }
+      } catch (err) { reject(err); }
     };
     reader.onerror = reject;
     reader.readAsArrayBuffer(file);
   });
 }
 
-// ─── API IGN : GÉOCODAGE ─────────────────────────────────────────
+// ─── IGN & LUSHA (inchangés) ─────────────────────────────────────
 async function geocodeAdresse({ adresse, cp, ville }) {
   const q = `${adresse} ${cp} ${ville}`.trim();
-  const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&postcode=${cp}&limit=1`;
-  const res  = await fetch(url);
+  const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&postcode=${cp}&limit=1`);
   if (!res.ok) throw new Error(`Geocode HTTP ${res.status}`);
   const data = await res.json();
   const feat = data.features?.[0];
@@ -124,44 +112,30 @@ async function geocodeAdresse({ adresse, cp, ville }) {
   return { lat, lon, score: feat.properties.score, label: feat.properties.label };
 }
 
-// ─── API IGN : PARCELLE CADASTRALE ───────────────────────────────
 async function fetchParcelle({ lat, lon }) {
-  const url = `https://apicarto.ign.fr/api/cadastre/parcelle?lon=${lon}&lat=${lat}&_limit=1`;
-  const res  = await fetch(url, { headers: { 'User-Agent': 'CEE-CRM/1.0' } });
+  const res = await fetch(`https://apicarto.ign.fr/api/cadastre/parcelle?lon=${lon}&lat=${lat}&_limit=1`, { headers: { 'User-Agent': 'CEE-CRM/1.0' } });
   if (!res.ok) throw new Error(`Parcelle HTTP ${res.status}`);
   const data = await res.json();
   const feat = data.features?.[0];
   if (!feat) return null;
   const p = feat.properties;
-  return {
-    id_parcelle:         p.id ?? '',
-    section_cadastrale:  p.section ?? '',
-    numero_parcelle:     p.numero ?? '',
-    surface_parcelle_m2: p.contenance ?? null,
-  };
+  return { id_parcelle: p.id ?? '', section_cadastrale: p.section ?? '', numero_parcelle: p.numero ?? '', surface_parcelle_m2: p.contenance ?? null };
 }
 
-// ─── API IGN : BÂTIMENTS BDTOPO ──────────────────────────────────
 async function fetchBatiments({ lat, lon, rayon = 120 }) {
   const dLat = rayon / 111320;
   const dLon = rayon / (111320 * Math.cos((lat * Math.PI) / 180));
   const bbox = `${lon-dLon},${lat-dLat},${lon+dLon},${lat+dLat}`;
-
   const url = new URL('https://data.geopf.fr/wfs/ows');
-  url.searchParams.set('SERVICE',      'WFS');
-  url.searchParams.set('VERSION',      '2.0.0');
-  url.searchParams.set('REQUEST',      'GetFeature');
-  url.searchParams.set('TYPENAMES',   'BDTOPO_V3:batiment');
-  url.searchParams.set('BBOX',         `${bbox},EPSG:4326`);
-  url.searchParams.set('OUTPUTFORMAT','application/json');
-  url.searchParams.set('COUNT',        '50');
-
-  const res  = await fetch(url.toString());
+  url.searchParams.set('SERVICE','WFS'); url.searchParams.set('VERSION','2.0.0');
+  url.searchParams.set('REQUEST','GetFeature'); url.searchParams.set('TYPENAMES','BDTOPO_V3:batiment');
+  url.searchParams.set('BBOX',`${bbox},EPSG:4326`); url.searchParams.set('OUTPUTFORMAT','application/json');
+  url.searchParams.set('COUNT','50');
+  const res = await fetch(url.toString());
   if (!res.ok) throw new Error(`BDTOPO HTTP ${res.status}`);
   const data = await res.json();
   const feats = data.features ?? [];
   if (!feats.length) return { nb_batiments: 0, surface_bati_m2: 0, surface_bati_max_m2: 0 };
-
   const surfaces = feats.map(f => {
     const s = f.properties?.superficie_au_sol ?? f.properties?.surface_au_sol;
     if (s && s > 0) return s;
@@ -178,33 +152,28 @@ async function fetchBatiments({ lat, lon, rayon = 120 }) {
     }
     return 0;
   }).filter(s => s > 0);
-
-  return {
-    nb_batiments:       feats.length,
-    surface_bati_m2:    Math.round(surfaces.reduce((a, b) => a + b, 0)),
-    surface_bati_max_m2: surfaces.length ? Math.round(Math.max(...surfaces)) : 0,
-  };
+  return { nb_batiments: feats.length, surface_bati_m2: Math.round(surfaces.reduce((a,b)=>a+b,0)), surface_bati_max_m2: surfaces.length ? Math.round(Math.max(...surfaces)) : 0 };
 }
 
-// ─── API LUSHA (via proxy /api/lusha) ────────────────────────────
 async function fetchLusha({ prenom, nom, societe, linkedinUrl }) {
   const body = linkedinUrl
     ? { action: 'lusha', linkedin_url: linkedinUrl }
     : { action: 'lusha', first_name: prenom, last_name: nom, company: societe };
-
-  const res = await fetch('/api/claude', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(body),
-  });
+  const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) throw new Error(`Lusha HTTP ${res.status}`);
   return res.json();
 }
 
 // ─── HOOK PRINCIPAL ──────────────────────────────────────────────
 export function useLeads() {
+  const { profile, profiles, fetchProfiles } = useStore();
+  const isAdmin = profile?.role === 'admin';
+
+  const [batches,         setBatches]         = useState([]);
+  const [selectedBatchId, setSelectedBatchId] = useState(null); // null = tous
   const [societes,        setSocietes]        = useState([]);
   const [loading,         setLoading]         = useState(false);
+  const [loadingBatches,  setLoadingBatches]  = useState(false);
   const [importing,       setImporting]       = useState(false);
   const [cadastreLoading, setCadastreLoading] = useState({});
   const [lushaLoading,    setLushaLoading]    = useState({});
@@ -212,129 +181,165 @@ export function useLeads() {
   const [searchQuery,     setSearchQuery]     = useState('');
   const [filterStatut,    setFilterStatut]    = useState('Tous');
 
-  const loadSocietes = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // Charger la liste des utilisateurs (pour l'assignation admin)
+  useEffect(() => { if (isAdmin && !profiles.length) fetchProfiles(); }, [isAdmin]);
+
+  // ── Chargement batches ──────────────────────────────────────────
+  const loadBatches = useCallback(async () => {
+    if (!profile) return;
+    setLoadingBatches(true);
     try {
-      const { data: imports, error: e1 } = await supabase
-        .from('leads_import')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let q = supabase.from('leads_batches').select(`
+        id, created_at, nom, lead_type, fichier_nom, nb_societes, nb_contacts,
+        assigne_a, created_by,
+        assignee:profiles!leads_batches_assigne_a_fkey(id, nom, prenom),
+        creator:profiles!leads_batches_created_by_fkey(id, nom, prenom)
+      `).order('created_at', { ascending: false });
+      if (!isAdmin) q = q.eq('assigne_a', profile.id);
+      const { data, error: e } = await q;
+      if (e) throw e;
+      setBatches(data || []);
+    } catch (e) { setError(e.message); }
+    setLoadingBatches(false);
+  }, [profile, isAdmin]);
+
+  // ── Chargement sociétés ─────────────────────────────────────────
+  const loadSocietes = useCallback(async (batchId = selectedBatchId) => {
+    if (!profile) return;
+    setLoading(true); setError(null);
+    try {
+      let q = supabase.from('leads_import').select('*').order('created_at', { ascending: false });
+      if (batchId) q = q.eq('batch_id', batchId);
+      else if (!isAdmin) q = q.eq('assigne_a', profile.id);
+      const { data: imports, error: e1 } = await q;
       if (e1) throw e1;
 
+      if (!imports?.length) { setSocietes([]); setLoading(false); return; }
+
+      const ids = imports.map(i => i.id);
       const { data: contacts, error: e2 } = await supabase
-        .from('leads_contacts')
-        .select('*')
-        .order('rang_poste', { ascending: true });
+        .from('leads_contacts').select('*').in('import_id', ids).order('rang_poste');
       if (e2) throw e2;
 
-      const assembled = (imports || []).map(imp => ({
+      const assembled = imports.map(imp => ({
         ...imp,
-        contacts: (contacts || [])
-          .filter(c => c.import_id === imp.id)
-          .sort((a, b) => (a.rang_poste ?? 99) - (b.rang_poste ?? 99)),
+        contacts: (contacts || []).filter(c => c.import_id === imp.id).sort((a,b) => (a.rang_poste??99)-(b.rang_poste??99)),
       }));
       setSocietes(assembled);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  }, [profile, isAdmin, selectedBatchId]);
+
+  useEffect(() => { loadBatches(); }, [loadBatches]);
+  useEffect(() => { loadSocietes(selectedBatchId); }, [selectedBatchId, profile?.id]);
+
+  // ── Sélectionner un batch ───────────────────────────────────────
+  const selectBatch = useCallback((batchId) => {
+    setSelectedBatchId(batchId);
+    setSearchQuery('');
+    setFilterStatut('Tous');
   }, []);
 
-  useEffect(() => { loadSocietes(); }, [loadSocietes]);
-
-  const importerExcel = useCallback(async (file) => {
-    setImporting(true);
-    setError(null);
+  // ── Import Excel ────────────────────────────────────────────────
+  const importerExcel = useCallback(async (file, { nom, leadType, assigneA }) => {
+    setImporting(true); setError(null);
     try {
-      const parsed  = await parseExcelFile(file);
-      const batchId = crypto.randomUUID();
+      const parsed = await parseExcelFile(file);
+      const targetUser = assigneA || profile?.id;
 
+      // Créer le batch
+      const { data: batch, error: eBatch } = await supabase
+        .from('leads_batches')
+        .insert({
+          nom,
+          lead_type:    leadType,
+          fichier_nom:  file.name,
+          assigne_a:    targetUser,
+          created_by:   profile?.id,
+          nb_societes:  parsed.length,
+          nb_contacts:  parsed.reduce((a, s) => a + s.contacts.length, 0),
+        })
+        .select().single();
+      if (eBatch) throw eBatch;
+
+      // Insérer les sociétés
       for (const soc of parsed) {
         const { data: imp, error: eImp } = await supabase
           .from('leads_import')
           .insert({
-            raison_sociale:  soc.raison_sociale,
-            adresse:         soc.adresse,
-            cp:              soc.cp,
-            ville:           soc.ville,
-            web:             soc.web,
-            activite:        soc.activite,
-            tel_societe:     soc.tel_societe,
-            import_batch_id: batchId,
+            raison_sociale: soc.raison_sociale, adresse: soc.adresse,
+            cp: soc.cp, ville: soc.ville, web: soc.web, activite: soc.activite,
+            tel_societe: soc.tel_societe,
+            batch_id:   batch.id,
+            assigne_a:  targetUser,
+            import_batch_id: batch.id,
           })
-          .select()
-          .single();
+          .select().single();
         if (eImp) throw eImp;
 
         if (soc.contacts.length) {
-          const { error: eCont } = await supabase
-            .from('leads_contacts')
-            .insert(soc.contacts.map(c => ({
-              import_id:       imp.id,
-              nom:             c.nom,
-              prenom:          c.prenom,
-              fonction:        c.fonction,
-              tel_societe:     c.tel_societe,
-              statut_original: c.statut_original,
-              score_poste:     c.score_poste,
-              rang_poste:      c.rang_poste,
-            })));
+          const { error: eCont } = await supabase.from('leads_contacts').insert(
+            soc.contacts.map(c => ({
+              import_id: imp.id, nom: c.nom, prenom: c.prenom, fonction: c.fonction,
+              tel_societe: c.tel_societe, statut_original: c.statut_original,
+              score_poste: c.score_poste, rang_poste: c.rang_poste,
+            }))
+          );
           if (eCont) throw eCont;
         }
       }
 
-      await loadSocietes();
-      return { imported: parsed.length, batchId };
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    } finally {
-      setImporting(false);
-    }
-  }, [loadSocietes]);
+      await loadBatches();
+      setSelectedBatchId(batch.id);
+      return { imported: parsed.length, batch };
+    } catch (e) { setError(e.message); throw e; }
+    finally { setImporting(false); }
+  }, [profile, loadBatches]);
 
+  // ── Réassigner un batch (admin) ─────────────────────────────────
+  const reassignerBatch = useCallback(async (batchId, newUserId) => {
+    const { error: e } = await supabase.from('leads_batches').update({ assigne_a: newUserId }).eq('id', batchId);
+    if (e) { setError(e.message); return; }
+    // Mettre à jour aussi les sociétés du batch
+    await supabase.from('leads_import').update({ assigne_a: newUserId }).eq('batch_id', batchId);
+    setBatches(prev => prev.map(b => b.id === batchId ? { ...b, assigne_a: newUserId } : b));
+  }, []);
+
+  // ── Supprimer un batch ──────────────────────────────────────────
+  const supprimerBatch = useCallback(async (batchId) => {
+    const { error: e } = await supabase.from('leads_batches').delete().eq('id', batchId);
+    if (e) { setError(e.message); return; }
+    setBatches(prev => prev.filter(b => b.id !== batchId));
+    if (selectedBatchId === batchId) { setSelectedBatchId(null); setSocietes([]); }
+  }, [selectedBatchId]);
+
+  // ── Enrichissement cadastral ────────────────────────────────────
   const enrichirCadastre = useCallback(async (importId) => {
     setCadastreLoading(prev => ({ ...prev, [importId]: true }));
     setError(null);
     try {
       const soc = societes.find(s => s.id === importId);
       if (!soc) throw new Error('Société non trouvée');
-
       const geo = await geocodeAdresse({ adresse: soc.adresse, cp: soc.cp, ville: soc.ville });
-      if (!geo) throw new Error('Adresse introuvable (géocodage)');
+      if (!geo) throw new Error('Adresse introuvable');
       await new Promise(r => setTimeout(r, IGN_DELAY_MS));
-
       const parcelle = await fetchParcelle({ lat: geo.lat, lon: geo.lon });
       await new Promise(r => setTimeout(r, IGN_DELAY_MS));
-
       const bati = await fetchBatiments({ lat: geo.lat, lon: geo.lon });
-
       const lienGeoportail = `https://www.geoportail.gouv.fr/carte?c=${geo.lon},${geo.lat}&z=19&l0=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&l1=ORTHOIMAGERY.ORTHOPHOTOS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes`;
-
       const patch = {
-        cadastre_fetched:    true,
-        cadastre_fetched_at: new Date().toISOString(),
-        lat:                 geo.lat,
-        lon:                 geo.lon,
-        geocode_score:       geo.score,
-        adresse_normalisee:  geo.label,
-        lien_geoportail:     lienGeoportail,
-        ...(parcelle ?? {}),
-        ...(bati      ?? {}),
+        cadastre_fetched: true, cadastre_fetched_at: new Date().toISOString(),
+        lat: geo.lat, lon: geo.lon, geocode_score: geo.score, adresse_normalisee: geo.label,
+        lien_geoportail: lienGeoportail, ...(parcelle ?? {}), ...(bati ?? {}),
       };
       const { error: eUp } = await supabase.from('leads_import').update(patch).eq('id', importId);
       if (eUp) throw eUp;
-
       setSocietes(prev => prev.map(s => s.id === importId ? { ...s, ...patch } : s));
-    } catch (err) {
-      setError(`Cadastre : ${err.message}`);
-    } finally {
-      setCadastreLoading(prev => ({ ...prev, [importId]: false }));
-    }
+    } catch (e) { setError(`Cadastre : ${e.message}`); }
+    setCadastreLoading(prev => ({ ...prev, [importId]: false }));
   }, [societes]);
 
+  // ── Enrichissement Lusha ────────────────────────────────────────
   const enrichirLusha = useCallback(async (contactId) => {
     setLushaLoading(prev => ({ ...prev, [contactId]: true }));
     setError(null);
@@ -342,92 +347,52 @@ export function useLeads() {
       const contact = societes.flatMap(s => s.contacts).find(c => c.id === contactId);
       if (!contact) throw new Error('Contact non trouvé');
       const soc = societes.find(s => s.id === contact.import_id);
-
-      const result = await fetchLusha({
-        prenom:      contact.prenom,
-        nom:         contact.nom,
-        societe:     soc?.raison_sociale ?? '',
-        linkedinUrl: contact.linkedin_url ?? null,
-      });
-
-      const patch = {
-        lusha_fetched:      true,
-        lusha_fetched_at:   new Date().toISOString(),
-        lusha_email:        result.emails?.[0] ?? null,
-        lusha_phone:        result.phones?.[0] ?? null,
-        lusha_mobile:       result.phones?.[1] ?? null,
-        lusha_raw:          result,
-        lusha_credits_used: result.credits_used ?? 1,
-      };
+      const result = await fetchLusha({ prenom: contact.prenom, nom: contact.nom, societe: soc?.raison_sociale ?? '', linkedinUrl: contact.linkedin_url ?? null });
+      const patch = { lusha_fetched: true, lusha_fetched_at: new Date().toISOString(), lusha_email: result.emails?.[0] ?? null, lusha_phone: result.phones?.[0] ?? null, lusha_mobile: result.phones?.[1] ?? null, lusha_raw: result, lusha_credits_used: result.credits_used ?? 1 };
       const { error: eUp } = await supabase.from('leads_contacts').update(patch).eq('id', contactId);
       if (eUp) throw eUp;
-
-      setSocietes(prev => prev.map(s => ({
-        ...s,
-        contacts: s.contacts.map(c => c.id === contactId ? { ...c, ...patch } : c),
-      })));
-    } catch (err) {
-      setError(`Lusha : ${err.message}`);
-    } finally {
-      setLushaLoading(prev => ({ ...prev, [contactId]: false }));
-    }
+      setSocietes(prev => prev.map(s => ({ ...s, contacts: s.contacts.map(c => c.id === contactId ? { ...c, ...patch } : c) })));
+    } catch (e) { setError(`Lusha : ${e.message}`); }
+    setLushaLoading(prev => ({ ...prev, [contactId]: false }));
   }, [societes]);
 
+  // ── LinkedIn & Statut ───────────────────────────────────────────
   const setLinkedinUrl = useCallback(async (contactId, url) => {
-    const { error: eUp } = await supabase
-      .from('leads_contacts')
-      .update({ linkedin_url: url, linkedin_fetched_at: new Date().toISOString() })
-      .eq('id', contactId);
-    if (eUp) { setError(eUp.message); return; }
-    setSocietes(prev => prev.map(s => ({
-      ...s,
-      contacts: s.contacts.map(c => c.id === contactId ? { ...c, linkedin_url: url } : c),
-    })));
+    await supabase.from('leads_contacts').update({ linkedin_url: url, linkedin_fetched_at: new Date().toISOString() }).eq('id', contactId);
+    setSocietes(prev => prev.map(s => ({ ...s, contacts: s.contacts.map(c => c.id === contactId ? { ...c, linkedin_url: url } : c) })));
   }, []);
 
   const setStatutSociete = useCallback(async (importId, statut) => {
-    const { error: eUp } = await supabase
-      .from('leads_import')
-      .update({ statut_qualification: statut })
-      .eq('id', importId);
-    if (eUp) { setError(eUp.message); return; }
+    await supabase.from('leads_import').update({ statut_qualification: statut }).eq('id', importId);
     setSocietes(prev => prev.map(s => s.id === importId ? { ...s, statut_qualification: statut } : s));
   }, []);
 
   const convertirEnDossier = useCallback(async (importId) => {
-    await supabase
-      .from('leads_import')
-      .update({ statut_qualification: 'Converti en dossier' })
-      .eq('id', importId);
-    setSocietes(prev => prev.map(s =>
-      s.id === importId ? { ...s, statut_qualification: 'Converti en dossier' } : s
-    ));
+    await supabase.from('leads_import').update({ statut_qualification: 'Converti en dossier' }).eq('id', importId);
+    setSocietes(prev => prev.map(s => s.id === importId ? { ...s, statut_qualification: 'Converti en dossier' } : s));
   }, []);
 
+  // ── Filtrage ────────────────────────────────────────────────────
   const societesFiltrees = societes.filter(s => {
     const q = searchQuery.toLowerCase();
-    const matchSearch = !q || [s.raison_sociale, s.ville, s.activite]
-      .some(v => v?.toLowerCase().includes(q));
+    const matchSearch = !q || [s.raison_sociale, s.ville, s.activite].some(v => v?.toLowerCase().includes(q));
     const matchStatut = filterStatut === 'Tous' || s.statut_qualification === filterStatut;
     return matchSearch && matchStatut;
   });
 
   return {
-    societes: societesFiltrees,
-    societesBrutes: societes,
-    loading,
-    importing,
-    cadastreLoading,
-    lushaLoading,
-    error,
-    searchQuery, setSearchQuery,
-    filterStatut, setFilterStatut,
-    importerExcel,
-    enrichirCadastre,
-    enrichirLusha,
-    setLinkedinUrl,
-    setStatutSociete,
-    convertirEnDossier,
-    refresh: loadSocietes,
+    // Batches
+    batches, loadingBatches, selectedBatchId, selectBatch,
+    reassignerBatch, supprimerBatch,
+    // Sociétés
+    societes: societesFiltrees, societesBrutes: societes,
+    loading, importing, cadastreLoading, lushaLoading, error,
+    searchQuery, setSearchQuery, filterStatut, setFilterStatut,
+    // Actions
+    importerExcel, enrichirCadastre, enrichirLusha,
+    setLinkedinUrl, setStatutSociete, convertirEnDossier,
+    refresh: () => { loadBatches(); loadSocietes(selectedBatchId); },
+    // Utilisateurs (pour admin)
+    profiles, isAdmin,
   };
 }
