@@ -1,10 +1,16 @@
 -- ═══════════════════════════════════════════════════════════════
---  MIGRATION LEADS — tables + RLS
+--  MIGRATION LEADS — suppression + recréation propre
 --  À exécuter dans Supabase > SQL Editor
+--  ⚠ Supprime les données existantes (test only)
 -- ═══════════════════════════════════════════════════════════════
 
+-- Suppression dans l'ordre (enfants d'abord)
+DROP TABLE IF EXISTS public.leads_contacts CASCADE;
+DROP TABLE IF EXISTS public.leads_import    CASCADE;
+DROP TABLE IF EXISTS public.leads_batches   CASCADE;
+
 -- ── 1. leads_batches ────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS public.leads_batches (
+CREATE TABLE public.leads_batches (
   id           UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   created_at   TIMESTAMPTZ DEFAULT now(),
   nom          TEXT        NOT NULL,
@@ -18,18 +24,16 @@ CREATE TABLE IF NOT EXISTS public.leads_batches (
 
 ALTER TABLE public.leads_batches ENABLE ROW LEVEL SECURITY;
 
--- Admin : accès total
 CREATE POLICY "leads_batches_admin" ON public.leads_batches
   FOR ALL USING (
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
   );
 
--- Commercial : voit seulement ses batches
 CREATE POLICY "leads_batches_own_select" ON public.leads_batches
   FOR SELECT USING (assigne_a = auth.uid());
 
 -- ── 2. leads_import ─────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS public.leads_import (
+CREATE TABLE public.leads_import (
   id                   UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   created_at           TIMESTAMPTZ DEFAULT now(),
   batch_id             UUID        REFERENCES public.leads_batches(id) ON DELETE CASCADE,
@@ -43,7 +47,6 @@ CREATE TABLE IF NOT EXISTS public.leads_import (
   activite             TEXT,
   tel_societe          TEXT,
   statut_qualification TEXT        DEFAULT 'À qualifier',
-  -- Enrichissement cadastral
   cadastre_fetched     BOOLEAN     DEFAULT false,
   cadastre_fetched_at  TIMESTAMPTZ,
   lat                  DOUBLE PRECISION,
@@ -75,27 +78,26 @@ CREATE POLICY "leads_import_own_update" ON public.leads_import
   FOR UPDATE USING (assigne_a = auth.uid());
 
 -- ── 3. leads_contacts ───────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS public.leads_contacts (
-  id                 UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  created_at         TIMESTAMPTZ DEFAULT now(),
-  import_id          UUID        REFERENCES public.leads_import(id) ON DELETE CASCADE,
-  nom                TEXT,
-  prenom             TEXT,
-  fonction           TEXT,
-  tel_societe        TEXT,
-  statut_original    TEXT,
-  score_poste        INT         DEFAULT 0,
-  rang_poste         INT,
-  linkedin_url       TEXT,
+CREATE TABLE public.leads_contacts (
+  id                  UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at          TIMESTAMPTZ DEFAULT now(),
+  import_id           UUID        REFERENCES public.leads_import(id) ON DELETE CASCADE,
+  nom                 TEXT,
+  prenom              TEXT,
+  fonction            TEXT,
+  tel_societe         TEXT,
+  statut_original     TEXT,
+  score_poste         INT         DEFAULT 0,
+  rang_poste          INT,
+  linkedin_url        TEXT,
   linkedin_fetched_at TIMESTAMPTZ,
-  -- Enrichissement Lusha
-  lusha_fetched      BOOLEAN     DEFAULT false,
-  lusha_fetched_at   TIMESTAMPTZ,
-  lusha_email        TEXT,
-  lusha_phone        TEXT,
-  lusha_mobile       TEXT,
-  lusha_raw          JSONB,
-  lusha_credits_used INT         DEFAULT 0
+  lusha_fetched       BOOLEAN     DEFAULT false,
+  lusha_fetched_at    TIMESTAMPTZ,
+  lusha_email         TEXT,
+  lusha_phone         TEXT,
+  lusha_mobile        TEXT,
+  lusha_raw           JSONB,
+  lusha_credits_used  INT         DEFAULT 0
 );
 
 ALTER TABLE public.leads_contacts ENABLE ROW LEVEL SECURITY;
@@ -115,6 +117,5 @@ CREATE POLICY "leads_contacts_own_update" ON public.leads_contacts
     EXISTS (SELECT 1 FROM public.leads_import WHERE id = import_id AND assigne_a = auth.uid())
   );
 
--- ── 4. Colonne lien_googlemaps si tables déjà existantes ────────
--- (À exécuter séparément si les tables existent déjà sans cette colonne)
--- ALTER TABLE public.leads_import ADD COLUMN IF NOT EXISTS lien_googlemaps TEXT;
+-- ── 4. Rafraîchir le cache PostgREST ────────────────────────────
+NOTIFY pgrst, 'reload schema';
