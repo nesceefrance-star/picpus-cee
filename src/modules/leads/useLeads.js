@@ -244,6 +244,7 @@ export function useLeads() {
   const [error,           setError]           = useState(null);
   const [searchQuery,     setSearchQuery]     = useState('');
   const [filterStatut,    setFilterStatut]    = useState('Tous');
+  const [sortBy,          setSortBy]          = useState('score');
 
   // Charger la liste des utilisateurs (pour l'assignation admin)
   useEffect(() => { if (isAdmin && !profiles.length) fetchProfiles(); }, [isAdmin]);
@@ -454,13 +455,30 @@ export function useLeads() {
     setSocietes(prev => prev.map(s => s.id === importId ? { ...s, statut_qualification: 'Converti en dossier' } : s));
   }, []);
 
-  // ── Filtrage ────────────────────────────────────────────────────
-  const societesFiltrees = societes.filter(s => {
-    const q = searchQuery.toLowerCase();
-    const matchSearch = !q || [s.raison_sociale, s.ville, s.activite].some(v => v?.toLowerCase().includes(q));
-    const matchStatut = filterStatut === 'Tous' || s.statut_qualification === filterStatut;
-    return matchSearch && matchStatut;
-  });
+  // ── Filtrage + tri ──────────────────────────────────────────────
+  const societesFiltrees = societes
+    .filter(s => {
+      const q = searchQuery.toLowerCase();
+      const matchSearch = !q || [s.raison_sociale, s.ville, s.activite].some(v => v?.toLowerCase().includes(q));
+      const matchStatut = filterStatut === 'Tous' || s.statut_qualification === filterStatut;
+      return matchSearch && matchStatut;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'score') {
+        const sa = a.contacts?.[0]?.score_poste ?? 0;
+        const sb = b.contacts?.[0]?.score_poste ?? 0;
+        return sb - sa;
+      }
+      if (sortBy === 'surface') {
+        return (b.surface_bati_m2 ?? 0) - (a.surface_bati_m2 ?? 0);
+      }
+      if (sortBy === 'statut') {
+        const order = ['Converti en dossier','RDV planifié','Contacté','À qualifier','Non qualifié','Non pertinent'];
+        return order.indexOf(a.statut_qualification) - order.indexOf(b.statut_qualification);
+      }
+      // date (défaut)
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
 
   return {
     // Batches
@@ -469,7 +487,7 @@ export function useLeads() {
     // Sociétés
     societes: societesFiltrees, societesBrutes: societes,
     loading, importing, cadastreLoading, lushaLoading, error,
-    searchQuery, setSearchQuery, filterStatut, setFilterStatut,
+    searchQuery, setSearchQuery, filterStatut, setFilterStatut, sortBy, setSortBy,
     // Actions
     importerExcel, enrichirCadastre, enrichirLusha,
     setLinkedinUrl, setStatutSociete, convertirEnDossier,

@@ -1,6 +1,7 @@
 // src/modules/leads/LeadsModule.jsx
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, lazy, Suspense } from 'react';
 import { useLeads } from './useLeads';
+const CadastreMap = lazy(() => import('../../components/CadastreMap'));
 
 const C = {
   bg: '#0F1923', bgCard: '#16212E', bgCardHover: '#1C2B3A', bgInput: '#111C27',
@@ -30,6 +31,7 @@ const STATUT_CFG = {
   'Contacté':            { color: C.accent,  bg: C.accentSoft },
   'RDV planifié':        { color: C.yellow,  bg: C.yellowSoft },
   'Non qualifié':        { color: C.red,     bg: C.redSoft },
+  'Non pertinent':       { color: C.textDim, bg: 'rgba(61,85,112,0.15)' },
   'Converti en dossier': { color: C.green,   bg: C.greenSoft },
 };
 
@@ -315,7 +317,8 @@ function ContactRow({ contact, societeNom, onLusha, lushaLoading, onSetLinkedin 
 
 // ─── CARTE SOCIÉTÉ ────────────────────────────────────────────────
 function SocieteCard({ soc, cadastreLoading, lushaLoading, onCadastre, onLusha, onSetLinkedin, onStatut, onConvertir }) {
-  const [open, setOpen] = useState(false);
+  const [open,    setOpen]    = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const statCfg = STATUT_CFG[soc.statut_qualification] ?? STATUT_CFG['À qualifier'];
   const contactsCibles = soc.contacts?.filter(c => (c.score_poste ?? 0) >= 70) ?? [];
 
@@ -349,7 +352,8 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, onCadastre, onLusha, 
               {Object.keys(STATUT_CFG).map(s => <option key={s}>{s}</option>)}
             </select>
             <Btn onClick={() => onCadastre(soc.id)} loading={cadastreLoading[soc.id]} icon="📐" label={soc.cadastre_fetched ? 'Recalculer' : 'Cadastre'} color={C.yellow} />
-            {soc.lien_geoportail && <Btn onClick={() => window.open(soc.lien_geoportail, '_blank')} icon="🗺" label="Géoportail" color={C.orange} />}
+            <Btn onClick={() => { setShowMap(m => !m); if (!open) setOpen(true); }} icon="🗺" label={showMap ? 'Masquer carte' : 'Carte parcelles'} color={C.purple} />
+            {soc.lien_geoportail && <Btn onClick={() => window.open(soc.lien_geoportail, '_blank')} icon="🌍" label="Géoportail" color={C.orange} />}
             {soc.lien_googlemaps && <Btn onClick={() => window.open(soc.lien_googlemaps, '_blank')} icon="🛰" label="Satellite" color={C.accent} />}
             <div style={{ marginLeft: 'auto' }}>
               <Btn onClick={() => onConvertir(soc.id)} icon="📁" label="Convertir en dossier" color={C.green} disabled={soc.statut_qualification === 'Converti en dossier'} />
@@ -375,6 +379,21 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, onCadastre, onLusha, 
             </div>
           )}
 
+          {showMap && (
+            <div style={{ padding: '0 18px 14px' }}>
+              <Suspense fallback={<div style={{ padding: 20, textAlign: 'center', color: C.textSub, fontSize: 12 }}>Chargement carte…</div>}>
+                <CadastreMap
+                  adresse={soc.adresse}
+                  codePostal={soc.cp}
+                  ville={soc.ville}
+                  siret={soc.siret ?? ''}
+                  raisonSociale={soc.raison_sociale}
+                  dossierId={`lead_${soc.id}`}
+                />
+              </Suspense>
+            </div>
+          )}
+
           <div style={{ padding: '10px 18px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 10, color: C.textDim }}>Score poste :</span>
@@ -397,7 +416,7 @@ export default function LeadsModule() {
     batches, loadingBatches, selectedBatchId, selectBatch, reassignerBatch, supprimerBatch,
     societes, societesBrutes, loading, importing, error,
     cadastreLoading, lushaLoading,
-    searchQuery, setSearchQuery, filterStatut, setFilterStatut,
+    searchQuery, setSearchQuery, filterStatut, setFilterStatut, sortBy, setSortBy,
     importerExcel, enrichirCadastre, enrichirLusha,
     setLinkedinUrl, setStatutSociete, convertirEnDossier,
     profiles, isAdmin,
@@ -496,6 +515,13 @@ export default function LeadsModule() {
             <select value={filterStatut} onChange={e => setFilterStatut(e.target.value)}
               style={{ padding: '8px 10px', borderRadius: 8, border: `1.5px solid ${C.border}`, background: C.bgInput, color: C.text, fontSize: 12, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
               {STATUTS_FILTRE.map(s => <option key={s}>{s}</option>)}
+            </select>
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+              style={{ padding: '8px 10px', borderRadius: 8, border: `1.5px solid ${C.border}`, background: C.bgInput, color: C.text, fontSize: 12, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
+              <option value="score">🎯 Meilleure cible</option>
+              <option value="surface">🏗 Surface bâtiment</option>
+              <option value="statut">📋 Statut avancement</option>
+              <option value="date">📅 Date import</option>
             </select>
             <div style={{ fontSize: 12, color: C.textSub, padding: '7px 12px', background: C.bgCard, borderRadius: 8, border: `1px solid ${C.border}` }}>
               <b style={{ color: C.text }}>{societes.length}</b> société{societes.length > 1 ? 's' : ''}
