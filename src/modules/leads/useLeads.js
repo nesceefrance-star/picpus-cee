@@ -45,72 +45,113 @@ function scorePoste(fonction) {
   return 1;
 }
 
-// ─── PARSING EXCEL — MAPPING AUTO PAR IA ─────────────────────────
+// ─── PARSING EXCEL ───────────────────────────────────────────────
 
 function normCP(v) {
   return String(v || '').replace(/\.0$/, '').replace(/\s/g, '').padStart(5, '0');
 }
 
-// Envoie les en-têtes à Claude pour détecter automatiquement le mapping
-async function detectColumnMapping(headers) {
-  const res = await fetch('/api/claude', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-3-5-haiku-20241022',
-      max_tokens: 600,
-      messages: [{
-        role: 'user',
-        content: `Tu es un assistant qui mappe des colonnes Excel vers un schéma normalisé.
-
-Colonnes du fichier : ${JSON.stringify(headers)}
-
-Mappe chaque colonne vers l'un de ces champs (null si pas de correspondance) :
-- raison_sociale : nom de la société/entreprise/établissement
-- adresse : rue, adresse principale (numéro + voie)
-- adresse_compl : complément d'adresse (bâtiment, lieu-dit…)
-- cp : code postal
-- ville : ville / commune
-- web : site web de la société
-- activite : activité, secteur, libellé NAF
-- tel_societe : téléphone général de la société
-- siret : SIRET, SIREN, numéro d'enregistrement
-- nom : nom de famille du contact
-- prenom : prénom du contact
-- fonction : poste / intitulé de fonction du contact (préfère la version la plus détaillée)
-- email : email du contact (préfère "direct" ou "dirigeant" si plusieurs choix)
-- tel_contact : téléphone direct / ligne directe du contact
-
-Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ou après.
-Exemple : {"raison_sociale":"Nom de l'entreprise","adresse":"Rue","cp":"Code postal","ville":"Ville","web":null,"activite":"Libellé NAF 2008","tel_societe":"Numéro de téléphone","siret":"Numéro d'enregistrement (Siret, Siren…)","nom":"Nom","prenom":"Prénom","fonction":"Libellé fonction locale","email":"Email direct dirigeant*","tel_contact":"Ligne directe","adresse_compl":"Complément d'adresse"}`,
-      }],
-    }),
-  });
-  if (!res.ok) throw new Error(`Détection mapping HTTP ${res.status}`);
-  const data = await res.json();
-  const text = data.content?.[0]?.text ?? '';
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('Réponse IA invalide');
-  return JSON.parse(jsonMatch[0]);
+function normStr(s) {
+  return String(s)
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u2018\u2019\u201a\u201b]/g, "'")
+    .replace(/[^a-z0-9' ]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
 }
 
-export async function parseExcelFile(file) {
-  const buffer = await file.arrayBuffer();
-  const wb   = XLSX.read(buffer, { type: 'array' });
-  const ws   = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-  if (!rows.length) return [];
+export const CHAMPS_MAPPING = [
+  { key: 'raison_sociale', label: 'Société *',          group: 'societe', req: true  },
+  { key: 'adresse',        label: 'Adresse (rue)',       group: 'societe', req: false },
+  { key: 'adresse_compl',  label: 'Complément adresse',  group: 'societe', req: false },
+  { key: 'cp',             label: 'Code postal',         group: 'societe', req: false },
+  { key: 'ville',          label: 'Ville',               group: 'societe', req: false },
+  { key: 'siret',          label: 'SIRET / SIREN',       group: 'societe', req: false },
+  { key: 'activite',       label: 'Activité / NAF',      group: 'societe', req: false },
+  { key: 'tel_societe',    label: 'Tél. société',        group: 'societe', req: false },
+  { key: 'web',            label: 'Site web',            group: 'societe', req: false },
+  { key: 'commentaire',    label: 'Commentaire / Notes', group: 'societe', req: false },
+  { key: 'nom',            label: 'Nom contact',         group: 'contact', req: false },
+  { key: 'prenom',         label: 'Prénom contact',      group: 'contact', req: false },
+  { key: 'fonction',       label: 'Fonction contact',    group: 'contact', req: false },
+  { key: 'email',          label: 'Email contact',       group: 'contact', req: false },
+  { key: 'tel_contact',    label: 'Tél. direct contact', group: 'contact', req: false },
+];
 
-  const headers = Object.keys(rows[0]);
-  const mapping = await detectColumnMapping(headers);
-
-  const get = (row, field) => {
-    const colName = mapping[field];
-    if (!colName) return '';
-    const v = row[colName];
-    return (v !== undefined && v !== null) ? String(v).trim() : '';
+export function detectMappingFuzzy(headers) {
+  const PATTERNS = {
+    raison_sociale: ['nom de l entreprise', 'raison sociale', 'company name', 'nom societe', 'denomination', 'etablissement'],
+    adresse:        ['^rue$', '^adresse$', 'adresse 1', 'adresse principale', 'street', 'voie'],
+    adresse_compl:  ['complement', 'adresse 2', 'lieu dit'],
+    cp:             ['^cp$', 'code postal', 'postal code', 'zip'],
+    ville:          ['^ville$', '^commune$', '^city$'],
+    web:            ['site web', 'company url', '^web$', 'website'],
+    activite:       ['libelle naf', 'libelle activite', '^activite$', '^secteur$'],
+    tel_societe:    ['numero de telephone', 'telephone entreprise', 'tel societe', '^telephone$', '^tel$'],
+    siret:          ['numero d enregistrement', '^siret$', '^siren$', 'n siret'],
+    nom:            ['^nom$', 'last name', 'nom de famille'],
+    prenom:         ['^prenom$', 'first name', 'firstname'],
+    fonction:       ['libelle fonction', 'fonction locale', 'job title', '^fonction$', '^poste$'],
+    email:          ['email direct', 'email dirigeant', 'mail direct'],
+    tel_contact:    ['ligne directe', 'tel direct', 'tel contact'],
+    commentaire:    ['commentaire', '^notes$', '^note$', 'observation', 'remarque'],
   };
 
+  const mapping = {};
+  const used = new Set();
+
+  for (const [field, patterns] of Object.entries(PATTERNS)) {
+    let bestHeader = null;
+    let bestScore = -1;
+    for (const header of headers) {
+      if (used.has(header)) continue;
+      const hn = normStr(header);
+      for (const pat of patterns) {
+        const isExact = pat.startsWith('^') && pat.endsWith('$');
+        const pn = isExact ? pat.slice(1, -1) : pat;
+        let score = -1;
+        if (isExact) { if (hn === pn) score = 200; }
+        else {
+          if (hn === pn) score = 150;
+          else if (hn.includes(pn) && pn.length > 3) score = pn.length;
+          else if (pn.includes(hn) && hn.length > 3) score = hn.length - 1;
+        }
+        if (score > bestScore) { bestScore = score; bestHeader = header; }
+      }
+    }
+    mapping[field] = bestScore >= 0 ? bestHeader : null;
+    if (bestHeader) used.add(bestHeader);
+  }
+  return mapping;
+}
+
+export function analyserFichier(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb   = XLSX.read(e.target.result, { type: 'array' });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        if (!rows.length) return reject(new Error('Fichier vide'));
+        const headers = Object.keys(rows[0]);
+        const mapping = detectMappingFuzzy(headers);
+        resolve({ headers, mapping, sampleRows: rows.slice(0, 3), totalRows: rows.length, rows });
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function buildSocieteMap(rows, mapping) {
+  const get = (row, field) => {
+    const col = mapping[field];
+    if (!col) return '';
+    const v = row[col];
+    return (v !== undefined && v !== null) ? String(v).trim() : '';
+  };
+  const mappedCols = new Set(Object.values(mapping).filter(Boolean));
   const societeMap = {};
 
   for (const row of rows) {
@@ -118,19 +159,21 @@ export async function parseExcelFile(file) {
     if (!raison) continue;
 
     if (!societeMap[raison]) {
-      const rue   = get(row, 'adresse');
-      const compl = get(row, 'adresse_compl');
-      const adresse = [rue, compl].filter(Boolean).join(', ');
-
+      const donnees_brutes = {};
+      for (const [k, v] of Object.entries(row)) {
+        if (!mappedCols.has(k) && v !== '' && v !== null) donnees_brutes[k] = v;
+      }
       societeMap[raison] = {
         raison_sociale: raison,
-        adresse,
+        adresse: [get(row, 'adresse'), get(row, 'adresse_compl')].filter(Boolean).join(', '),
         cp:           normCP(get(row, 'cp')),
         ville:        get(row, 'ville'),
         web:          get(row, 'web'),
         activite:     get(row, 'activite'),
         tel_societe:  get(row, 'tel_societe'),
         siret_import: get(row, 'siret').replace(/\s/g, ''),
+        commentaire:  get(row, 'commentaire'),
+        donnees_brutes: Object.keys(donnees_brutes).length ? donnees_brutes : null,
         contacts: [],
       };
     }
@@ -140,13 +183,11 @@ export async function parseExcelFile(file) {
     if (!nom && !prenom) continue;
 
     const fonction = get(row, 'fonction');
-    const email    = get(row, 'email');
-    const tel      = get(row, 'tel_contact') || societeMap[raison].tel_societe;
-
     societeMap[raison].contacts.push({
-      nom, prenom, fonction, email,
-      tel_societe:     tel,
-      statut_original: get(row, 'statut') || '',
+      nom, prenom, fonction,
+      email:           get(row, 'email'),
+      tel_societe:     get(row, 'tel_contact') || societeMap[raison].tel_societe,
+      statut_original: '',
       score_poste:     scorePoste(fonction),
     });
   }
@@ -155,7 +196,6 @@ export async function parseExcelFile(file) {
     s.contacts.sort((a, b) => b.score_poste - a.score_poste);
     s.contacts.forEach((c, i) => { c.rang_poste = i + 1; });
   });
-
   return Object.values(societeMap);
 }
 
@@ -305,6 +345,9 @@ export function useLeads() {
   const [filterStatut,    setFilterStatut]    = useState('Tous');
   const [sortBy,          setSortBy]          = useState('score');
 
+  const [analyseData,    setAnalyseData]    = useState(null);
+  const [analyseEnCours, setAnalyseEnCours] = useState(false);
+
   // Charger la liste des utilisateurs (pour l'assignation admin)
   useEffect(() => { if (isAdmin && !profiles.length) fetchProfiles(); }, [isAdmin]);
 
@@ -364,29 +407,41 @@ export function useLeads() {
     setFilterStatut('Tous');
   }, []);
 
-  // ── Import Excel ────────────────────────────────────────────────
-  const importerExcel = useCallback(async (file, { nom, leadType, assigneA }) => {
+  // ── Analyse fichier (étape 1) ───────────────────────────────────
+  const analyserImport = useCallback(async (file, opts) => {
+    setAnalyseEnCours(true); setError(null);
+    try {
+      const data = await analyserFichier(file);
+      setAnalyseData({ ...data, file, opts });
+    } catch (e) { setError(e.message); }
+    setAnalyseEnCours(false);
+  }, []);
+
+  const clearAnalyse = useCallback(() => setAnalyseData(null), []);
+
+  // ── Import avec mapping validé (étape 2) ────────────────────────
+  const importerExcel = useCallback(async (mapping) => {
+    if (!analyseData) throw new Error('Pas de fichier analysé');
     setImporting(true); setError(null);
     try {
-      const parsed = await parseExcelFile(file);
-      const targetUser = assigneA || profile?.id;
+      const { rows, opts } = analyseData;
+      const parsed = buildSocieteMap(rows, mapping);
+      const targetUser = opts.assigneA || profile?.id;
 
-      // Créer le batch
       const { data: batch, error: eBatch } = await supabase
         .from('leads_batches')
         .insert({
-          nom,
-          lead_type:    leadType,
-          fichier_nom:  file.name,
-          assigne_a:    targetUser,
-          created_by:   profile?.id,
-          nb_societes:  parsed.length,
-          nb_contacts:  parsed.reduce((a, s) => a + s.contacts.length, 0),
+          nom:         opts.nom,
+          lead_type:   opts.leadType,
+          fichier_nom: analyseData.file?.name,
+          assigne_a:   targetUser,
+          created_by:  profile?.id,
+          nb_societes: parsed.length,
+          nb_contacts: parsed.reduce((a, s) => a + s.contacts.length, 0),
         })
         .select().single();
       if (eBatch) throw eBatch;
 
-      // Insérer les sociétés
       for (const soc of parsed) {
         const { data: imp, error: eImp } = await supabase
           .from('leads_import')
@@ -395,8 +450,10 @@ export function useLeads() {
             cp: soc.cp, ville: soc.ville, web: soc.web, activite: soc.activite,
             tel_societe: soc.tel_societe,
             siret: soc.siret_import || null,
-            batch_id:   batch.id,
-            assigne_a:  targetUser,
+            commentaire: soc.commentaire || null,
+            donnees_brutes: soc.donnees_brutes,
+            batch_id:       batch.id,
+            assigne_a:      targetUser,
             import_batch_id: batch.id,
           })
           .select().single();
@@ -415,12 +472,13 @@ export function useLeads() {
         }
       }
 
+      setAnalyseData(null);
       await loadBatches();
       setSelectedBatchId(batch.id);
       return { imported: parsed.length, batch };
     } catch (e) { setError(e.message); throw e; }
     finally { setImporting(false); }
-  }, [profile, loadBatches]);
+  }, [analyseData, profile, loadBatches]);
 
   // ── Réassigner un batch (admin) ─────────────────────────────────
   const reassignerBatch = useCallback(async (batchId, newUserId) => {
@@ -550,7 +608,8 @@ export function useLeads() {
     loading, importing, cadastreLoading, lushaLoading, error,
     searchQuery, setSearchQuery, filterStatut, setFilterStatut, sortBy, setSortBy,
     // Actions
-    importerExcel, enrichirCadastre, enrichirLusha,
+    importerExcel, analyserImport, clearAnalyse, analyseData, analyseEnCours,
+    enrichirCadastre, enrichirLusha,
     setLinkedinUrl, setStatutSociete, convertirEnDossier,
     refresh: () => { loadBatches(); loadSocietes(selectedBatchId); },
     // Utilisateurs (pour admin)

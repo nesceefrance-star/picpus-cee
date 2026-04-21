@@ -1,6 +1,6 @@
 // src/modules/leads/LeadsModule.jsx
 import { useState, useRef, useCallback, lazy, Suspense } from 'react';
-import { useLeads } from './useLeads';
+import { useLeads, CHAMPS_MAPPING } from './useLeads';
 const CadastreMap = lazy(() => import('../../components/CadastreMap'));
 
 const C = {
@@ -77,18 +77,17 @@ function Btn({ onClick, disabled, loading: isLoading, icon, label, color = C.acc
   );
 }
 
-// ─── MODAL IMPORT ─────────────────────────────────────────────────
-function ImportModal({ onClose, onImport, importing, profiles, isAdmin }) {
+// ─── MODAL ÉTAPE 1 : infos batch + sélection fichier ─────────────
+function ImportModal({ onClose, onAnalyser, analyseEnCours, profiles, isAdmin }) {
   const [nom,      setNom]      = useState('');
   const [leadType, setLeadType] = useState('Industrie');
   const [assigneA, setAssigneA] = useState('');
   const fileRef = useRef();
 
-  const handleFileChange = async (e) => {
+  const handleFile = async (e) => {
     const file = e.target.files[0];
     if (!file || !nom.trim()) return;
-    await onImport(file, { nom: nom.trim(), leadType, assigneA: assigneA || null });
-    onClose();
+    await onAnalyser(file, { nom: nom.trim(), leadType, assigneA: assigneA || null });
     e.target.value = '';
   };
 
@@ -102,34 +101,21 @@ function ImportModal({ onClose, onImport, importing, profiles, isAdmin }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ background: C.bgCard, border: `1px solid ${C.borderLight}`, borderRadius: 14, padding: '28px 32px', width: 440, maxWidth: '95vw' }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color: C.text, marginBottom: 20 }}>
-          📥 Nouvel import de leads
-        </div>
-
+        <div style={{ fontSize: 16, fontWeight: 800, color: C.text, marginBottom: 20 }}>📥 Nouvel import de leads</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-              Nom du batch *
-            </div>
-            <input value={nom} onChange={e => setNom(e.target.value)}
-              placeholder="ex : Industrie IDF Q2 2026"
-              style={inpStyle} autoFocus />
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>Nom du batch *</div>
+            <input value={nom} onChange={e => setNom(e.target.value)} placeholder="ex : Industrie IDF Q2 2026" style={inpStyle} autoFocus />
           </div>
-
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-              Type de lead
-            </div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>Type de lead</div>
             <select value={leadType} onChange={e => setLeadType(e.target.value)} style={{ ...inpStyle, cursor: 'pointer' }}>
               {LEAD_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
-
           {isAdmin && (
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                Assigné à
-              </div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>Assigné à</div>
               <select value={assigneA} onChange={e => setAssigneA(e.target.value)} style={{ ...inpStyle, cursor: 'pointer' }}>
                 <option value="">— Moi-même —</option>
                 {profiles.filter(p => p.role !== 'admin' || p.id).map(p => (
@@ -138,33 +124,91 @@ function ImportModal({ onClose, onImport, importing, profiles, isAdmin }) {
               </select>
             </div>
           )}
-
-          <div style={{ background: C.accentDim, border: `1px dashed ${C.accent}40`, borderRadius: 8, padding: '14px', textAlign: 'center', marginTop: 4 }}>
+          <div style={{ background: C.accentDim, border: `1px dashed ${C.accent}40`, borderRadius: 8, padding: 14, textAlign: 'center', marginTop: 4 }}>
             <div style={{ fontSize: 12, color: C.textSub, marginBottom: 10 }}>
-              Fichier Excel (.xlsx / .xls) — colonnes attendues :<br />
-              <span style={{ color: C.textDim, fontSize: 11 }}>RAISON_SOCIALE, ADRESSE, CP, VILLE, NOM, PRENOM, FONCTION…</span>
+              Fichier Excel (.xlsx / .xls) — n'importe quelle structure<br />
+              <span style={{ color: C.textDim, fontSize: 11 }}>Le mapping des colonnes sera détecté automatiquement</span>
             </div>
-            <button
-              onClick={() => { if (nom.trim()) fileRef.current.click(); }}
-              disabled={!nom.trim() || importing}
-              style={{
-                padding: '9px 20px', borderRadius: 8, border: 'none',
-                background: nom.trim() && !importing ? C.accent : C.borderLight,
-                color: nom.trim() && !importing ? C.bg : C.textDim,
-                fontWeight: 800, fontSize: 13, cursor: nom.trim() && !importing ? 'pointer' : 'not-allowed',
-                fontFamily: 'inherit',
-              }}>
-              {importing ? '⏳ Import en cours…' : '📂 Choisir un fichier'}
+            <button onClick={() => { if (nom.trim()) fileRef.current.click(); }}
+              disabled={!nom.trim() || analyseEnCours}
+              style={{ padding: '9px 20px', borderRadius: 8, border: 'none', background: nom.trim() && !analyseEnCours ? C.accent : C.borderLight, color: nom.trim() && !analyseEnCours ? C.bg : C.textDim, fontWeight: 800, fontSize: 13, cursor: nom.trim() && !analyseEnCours ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+              {analyseEnCours ? '⏳ Analyse en cours…' : '📂 Choisir un fichier'}
             </button>
             {!nom.trim() && <div style={{ fontSize: 11, color: C.red, marginTop: 6 }}>Renseignez d'abord le nom du batch</div>}
           </div>
         </div>
-
-        <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleFileChange} />
-
-        <button onClick={onClose} style={{ marginTop: 16, width: '100%', padding: '8px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.textSub, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleFile} />
+        <button onClick={onClose} style={{ marginTop: 16, width: '100%', padding: 8, borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.textSub, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
           Annuler
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── MODAL ÉTAPE 2 : validation du mapping ────────────────────────
+function MappingModal({ analyseData, onImport, onCancel, importing }) {
+  const { headers, mapping: detected, sampleRows, totalRows } = analyseData;
+  const [mapping, setMapping] = useState({ ...detected });
+
+  const sample = sampleRows?.[0] ?? {};
+  const inpStyle = { padding: '5px 8px', borderRadius: 6, border: `1px solid ${C.borderLight}`, background: C.bgInput, color: C.text, fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', outline: 'none', width: '100%' };
+
+  const groups = [
+    { key: 'societe', label: '🏢 Société' },
+    { key: 'contact', label: '👤 Contact' },
+  ];
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.72)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: C.bgCard, border: `1px solid ${C.borderLight}`, borderRadius: 14, width: 680, maxWidth: '98vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Header */}
+        <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>🗂 Correspondance des colonnes</div>
+          <div style={{ fontSize: 12, color: C.textSub, marginTop: 4 }}>
+            {totalRows} ligne{totalRows > 1 ? 's' : ''} détectée{totalRows > 1 ? 's' : ''} · Vérifie les correspondances et corrige si nécessaire
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+          {groups.map(grp => (
+            <div key={grp.key} style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textSub, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>{grp.label}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {CHAMPS_MAPPING.filter(c => c.group === grp.key).map(champ => {
+                  const colonne = mapping[champ.key];
+                  const exemple = colonne ? String(sample[colonne] ?? '').slice(0, 60) : '';
+                  return (
+                    <div key={champ.key} style={{ display: 'grid', gridTemplateColumns: '160px 1fr 1fr', gap: 10, alignItems: 'center', padding: '6px 10px', borderRadius: 8, background: colonne ? C.accentDim : 'transparent', border: `1px solid ${colonne ? C.borderLight : C.border}` }}>
+                      <div style={{ fontSize: 12, color: colonne ? C.text : C.textDim, fontWeight: champ.req ? 700 : 500 }}>
+                        {champ.label}
+                      </div>
+                      <select value={colonne ?? ''} onChange={e => setMapping(m => ({ ...m, [champ.key]: e.target.value || null }))} style={inpStyle}>
+                        <option value="">— Ignorer —</option>
+                        {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                      <div style={{ fontSize: 11, color: C.textSub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {exemple || <span style={{ color: C.textDim, fontStyle: 'italic' }}>—</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '16px 24px', borderTop: `1px solid ${C.border}`, display: 'flex', gap: 10, flexShrink: 0 }}>
+          <button onClick={onCancel} style={{ padding: '9px 20px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.textSub, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+            ← Annuler
+          </button>
+          <button onClick={() => onImport(mapping)} disabled={!mapping.raison_sociale || importing}
+            style={{ flex: 1, padding: '9px 20px', borderRadius: 8, border: 'none', background: mapping.raison_sociale && !importing ? C.accent : C.borderLight, color: mapping.raison_sociale && !importing ? C.bg : C.textDim, fontWeight: 800, fontSize: 13, cursor: mapping.raison_sociale && !importing ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+            {importing ? '⏳ Import en cours…' : `✅ Importer ${totalRows} lignes`}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -417,7 +461,8 @@ export default function LeadsModule() {
     societes, societesBrutes, loading, importing, error,
     cadastreLoading, lushaLoading,
     searchQuery, setSearchQuery, filterStatut, setFilterStatut, sortBy, setSortBy,
-    importerExcel, enrichirCadastre, enrichirLusha,
+    importerExcel, analyserImport, clearAnalyse, analyseData, analyseEnCours,
+    enrichirCadastre, enrichirLusha,
     setLinkedinUrl, setStatutSociete, convertirEnDossier,
     profiles, isAdmin,
   } = useLeads();
@@ -425,11 +470,16 @@ export default function LeadsModule() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importMsg,       setImportMsg]       = useState(null);
 
-  const handleImport = useCallback(async (file, params) => {
+  const handleAnalyser = useCallback(async (file, opts) => {
+    setShowImportModal(false);
+    await analyserImport(file, opts);
+  }, [analyserImport]);
+
+  const handleImport = useCallback(async (mapping) => {
     setImportMsg(null);
     try {
-      const { imported } = await importerExcel(file, params);
-      setImportMsg({ type: 'ok', text: `✅ ${imported} société(s) importée(s) dans "${params.nom}"` });
+      const { imported, batch } = await importerExcel(mapping);
+      setImportMsg({ type: 'ok', text: `✅ ${imported} société(s) importée(s) dans "${batch.nom}"` });
     } catch (e) {
       setImportMsg({ type: 'err', text: `❌ Import échoué : ${e.message}` });
     }
@@ -561,14 +611,24 @@ export default function LeadsModule() {
         </div>
       </div>
 
-      {/* Modal import */}
+      {/* Modal étape 1 : infos batch */}
       {showImportModal && (
         <ImportModal
           onClose={() => setShowImportModal(false)}
-          onImport={handleImport}
-          importing={importing}
+          onAnalyser={handleAnalyser}
+          analyseEnCours={analyseEnCours}
           profiles={profiles}
           isAdmin={isAdmin}
+        />
+      )}
+
+      {/* Modal étape 2 : validation mapping */}
+      {analyseData && !analyseEnCours && (
+        <MappingModal
+          analyseData={analyseData}
+          onImport={handleImport}
+          onCancel={clearAnalyse}
+          importing={importing}
         />
       )}
     </div>
