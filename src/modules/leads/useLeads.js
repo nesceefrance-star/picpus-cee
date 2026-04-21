@@ -45,109 +45,118 @@ function scorePoste(fonction) {
   return 1;
 }
 
-// ─── PARSING EXCEL MULTI-FORMAT ──────────────────────────────────
-
-// Résout un champ en essayant plusieurs noms de colonnes (insensible à la casse)
-function col(row, ...candidates) {
-  for (const c of candidates) {
-    const v = row[c.toUpperCase()];
-    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
-  }
-  return '';
-}
+// ─── PARSING EXCEL — MAPPING AUTO PAR IA ─────────────────────────
 
 function normCP(v) {
   return String(v || '').replace(/\.0$/, '').replace(/\s/g, '').padStart(5, '0');
 }
 
-export function parseExcelFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const wb   = XLSX.read(e.target.result, { type: 'array' });
-        const ws   = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+// Envoie les en-têtes à Claude pour détecter automatiquement le mapping
+async function detectColumnMapping(headers) {
+  const res = await fetch('/api/claude', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 600,
+      messages: [{
+        role: 'user',
+        content: `Tu es un assistant qui mappe des colonnes Excel vers un schéma normalisé.
 
-        // Normalise toutes les clés en majuscules
-        const normalized = rows.map(row => {
-          const r = {};
-          Object.keys(row).forEach(k => { r[k.trim().toUpperCase()] = row[k]; });
-          return r;
-        });
+Colonnes du fichier : ${JSON.stringify(headers)}
 
-        const societeMap = {};
+Mappe chaque colonne vers l'un de ces champs (null si pas de correspondance) :
+- raison_sociale : nom de la société/entreprise/établissement
+- adresse : rue, adresse principale (numéro + voie)
+- adresse_compl : complément d'adresse (bâtiment, lieu-dit…)
+- cp : code postal
+- ville : ville / commune
+- web : site web de la société
+- activite : activité, secteur, libellé NAF
+- tel_societe : téléphone général de la société
+- siret : SIRET, SIREN, numéro d'enregistrement
+- nom : nom de famille du contact
+- prenom : prénom du contact
+- fonction : poste / intitulé de fonction du contact (préfère la version la plus détaillée)
+- email : email du contact (préfère "direct" ou "dirigeant" si plusieurs choix)
+- tel_contact : téléphone direct / ligne directe du contact
 
-        normalized.forEach(row => {
-          // ── Raison sociale ───────────────────────────────────────
-          const raison = col(row,
-            'RAISON_SOCIALE', 'RAISON SOCIALE',         // format interne
-            "NOM DE L'ENTREPRISE", 'NOM DE L\'ENTREPRISE', 'COMPANY NAME', 'SOCIETE', 'SOCIÉTÉ',
-            'COMPANY', 'ETABLISSEMENT',
-          );
-          if (!raison) return;
-
-          if (!societeMap[raison]) {
-            // ── Adresse ──────────────────────────────────────────
-            const rue   = col(row, 'ADRESSE_1', 'ADRESSE', 'RUE', 'STREET', 'ADRESSE 1');
-            const compl = col(row, 'ADRESSE_2', "COMPLÉMENT D'ADRESSE", "COMPLEMENT D'ADRESSE", 'ADRESSE 2');
-            const adresse = [rue, compl].filter(Boolean).join(', ');
-
-            societeMap[raison] = {
-              raison_sociale: raison,
-              adresse,
-              cp:          normCP(col(row, 'CP', 'CODE POSTAL', 'CODE_POSTAL', 'POSTAL CODE', 'ZIP')),
-              ville:       col(row, 'VILLE', 'CITY', 'COMMUNE'),
-              web:         col(row, 'WEB', 'SITE WEB', 'COMPANY URL', 'WEBSITE', 'URL'),
-              activite:    col(row, 'ACTIVITE', 'ACTIVITÉ', 'LIBELLÉ NAF 2008', 'LIBELLE NAF 2008', 'SECTOR', 'NAF'),
-              tel_societe: col(row, 'TEL SOCIETE', 'TEL', 'TÉLÉPHONE', 'TELEPHONE', 'PHONE',
-                               'NUMÉRO DE TÉLÉPHONE', 'NUMERO DE TELEPHONE', 'LIGNE DIRECTE'),
-              siret_import: col(row,
-                'SIRET', "NUMÉRO D'ENREGISTREMENT (SIRET, SIREN…)",
-                "NUMERO D'ENREGISTREMENT (SIRET, SIREN…)",
-                'SIREN', 'N° SIRET',
-              ).replace(/\s/g, ''),
-              effectif:    col(row, 'EFFECTIF ENTREPRISE', "EFFECTIF EXACT DE L'ENTREPRISE", 'EFFECTIF'),
-              contacts: [],
-            };
-          }
-
-          // ── Contact ──────────────────────────────────────────────
-          const nom    = col(row, 'NOM', 'LAST NAME', 'LASTNAME', 'NAME');
-          const prenom = col(row, 'PRENOM', 'PRÉNOM', 'FIRST NAME', 'FIRSTNAME');
-          if (!nom && !prenom) return;
-
-          const fonction = col(row,
-            'FONCTION', 'FUNCTION', 'JOB TITLE', 'POSTE', 'TITLE',
-            'LIBELLÉ FONCTION LOCALE',
-          );
-          const email = col(row,
-            'EMAIL', 'E-MAIL', 'MAIL',
-            'EMAIL DIRECT DIRIGEANT*', 'EMAIL DIRECT DIRIGEANT',
-          );
-          const tel = col(row,
-            'TEL CONTACT', 'TEL DIRECT', 'LIGNE DIRECTE',
-            'NUMÉRO DE TÉLÉPHONE', 'NUMERO DE TELEPHONE', 'PHONE',
-          ) || societeMap[raison].tel_societe;
-
-          societeMap[raison].contacts.push({
-            nom, prenom, fonction, email,
-            tel_societe:     tel,
-            statut_original: col(row, 'STATUT', 'STATUS'),
-            score_poste:     scorePoste(fonction),
-          });
-        });
-
-        Object.values(societeMap).forEach(s => {
-          s.contacts.sort((a, b) => b.score_poste - a.score_poste);
-          s.contacts.forEach((c, i) => { c.rang_poste = i + 1; });
-        });
-        resolve(Object.values(societeMap));
-      } catch (err) { reject(err); }
-    };
-    reader.onerror = reject;
-    reader.readAsArrayBuffer(file);
+Réponds UNIQUEMENT avec un objet JSON valide, sans aucun texte avant ou après.
+Exemple : {"raison_sociale":"Nom de l'entreprise","adresse":"Rue","cp":"Code postal","ville":"Ville","web":null,"activite":"Libellé NAF 2008","tel_societe":"Numéro de téléphone","siret":"Numéro d'enregistrement (Siret, Siren…)","nom":"Nom","prenom":"Prénom","fonction":"Libellé fonction locale","email":"Email direct dirigeant*","tel_contact":"Ligne directe","adresse_compl":"Complément d'adresse"}`,
+      }],
+    }),
   });
+  if (!res.ok) throw new Error(`Détection mapping HTTP ${res.status}`);
+  const data = await res.json();
+  const text = data.content?.[0]?.text ?? '';
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('Réponse IA invalide');
+  return JSON.parse(jsonMatch[0]);
+}
+
+export async function parseExcelFile(file) {
+  const buffer = await file.arrayBuffer();
+  const wb   = XLSX.read(buffer, { type: 'array' });
+  const ws   = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+  if (!rows.length) return [];
+
+  const headers = Object.keys(rows[0]);
+  const mapping = await detectColumnMapping(headers);
+
+  const get = (row, field) => {
+    const colName = mapping[field];
+    if (!colName) return '';
+    const v = row[colName];
+    return (v !== undefined && v !== null) ? String(v).trim() : '';
+  };
+
+  const societeMap = {};
+
+  for (const row of rows) {
+    const raison = get(row, 'raison_sociale');
+    if (!raison) continue;
+
+    if (!societeMap[raison]) {
+      const rue   = get(row, 'adresse');
+      const compl = get(row, 'adresse_compl');
+      const adresse = [rue, compl].filter(Boolean).join(', ');
+
+      societeMap[raison] = {
+        raison_sociale: raison,
+        adresse,
+        cp:           normCP(get(row, 'cp')),
+        ville:        get(row, 'ville'),
+        web:          get(row, 'web'),
+        activite:     get(row, 'activite'),
+        tel_societe:  get(row, 'tel_societe'),
+        siret_import: get(row, 'siret').replace(/\s/g, ''),
+        contacts: [],
+      };
+    }
+
+    const nom    = get(row, 'nom');
+    const prenom = get(row, 'prenom');
+    if (!nom && !prenom) continue;
+
+    const fonction = get(row, 'fonction');
+    const email    = get(row, 'email');
+    const tel      = get(row, 'tel_contact') || societeMap[raison].tel_societe;
+
+    societeMap[raison].contacts.push({
+      nom, prenom, fonction, email,
+      tel_societe:     tel,
+      statut_original: get(row, 'statut') || '',
+      score_poste:     scorePoste(fonction),
+    });
+  }
+
+  Object.values(societeMap).forEach(s => {
+    s.contacts.sort((a, b) => b.score_poste - a.score_poste);
+    s.contacts.forEach((c, i) => { c.rang_poste = i + 1; });
+  });
+
+  return Object.values(societeMap);
 }
 
 // ─── GEOCODAGE ───────────────────────────────────────────────────
