@@ -101,7 +101,8 @@ CREATE TABLE public.leads_contacts (
   lusha_phone         TEXT,
   lusha_mobile        TEXT,
   lusha_raw           JSONB,
-  lusha_credits_used  INT         DEFAULT 0
+  lusha_credits_used  INT         DEFAULT 0,
+  email               TEXT
 );
 
 ALTER TABLE public.leads_contacts ENABLE ROW LEVEL SECURITY;

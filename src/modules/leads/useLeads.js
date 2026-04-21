@@ -45,7 +45,21 @@ function scorePoste(fonction) {
   return 1;
 }
 
-// ─── PARSING EXCEL ───────────────────────────────────────────────
+// ─── PARSING EXCEL MULTI-FORMAT ──────────────────────────────────
+
+// Résout un champ en essayant plusieurs noms de colonnes (insensible à la casse)
+function col(row, ...candidates) {
+  for (const c of candidates) {
+    const v = row[c.toUpperCase()];
+    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+  }
+  return '';
+}
+
+function normCP(v) {
+  return String(v || '').replace(/\.0$/, '').replace(/\s/g, '').padStart(5, '0');
+}
+
 export function parseExcelFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -54,40 +68,76 @@ export function parseExcelFile(file) {
         const wb   = XLSX.read(e.target.result, { type: 'array' });
         const ws   = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+        // Normalise toutes les clés en majuscules
         const normalized = rows.map(row => {
           const r = {};
           Object.keys(row).forEach(k => { r[k.trim().toUpperCase()] = row[k]; });
           return r;
         });
+
         const societeMap = {};
+
         normalized.forEach(row => {
-          const raison = (row['RAISON_SOCIALE'] || row['RAISON SOCIALE'] || '').trim();
+          // ── Raison sociale ───────────────────────────────────────
+          const raison = col(row,
+            'RAISON_SOCIALE', 'RAISON SOCIALE',         // format interne
+            "NOM DE L'ENTREPRISE", 'NOM DE L\'ENTREPRISE', 'COMPANY NAME', 'SOCIETE', 'SOCIÉTÉ',
+            'COMPANY', 'ETABLISSEMENT',
+          );
           if (!raison) return;
+
           if (!societeMap[raison]) {
+            // ── Adresse ──────────────────────────────────────────
+            const rue   = col(row, 'ADRESSE_1', 'ADRESSE', 'RUE', 'STREET', 'ADRESSE 1');
+            const compl = col(row, 'ADRESSE_2', "COMPLÉMENT D'ADRESSE", "COMPLEMENT D'ADRESSE", 'ADRESSE 2');
+            const adresse = [rue, compl].filter(Boolean).join(', ');
+
             societeMap[raison] = {
               raison_sociale: raison,
-              adresse:        (row['ADRESSE_1'] || row['ADRESSE'] || '').trim(),
-              cp:             String(row['CP'] || '').replace('.0','').padStart(5,'0'),
-              ville:          (row['VILLE'] || row['CITY'] || '').trim(),
-              web:            (row['WEB'] || '').trim(),
-              activite:       (row['ACTIVITE'] || '').trim(),
-              tel_societe:    (row['TEL SOCIETE'] || row['TEL'] || '').trim(),
-              contacts:       [],
+              adresse,
+              cp:          normCP(col(row, 'CP', 'CODE POSTAL', 'CODE_POSTAL', 'POSTAL CODE', 'ZIP')),
+              ville:       col(row, 'VILLE', 'CITY', 'COMMUNE'),
+              web:         col(row, 'WEB', 'SITE WEB', 'COMPANY URL', 'WEBSITE', 'URL'),
+              activite:    col(row, 'ACTIVITE', 'ACTIVITÉ', 'LIBELLÉ NAF 2008', 'LIBELLE NAF 2008', 'SECTOR', 'NAF'),
+              tel_societe: col(row, 'TEL SOCIETE', 'TEL', 'TÉLÉPHONE', 'TELEPHONE', 'PHONE',
+                               'NUMÉRO DE TÉLÉPHONE', 'NUMERO DE TELEPHONE', 'LIGNE DIRECTE'),
+              siret_import: col(row,
+                'SIRET', "NUMÉRO D'ENREGISTREMENT (SIRET, SIREN…)",
+                "NUMERO D'ENREGISTREMENT (SIRET, SIREN…)",
+                'SIREN', 'N° SIRET',
+              ).replace(/\s/g, ''),
+              effectif:    col(row, 'EFFECTIF ENTREPRISE', "EFFECTIF EXACT DE L'ENTREPRISE", 'EFFECTIF'),
+              contacts: [],
             };
           }
-          const nom = (row['NOM'] || '').trim();
-          if (nom) {
-            const fonction = (row['FONCTION'] || '').trim();
-            societeMap[raison].contacts.push({
-              nom,
-              prenom:          (row['PRENOM'] || '').trim(),
-              fonction,
-              tel_societe:     societeMap[raison].tel_societe,
-              statut_original: (row['STATUT'] || '').trim(),
-              score_poste:     scorePoste(fonction),
-            });
-          }
+
+          // ── Contact ──────────────────────────────────────────────
+          const nom    = col(row, 'NOM', 'LAST NAME', 'LASTNAME', 'NAME');
+          const prenom = col(row, 'PRENOM', 'PRÉNOM', 'FIRST NAME', 'FIRSTNAME');
+          if (!nom && !prenom) return;
+
+          const fonction = col(row,
+            'FONCTION', 'FUNCTION', 'JOB TITLE', 'POSTE', 'TITLE',
+            'LIBELLÉ FONCTION LOCALE',
+          );
+          const email = col(row,
+            'EMAIL', 'E-MAIL', 'MAIL',
+            'EMAIL DIRECT DIRIGEANT*', 'EMAIL DIRECT DIRIGEANT',
+          );
+          const tel = col(row,
+            'TEL CONTACT', 'TEL DIRECT', 'LIGNE DIRECTE',
+            'NUMÉRO DE TÉLÉPHONE', 'NUMERO DE TELEPHONE', 'PHONE',
+          ) || societeMap[raison].tel_societe;
+
+          societeMap[raison].contacts.push({
+            nom, prenom, fonction, email,
+            tel_societe:     tel,
+            statut_original: col(row, 'STATUT', 'STATUS'),
+            score_poste:     scorePoste(fonction),
+          });
         });
+
         Object.values(societeMap).forEach(s => {
           s.contacts.sort((a, b) => b.score_poste - a.score_poste);
           s.contacts.forEach((c, i) => { c.rang_poste = i + 1; });
@@ -335,6 +385,7 @@ export function useLeads() {
             raison_sociale: soc.raison_sociale, adresse: soc.adresse,
             cp: soc.cp, ville: soc.ville, web: soc.web, activite: soc.activite,
             tel_societe: soc.tel_societe,
+            siret: soc.siret_import || null,
             batch_id:   batch.id,
             assigne_a:  targetUser,
             import_batch_id: batch.id,
@@ -348,6 +399,7 @@ export function useLeads() {
               import_id: imp.id, nom: c.nom, prenom: c.prenom, fonction: c.fonction,
               tel_societe: c.tel_societe, statut_original: c.statut_original,
               score_poste: c.score_poste, rang_poste: c.rang_poste,
+              email: c.email || null,
             }))
           );
           if (eCont) throw eCont;
