@@ -29,17 +29,30 @@ export default function VisitesTechniques() {
   const [loading,   setLoading]   = useState(true)
   const [search,    setSearch]    = useState('')
   const [filterStatut, setFilterStatut] = useState('')
+  const [profiles,  setProfiles]  = useState([])
 
   useEffect(() => {
     if (!profile) return
     loadVisites()
+    if (profile.role === 'admin') loadProfiles()
   }, [profile?.id])
+
+  const loadProfiles = async () => {
+    const { data } = await supabase.from('profiles').select('id, prenom, nom')
+    setProfiles(data || [])
+  }
+
+  const handleReassign = async (e, visiteId, newUserId) => {
+    e.stopPropagation()
+    await supabase.from('visites_techniques').update({ assigne_a: newUserId || null }).eq('id', visiteId)
+    setVisites(vs => vs.map(v => v.id === visiteId ? { ...v, assigne_a: newUserId || null } : v))
+  }
 
   const loadVisites = async () => {
     setLoading(true)
     let query = supabase
       .from('visites_techniques')
-      .select('id, created_at, updated_at, statut, type_fiche, donnees, photos, dossier_id')
+      .select('id, created_at, updated_at, statut, type_fiche, donnees, photos, dossier_id, assigne_a')
       .order('updated_at', { ascending: false })
     if (profile?.role !== 'admin') query = query.eq('assigne_a', profile.id)
     const { data: vData } = await query
@@ -131,10 +144,11 @@ export default function VisitesTechniques() {
       ) : (
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
           {/* Entêtes */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px 100px 80px 80px 44px', gap: 0, background: C.bg, borderBottom: `1px solid ${C.border}`, padding: '10px 18px', fontSize: 11, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: profile?.role === 'admin' ? '1fr 130px 100px 140px 80px 80px 44px' : '1fr 130px 100px 80px 80px 44px', gap: 0, background: C.bg, borderBottom: `1px solid ${C.border}`, padding: '10px 18px', fontSize: 11, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             <span>Site / Dossier</span>
             <span>Fiche CEE</span>
             <span>Statut</span>
+            {profile?.role === 'admin' && <span>Attribué à</span>}
             <span>Photos</span>
             <span>Mise à jour</span>
             <span />
@@ -143,12 +157,13 @@ export default function VisitesTechniques() {
           {filtered.map((v, i) => {
             const nom = v.donnees?.nom_site || v.donnees?.raison_sociale || v.dossiers?.prospects?.raison_sociale || 'Sans nom'
             const updatedAt = new Date(v.updated_at).toLocaleDateString('fr-FR')
+            const cols = profile?.role === 'admin' ? '1fr 130px 100px 140px 80px 80px 44px' : '1fr 130px 100px 80px 80px 44px'
             return (
               <div
                 key={v.id}
                 onClick={() => navigate(`/visites/${v.id}`)}
                 style={{
-                  display: 'grid', gridTemplateColumns: '1fr 130px 100px 80px 80px 44px',
+                  display: 'grid', gridTemplateColumns: cols,
                   gap: 0, padding: '13px 18px', cursor: 'pointer',
                   borderBottom: i < filtered.length - 1 ? `1px solid ${C.bg}` : 'none',
                   alignItems: 'center',
@@ -170,6 +185,20 @@ export default function VisitesTechniques() {
                   ))}
                 </div>
                 <StatutBadge statut={v.statut} />
+                {profile?.role === 'admin' && (
+                  <div onClick={e => e.stopPropagation()}>
+                    <select
+                      value={v.assigne_a || ''}
+                      onChange={e => handleReassign(e, v.id, e.target.value)}
+                      style={{ fontSize: 12, border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 6px', background: C.surface, color: C.text, fontFamily: 'inherit', cursor: 'pointer', maxWidth: 130 }}
+                    >
+                      <option value="">— Non attribué</option>
+                      {profiles.map(p => (
+                        <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <span style={{ fontSize: 12, color: C.textMid }}>
                   {(v.photos || []).length} 📷
                 </span>
