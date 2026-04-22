@@ -62,6 +62,20 @@ const s = StyleSheet.create({
   statutBrouillon: { backgroundColor: '#FEF3C7', color: '#D97706', padding: '3 8', borderRadius: 4, fontSize: 9, fontWeight: 'bold' },
 })
 
+const getChaudieres = (d) => {
+  if (Array.isArray(d.chaudieres) && d.chaudieres.length > 0) return d.chaudieres
+  if (d.type_installation || d.marque) return [{
+    type_installation: d.type_installation, marque: d.marque, modele: d.modele,
+    annee_fabrication: d.annee_fabrication, puissance_nominale_kw: d.puissance_nominale_kw,
+    combustible: d.combustible, temperature_consigne: d.temperature_consigne,
+    heures_fonctionnement: d.heures_fonctionnement, etat_general: d.etat_general,
+    regulation: d.regulation, bruleur: d.bruleur, bruleur_marque: d.bruleur_marque,
+    bruleur_modele: d.bruleur_modele, plaque_constructeur_notes: d.plaque_constructeur_notes,
+    puissance_convectif_kw: d.puissance_convectif_kw, puissance_radiatif_kw: d.puissance_radiatif_kw,
+  }]
+  return []
+}
+
 const val = (obj, key, fallback = '—') => {
   const v = obj?.[key]
   return (v !== undefined && v !== null && v !== '') ? String(v) : fallback
@@ -160,36 +174,39 @@ export default function VisiteRapportPDF({ visite, dossierRef }) {
         </View>
 
         {/* Chaufferie — Production */}
-        {(d.type_installation || d.marque || d.puissance_nominale_kw) && (
+        {getChaudieres(d).length > 0 && (
           <View style={s.section}>
             <SectionTitle>Chaufferie</SectionTitle>
 
-            <SubTitle>Production</SubTitle>
-            <View style={s.grid}>
-              <Field label="Type d'installation"   value={INSTAL_LABELS[d.type_installation] || val(d, 'type_installation')} />
-              <Field label="État général"          value={ETAT_LABELS[d.etat_general] || val(d, 'etat_general')} />
-              <Field label="Marque"                value={val(d, 'marque')} />
-              <Field label="Modèle / Référence"    value={val(d, 'modele')} />
-              <Field label="Année de fabrication"  value={val(d, 'annee_fabrication')} />
-              <Field label="Puissance nominale"    value={d.puissance_nominale_kw ? `${d.puissance_nominale_kw} kW` : null} />
-              <Field label="Combustible actuel"    value={COMBUST_LABELS[d.combustible] || val(d, 'combustible')} />
-              <Field label="Régulation"            value={REGUL_LABELS[d.regulation] || val(d, 'regulation')} />
-              <Field label="Température de consigne" value={d.temperature_consigne ? `${d.temperature_consigne} °C` : null} />
-              <Field label="Heures de fonctionnement / an" value={d.heures_fonctionnement ? `${d.heures_fonctionnement} h` : null} />
-              {d.bruleur === 'oui' && <>
-                <Field label="Marque brûleur"  value={val(d, 'bruleur_marque')} />
-                <Field label="Modèle brûleur"  value={val(d, 'bruleur_modele')} />
-              </>}
-            </View>
-
-            {d.plaque_constructeur_notes && (
-              <View>
-                <Text style={s.fLabel}>Plaque constructeur</Text>
-                <View style={s.noteBox}>
-                  <Text style={s.noteText}>{d.plaque_constructeur_notes}</Text>
+            {getChaudieres(d).map((ch, idx) => (
+              <View key={idx} style={{ marginBottom: 10 }}>
+                {getChaudieres(d).length > 1 && <SubTitle>Installation {idx + 1}</SubTitle>}
+                <View style={s.grid}>
+                  <Field label="Type d'installation"   value={INSTAL_LABELS[ch.type_installation] || val(ch, 'type_installation')} />
+                  <Field label="État général"          value={ETAT_LABELS[ch.etat_general] || val(ch, 'etat_general')} />
+                  <Field label="Marque"                value={val(ch, 'marque')} />
+                  <Field label="Modèle / Référence"    value={val(ch, 'modele')} />
+                  <Field label="Année de fabrication"  value={val(ch, 'annee_fabrication')} />
+                  <Field label="Puissance nominale"    value={ch.puissance_nominale_kw ? `${ch.puissance_nominale_kw} kW` : null} />
+                  <Field label="Combustible actuel"    value={COMBUST_LABELS[ch.combustible] || val(ch, 'combustible')} />
+                  <Field label="Régulation"            value={REGUL_LABELS[ch.regulation] || val(ch, 'regulation')} />
+                  <Field label="Température de consigne" value={ch.temperature_consigne ? `${ch.temperature_consigne} °C` : null} />
+                  <Field label="Heures de fonctionnement / an" value={ch.heures_fonctionnement ? `${ch.heures_fonctionnement} h` : null} />
+                  <Field label="Puissance convectif à installer" value={ch.puissance_convectif_kw ? `${ch.puissance_convectif_kw} kW` : null} />
+                  <Field label="Puissance radiatif à installer" value={ch.puissance_radiatif_kw ? `${ch.puissance_radiatif_kw} kW` : null} />
+                  {ch.bruleur === 'oui' && <>
+                    <Field label="Marque brûleur"  value={val(ch, 'bruleur_marque')} />
+                    <Field label="Modèle brûleur"  value={val(ch, 'bruleur_modele')} />
+                  </>}
                 </View>
+                {ch.plaque_constructeur_notes && (
+                  <View>
+                    <Text style={s.fLabel}>Plaque constructeur</Text>
+                    <View style={s.noteBox}><Text style={s.noteText}>{ch.plaque_constructeur_notes}</Text></View>
+                  </View>
+                )}
               </View>
-            )}
+            ))}
 
             {(d.chauf_nb_aerothermes || d.chauf_puissance_aero_kw || d.chauf_distribution_obs) && (
               <View style={{ marginTop: 8 }}>
@@ -232,18 +249,23 @@ export default function VisiteRapportPDF({ visite, dossierRef }) {
       <Page size="A4" style={s.page}>
 
         {/* Données techniques */}
-        {(d.zone_climatique || d.surface_chauffee_m2 || d.puissance_convectif_kw) && (
+        {(d.zone_climatique || d.surface_chauffee_m2 || d.type_charpente || d.type_toiture) && (
           <View style={s.section}>
             <SectionTitle>Données techniques{fiches !== '—' ? ` — ${fiches}` : ''}</SectionTitle>
             <View style={s.grid}>
               <Field label="Zone climatique"     value={val(d, 'zone_climatique')} />
               <Field label="Type de bâtiment"    value={BATIM_LABELS[d.type_batiment] || val(d, 'type_batiment')} />
               <Field label="Surface chauffée"    value={d.surface_chauffee_m2 ? `${d.surface_chauffee_m2} m²` : null} />
-              <Field label="Hauteur sous plafond" value={d.hauteur_sous_plafond_m ? `${d.hauteur_sous_plafond_m} m` : null} />
-              <Field label="Puissance convectif" value={d.puissance_convectif_kw ? `${d.puissance_convectif_kw} kW` : null} />
-              <Field label="Puissance radiatif"  value={d.puissance_radiatif_kw ? `${d.puissance_radiatif_kw} kW` : null} />
               <Field label="Isolation bâtiment"  value={val(d, 'isolation_batiment')} />
+              <Field label="Type de charpente"   value={d.type_charpente === 'metallique' ? 'Métallique' : d.type_charpente === 'bois' ? 'Bois' : d.type_charpente === 'beton' ? 'Béton' : val(d, 'type_charpente')} />
+              <Field label="Type de toiture"     value={d.type_toiture === 'plat' ? 'Plate / Terrasse' : d.type_toiture === 'double_pans' ? 'Double pans' : d.type_toiture === 'shed' ? 'Shed (dents de scie)' : d.type_toiture === 'bac_acier' ? 'Bac acier' : val(d, 'type_toiture')} />
             </View>
+            {(d.zones_hauteur || []).length > 0 && (
+              <View style={s.fieldFull}>
+                <Text style={s.fLabel}>Hauteurs sous plafond</Text>
+                <Text style={s.fValue}>{(d.zones_hauteur || []).map(zh => `${zh.zone || 'Zone'} : ${zh.hauteur_m || '?'} m`).join(' · ')}</Text>
+              </View>
+            )}
 
             {kwhCumac > 0 && (
               <View style={s.highlight}>
@@ -310,9 +332,25 @@ export default function VisiteRapportPDF({ visite, dossierRef }) {
         {/* Observations générales */}
         {d.observations_generales && (
           <View style={s.section}>
-            <SectionTitle>Observations générales</SectionTitle>
+            <SectionTitle>Observations et contrainte opérationnel</SectionTitle>
             <View style={s.noteBox}>
               <Text style={s.noteText}>{d.observations_generales}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Nacelle et circulation */}
+        {(d.nacelle_disponible || d.passage_nacelle) && (
+          <View style={s.section}>
+            <SectionTitle>Nacelle et circulation</SectionTitle>
+            <View style={s.grid}>
+              <Field label="Nacelle disponible" value={d.nacelle_disponible === 'oui' ? 'Oui' : d.nacelle_disponible === 'non' ? 'Non' : d.nacelle_disponible === 'a_prevoir' ? 'À prévoir' : val(d, 'nacelle_disponible')} />
+              {d.nacelle_disponible === 'oui' && <>
+                <Field label="Type de nacelle" value={val(d, 'nacelle_type')} />
+                <Field label="Hauteur max" value={d.nacelle_hauteur_max ? `${d.nacelle_hauteur_max} m` : null} />
+              </>}
+              <Field label="Passage de nacelle" value={d.passage_nacelle === 'libre' ? 'Libre' : d.passage_nacelle === 'zones_difficiles' ? 'Zones difficiles' : d.passage_nacelle === 'impossible' ? 'Impossible' : val(d, 'passage_nacelle')} />
+              {d.nacelle_observations && <Field label="Observations" value={d.nacelle_observations} full />}
             </View>
           </View>
         )}

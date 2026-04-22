@@ -10,6 +10,7 @@ export const PHOTO_CATEGORIES = [
   { id: 'equipements',         label: 'Équipements existants',  icon: '🔧' },
   { id: 'plaque_constructeur', label: 'Plaque constructeur',    icon: '🏷️' },
   { id: 'compteur',            label: 'Compteur',               icon: '📊' },
+  { id: 'nacelle',             label: 'Nacelle & accès',        icon: '🏗' },
   { id: 'apres_travaux',       label: 'Après travaux',          icon: '✅' },
   { id: 'autres',              label: 'Autres',                 icon: '📷' },
 ]
@@ -64,6 +65,9 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
   const [localPhotos, setLocalPhotos] = useState([])
   const [expanded,    setExpanded]    = useState({})
   const [lightbox,    setLightbox]    = useState(null)
+  const [dragOverCat, setDragOverCat] = useState(null)
+
+  const isMobile = /Android|iPhone|iPad|iPod/.test(navigator.userAgent) || navigator.maxTouchPoints > 1
   const inputs      = useRef({})
   const pendingRef  = useRef({})  // { tempId: { catId, file, localUrl } }
   const photosRef   = useRef(photos)
@@ -85,7 +89,8 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
     try {
       const ios  = isIOSDevice()
       const ipad = isIPadDevice()
-      if (!ios) await saveToDevice(file)
+      const isAndroid = /Android/.test(navigator.userAgent)
+      if (isAndroid) await saveToDevice(file)
       let toUpload = file
       if (!ipad) {
         try { toUpload = await compressImage(file) } catch { toUpload = file }
@@ -119,6 +124,14 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
       ))
     }
   }, [visiteId, onPhotosChange])
+
+  const handleDrop = (catId, e) => {
+    e.preventDefault()
+    setDragOverCat(null)
+    Array.from(e.dataTransfer.files)
+      .filter(f => f.type.startsWith('image/'))
+      .forEach(file => handleFile(catId, file))
+  }
 
   // Retry auto quand connexion rétablie
   useEffect(() => {
@@ -259,23 +272,29 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
                   ref={el => inputs.current[cat.id] = el}
                   type="file"
                   accept="image/*"
-                  capture="environment"
+                  multiple
                   style={{ display: 'none' }}
-                  onChange={e => handleFile(cat.id, e.target.files[0])}
+                  onChange={e => {
+                    Array.from(e.target.files).forEach(file => handleFile(cat.id, file))
+                    if (inputs.current[cat.id]) inputs.current[cat.id].value = ''
+                  }}
                 />
                 <button
                   onClick={() => inputs.current[cat.id]?.click()}
                   disabled={!visiteId}
+                  onDragOver={e => { e.preventDefault(); setDragOverCat(cat.id) }}
+                  onDragLeave={() => setDragOverCat(null)}
+                  onDrop={e => handleDrop(cat.id, e)}
                   style={{
-                    background: uploading ? C.bg : '#EFF6FF',
-                    border: `1.5px dashed ${uploading ? C.border : '#93C5FD'}`,
+                    background: dragOverCat === cat.id ? '#DBEAFE' : uploading ? C.bg : '#EFF6FF',
+                    border: `1.5px dashed ${dragOverCat === cat.id ? C.accent : uploading ? C.border : '#93C5FD'}`,
                     borderRadius: 8, padding: '10px 0', width: '100%',
                     color: uploading ? C.textSoft : C.accent,
                     fontSize: 13, fontWeight: 600, cursor: !visiteId ? 'not-allowed' : 'pointer',
                     fontFamily: 'inherit', marginTop: catPhotos.length > 0 ? 0 : 12,
                   }}
                 >
-                  {uploading ? '⏳ Upload en cours…' : '📷 Ajouter une photo'}
+                  {uploading ? '⏳ Upload en cours…' : isMobile ? '📷 Ajouter une photo' : '📁 Glisser-déposer ou cliquer pour sélectionner'}
                 </button>
               </div>
             )}

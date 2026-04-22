@@ -40,14 +40,13 @@ const ALL_ZONES = [
   { id: 'td',           icon: '🔌', title: 'Tableau divisionnaire',   photoCats: ['td'] },
   { id: 'ventilation',  icon: '💨', title: 'Ventilation',             photoCats: ['ventilation'] },
   { id: 'isolation',    icon: '🏠', title: 'Isolation',               photoCats: ['isolation'] },
-  { id: 'equipements',  icon: '🔧', title: 'Équipements & CEE',       photoCats: ['equipements', 'plaque_constructeur', 'compteur'] },
-  { id: 'observations', icon: '📝', title: 'Observations',            photoCats: ['observations', 'autres'] },
+  { id: 'observations', icon: '📝', title: 'Observations et contrainte opérationnel', photoCats: ['observations', 'nacelle', 'autres'] },
   { id: 'rapport',      icon: '📄', title: 'Rapport & Envoi',         photoCats: [] },
 ]
 
 function getActiveZones(fiches) {
   if (!fiches || fiches.length === 0) return ALL_ZONES
-  const needed = new Set(['infos','vue_generale','equipements','observations','rapport'])
+  const needed = new Set(['infos','vue_generale','observations','rapport'])
   fiches.forEach(f => { (FICHES_CEE[f]?.zones || []).forEach(z => needed.add(z)) })
   return ALL_ZONES.filter(z => needed.has(z.id))
 }
@@ -222,6 +221,9 @@ export default function VisiteTechniqueDetail() {
   const { profile, session, dossiers: storeDossiers, fetchDossiers } = useStore()
   const isNew                = id === 'new'
 
+  const visiteIdRef  = useRef(isNew ? null : id)
+  const creatingRef  = useRef(null)
+
   const [visiteId,    setVisiteId]    = useState(isNew ? null : id)
   const [donnees,     setDonnees]     = useState({ date_visite: new Date().toISOString().split('T')[0] })
   const [photos,      setPhotos]      = useState([])
@@ -259,6 +261,7 @@ export default function VisiteTechniqueDetail() {
   }, [storeDossiers])
 
   const loadVisite = async () => {
+    visiteIdRef.current = id
     setLoading(true)
     const { data } = await supabase.from('visites_techniques').select('*').eq('id', id).single()
     if (!data) { navigate('/visites', { replace: true }); return }
@@ -291,18 +294,25 @@ export default function VisiteTechniqueDetail() {
 
   // ── Création + autosave ─────────────────────────────────────────────────────
   const ensureCreated = useCallback(async (d, p) => {
-    if (visiteId) return visiteId
-    const fiches = d.fiches || []
-    const typeFiche = fiches[0] || 'IND-BA-110'
-    const { data, error } = await supabase.from('visites_techniques').insert({
-      created_by: profile?.id, assigne_a: profile?.id, type_fiche: typeFiche, statut: 'brouillon', donnees: d, photos: p,
-    }).select().single()
-    if (error) throw error
-    setVisiteId(data.id)
-    setToken(data.partage_token)
-    navigate(`/visites/${data.id}`, { replace: true })
-    return data.id
-  }, [visiteId, profile?.id, navigate])
+    if (visiteIdRef.current) return visiteIdRef.current
+    if (creatingRef.current) return creatingRef.current
+    const promise = (async () => {
+      const fiches = d.fiches || []
+      const typeFiche = fiches[0] || 'IND-BA-110'
+      const { data, error } = await supabase.from('visites_techniques').insert({
+        created_by: profile?.id, assigne_a: profile?.id, type_fiche: typeFiche,
+        statut: 'brouillon', donnees: d, photos: p,
+      }).select().single()
+      if (error) throw error
+      visiteIdRef.current = data.id
+      setVisiteId(data.id)
+      setToken(data.partage_token)
+      navigate(`/visites/${data.id}`, { replace: true })
+      return data.id
+    })()
+    creatingRef.current = promise
+    try { return await promise } finally { creatingRef.current = null }
+  }, [profile?.id, navigate])
 
   const scheduleSave = useCallback((newDonnees) => {
     setSaveStatus('saving')
@@ -459,6 +469,23 @@ export default function VisiteTechniqueDetail() {
   const zonePhotoCount = (zone) => photos.filter(p => zone.photoCats.includes(p.categorie)).length
   const nom = donnees.nom_site || donnees.raison_sociale || (isNew ? 'Nouvelle visite' : 'Sans nom')
   const selectedFiches = donnees.fiches || []
+
+  const initChaudieres = () => {
+    const ch = v('chaudieres', null)
+    if (Array.isArray(ch) && ch.length > 0) return ch
+    // Migration depuis format plat
+    const legacy = {
+      type_installation: v('type_installation'), marque: v('marque'), modele: v('modele'),
+      annee_fabrication: v('annee_fabrication'), puissance_nominale_kw: v('puissance_nominale_kw'),
+      combustible: v('combustible'), temperature_consigne: v('temperature_consigne'),
+      heures_fonctionnement: v('heures_fonctionnement'), etat_general: v('etat_general'),
+      regulation: v('regulation'), bruleur: v('bruleur'), bruleur_marque: v('bruleur_marque'),
+      bruleur_modele: v('bruleur_modele'), plaque_constructeur_notes: v('plaque_constructeur_notes'),
+      puissance_convectif_kw: v('puissance_convectif_kw'), puissance_radiatif_kw: v('puissance_radiatif_kw'),
+    }
+    if (Object.values(legacy).some(x => x && x !== '')) return [legacy]
+    return [{}]
+  }
 
   if (loading) return (
     <div style={{ padding: 40, textAlign: 'center', color: C.textSoft }}>Chargement…</div>
@@ -684,9 +711,6 @@ export default function VisiteTechniqueDetail() {
                           <Field label="Surface chauffée (m²)">
                             <input style={INP} type="number" min="0" value={v('surface_chauffee_m2')} onChange={e => set('surface_chauffee_m2', e.target.value)} placeholder="Ex: 1200" />
                           </Field>
-                          <Field label="Hauteur sous plafond (m)">
-                            <input style={INP} type="number" min="0" step="0.1" value={v('hauteur_sous_plafond_m')} onChange={e => set('hauteur_sous_plafond_m', e.target.value)} placeholder="Ex: 6" />
-                          </Field>
                           <Field label="Isolation du bâtiment">
                             <select style={SEL} value={v('isolation_batiment')} onChange={e => set('isolation_batiment', e.target.value)}>
                               <option value="">— Sélectionner —</option>
@@ -695,6 +719,65 @@ export default function VisiteTechniqueDetail() {
                               <option value="faible">Faible / Non isolé</option>
                             </select>
                           </Field>
+                          <Field label="Type de charpente">
+                            <select style={SEL} value={v('type_charpente')} onChange={e => set('type_charpente', e.target.value)}>
+                              <option value="">— Sélectionner —</option>
+                              <option value="metallique">Métallique</option>
+                              <option value="bois">Bois</option>
+                              <option value="beton">Béton</option>
+                              <option value="mixte">Mixte</option>
+                              <option value="autre">Autre</option>
+                            </select>
+                          </Field>
+                          <Field label="Type de toiture">
+                            <select style={SEL} value={v('type_toiture')} onChange={e => set('type_toiture', e.target.value)}>
+                              <option value="">— Sélectionner —</option>
+                              <option value="plat">Toiture plate / terrasse</option>
+                              <option value="double_pans">Double pans</option>
+                              <option value="shed">Shed (dents de scie)</option>
+                              <option value="bac_acier">Bac acier</option>
+                              <option value="voute">Voûte</option>
+                              <option value="autre">Autre</option>
+                            </select>
+                          </Field>
+                        </div>
+
+                        {/* Multi-hauteurs */}
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: C.textMid, marginBottom: 8 }}>
+                            Hauteurs sous plafond (par zone)
+                            <button onClick={() => {
+                              const zones = v('zones_hauteur', [])
+                              set('zones_hauteur', [...zones, { zone: '', hauteur_m: '' }])
+                            }} style={{ marginLeft: 10, background: C.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                              + Ajouter une zone
+                            </button>
+                          </div>
+                          {(v('zones_hauteur', []).length === 0) && (
+                            <div style={{ fontSize: 12, color: C.textSoft, fontStyle: 'italic' }}>
+                              Cliquez sur "+ Ajouter une zone" pour renseigner une hauteur (ex: Atelier / 8m)
+                            </div>
+                          )}
+                          {v('zones_hauteur', []).map((zh, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                              <input style={{ ...INP, flex: 2 }} value={zh.zone || ''} placeholder="Zone (ex: Atelier nord)"
+                                onChange={e => {
+                                  const arr = [...v('zones_hauteur', [])]
+                                  arr[i] = { ...arr[i], zone: e.target.value }
+                                  set('zones_hauteur', arr)
+                                }} />
+                              <input style={{ ...INP, flex: 1 }} type="number" min="0" step="0.5" value={zh.hauteur_m || ''} placeholder="Hauteur (m)"
+                                onChange={e => {
+                                  const arr = [...v('zones_hauteur', [])]
+                                  arr[i] = { ...arr[i], hauteur_m: e.target.value }
+                                  set('zones_hauteur', arr)
+                                }} />
+                              <button onClick={() => {
+                                const arr = v('zones_hauteur', []).filter((_, j) => j !== i)
+                                set('zones_hauteur', arr)
+                              }} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', fontSize: 16, padding: '0 4px' }}>✕</button>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -704,86 +787,124 @@ export default function VisiteTechniqueDetail() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                         <PhotoSection visiteId={visiteId} photos={photos} onPhotosChange={handlePhotosChange} showCategories={zone.photoCats} />
 
-                        {/* Production */}
-                        <SubSection title="🔥 Production">
-                          <Field label="Type d'installation">
-                            <select style={SEL} value={v('type_installation')} onChange={e => set('type_installation', e.target.value)}>
-                              <option value="">— Sélectionner —</option>
-                              <option value="chaudiere">Chaudière</option>
-                              <option value="aerotherme">Aérotherme</option>
-                              <option value="radiateur">Radiateur</option>
-                              <option value="generateur_air">Générateur air chaud</option>
-                              <option value="plancher_chauffant">Plancher chauffant</option>
-                              <option value="pompe_chaleur">Pompe à chaleur</option>
-                              <option value="autre">Autre</option>
-                            </select>
-                          </Field>
-                          <Field label="Marque">
-                            <input style={INP} value={v('marque')} onChange={e => set('marque', e.target.value)} placeholder="Ex: De Dietrich" />
-                          </Field>
-                          <Field label="Modèle / Référence">
-                            <input style={INP} value={v('modele')} onChange={e => set('modele', e.target.value)} placeholder="Ex: Vitodens 200-W" />
-                          </Field>
-                          <Field label="Année de fabrication">
-                            <input style={INP} type="number" min="1950" max="2030" value={v('annee_fabrication')} onChange={e => set('annee_fabrication', e.target.value)} placeholder="Ex: 2008" />
-                          </Field>
-                          <Field label="Puissance nominale (kW)">
-                            <input style={INP} type="number" min="0" step="0.1" value={v('puissance_nominale_kw')} onChange={e => set('puissance_nominale_kw', e.target.value)} placeholder="Ex: 150" />
-                          </Field>
-                          <Field label="Combustible actuel">
-                            <select style={SEL} value={v('combustible')} onChange={e => set('combustible', e.target.value)}>
-                              <option value="">— Sélectionner —</option>
-                              <option value="gaz_naturel">Gaz naturel</option>
-                              <option value="gpl">GPL</option>
-                              <option value="fioul">Fioul</option>
-                              <option value="electricite">Électricité</option>
-                              <option value="bois_granules">Bois / Granulés</option>
-                              <option value="autre">Autre</option>
-                            </select>
-                          </Field>
-                          <Field label="Température de consigne (°C)">
-                            <input style={INP} type="number" min="5" max="30" value={v('temperature_consigne')} onChange={e => set('temperature_consigne', e.target.value)} placeholder="Ex: 16" />
-                          </Field>
-                          <Field label="Heures de fonctionnement / an">
-                            <input style={INP} type="number" min="0" max="8760" value={v('heures_fonctionnement')} onChange={e => set('heures_fonctionnement', e.target.value)} placeholder="Ex: 3000" />
-                          </Field>
-                          <Field label="État général">
-                            <select style={SEL} value={v('etat_general')} onChange={e => set('etat_general', e.target.value)}>
-                              <option value="">— Sélectionner —</option>
-                              <option value="bon">Bon état</option>
-                              <option value="moyen">État moyen</option>
-                              <option value="mauvais">Mauvais état</option>
-                              <option value="hors_service">Hors service</option>
-                            </select>
-                          </Field>
-                          <Field label="Régulation existante">
-                            <select style={SEL} value={v('regulation')} onChange={e => set('regulation', e.target.value)}>
-                              <option value="">— Sélectionner —</option>
-                              <option value="aucune">Aucune</option>
-                              <option value="thermostat_simple">Thermostat simple</option>
-                              <option value="programmable">Thermostat programmable</option>
-                              <option value="gestion_technique">Gestion technique bâtiment</option>
-                            </select>
-                          </Field>
-                          <Field label="Brûleur présent ?">
-                            <select style={SEL} value={v('bruleur')} onChange={e => set('bruleur', e.target.value)}>
-                              <option value="">— Sélectionner —</option>
-                              <option value="oui">Oui</option>
-                              <option value="non">Non</option>
-                            </select>
-                          </Field>
-                          {v('bruleur') === 'oui' && <>
-                            <Field label="Marque brûleur">
-                              <input style={INP} value={v('bruleur_marque')} onChange={e => set('bruleur_marque', e.target.value)} placeholder="Ex: Riello" />
-                            </Field>
-                            <Field label="Modèle brûleur">
-                              <input style={INP} value={v('bruleur_modele')} onChange={e => set('bruleur_modele', e.target.value)} />
-                            </Field>
-                          </>}
-                          <Field label="Plaque constructeur" hint="(photo ci-dessus)" full>
-                            <textarea style={{ ...INP, resize: 'vertical', minHeight: 60 }} value={v('plaque_constructeur_notes')} onChange={e => set('plaque_constructeur_notes', e.target.value)} placeholder="Informations relevées sur la plaque constructeur…" />
-                          </Field>
-                        </SubSection>
+                        {/* Chaudières multiples */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.textMid }}>🔥 Équipements de production</div>
+                          <button onClick={() => {
+                            const arr = initChaudieres()
+                            set('chaudieres', [...arr, {}])
+                          }} style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: 7, padding: '6px 14px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>
+                            + Ajouter une chaudière
+                          </button>
+                        </div>
+                        {initChaudieres().map((ch, idx) => {
+                          const setCh = (key, val) => {
+                            const arr = [...initChaudieres()]
+                            arr[idx] = { ...arr[idx], [key]: val }
+                            set('chaudieres', arr)
+                          }
+                          const getCh = (key, def = '') => ch[key] ?? def
+                          return (
+                            <div key={idx} style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden', marginBottom: 10 }}>
+                              <div style={{ background: C.bg, padding: '8px 14px', fontSize: 12, fontWeight: 700, color: C.textMid, borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>Chaudière / Installation {idx + 1}</span>
+                                {initChaudieres().length > 1 && (
+                                  <button onClick={() => {
+                                    const arr = initChaudieres().filter((_, j) => j !== idx)
+                                    set('chaudieres', arr)
+                                  }} style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>
+                                    Supprimer
+                                  </button>
+                                )}
+                              </div>
+                              <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+                                <Field label="Type d'installation">
+                                  <select style={SEL} value={getCh('type_installation')} onChange={e => setCh('type_installation', e.target.value)}>
+                                    <option value="">— Sélectionner —</option>
+                                    <option value="chaudiere">Chaudière</option>
+                                    <option value="aerotherme">Aérotherme</option>
+                                    <option value="radiateur">Radiateur</option>
+                                    <option value="generateur_air">Générateur air chaud</option>
+                                    <option value="plancher_chauffant">Plancher chauffant</option>
+                                    <option value="pompe_chaleur">Pompe à chaleur</option>
+                                    <option value="autre">Autre</option>
+                                  </select>
+                                </Field>
+                                <Field label="Marque"><input style={INP} value={getCh('marque')} onChange={e => setCh('marque', e.target.value)} placeholder="Ex: De Dietrich" /></Field>
+                                <Field label="Modèle / Référence"><input style={INP} value={getCh('modele')} onChange={e => setCh('modele', e.target.value)} placeholder="Ex: Vitodens 200-W" /></Field>
+                                <Field label="Année de fabrication"><input style={INP} type="number" min="1950" max="2030" value={getCh('annee_fabrication')} onChange={e => setCh('annee_fabrication', e.target.value)} placeholder="Ex: 2008" /></Field>
+                                <Field label="Puissance nominale (kW)"><input style={INP} type="number" min="0" step="0.1" value={getCh('puissance_nominale_kw')} onChange={e => setCh('puissance_nominale_kw', e.target.value)} placeholder="Ex: 150" /></Field>
+                                <Field label="Combustible actuel">
+                                  <select style={SEL} value={getCh('combustible')} onChange={e => setCh('combustible', e.target.value)}>
+                                    <option value="">— Sélectionner —</option>
+                                    <option value="gaz_naturel">Gaz naturel</option>
+                                    <option value="gpl">GPL</option>
+                                    <option value="fioul">Fioul</option>
+                                    <option value="electricite">Électricité</option>
+                                    <option value="bois_granules">Bois / Granulés</option>
+                                    <option value="autre">Autre</option>
+                                  </select>
+                                </Field>
+                                <Field label="Température de consigne (°C)"><input style={INP} type="number" min="5" max="30" value={getCh('temperature_consigne')} onChange={e => setCh('temperature_consigne', e.target.value)} placeholder="Ex: 16" /></Field>
+                                <Field label="Heures de fonctionnement / an"><input style={INP} type="number" min="0" max="8760" value={getCh('heures_fonctionnement')} onChange={e => setCh('heures_fonctionnement', e.target.value)} placeholder="Ex: 3000" /></Field>
+                                <Field label="État général">
+                                  <select style={SEL} value={getCh('etat_general')} onChange={e => setCh('etat_general', e.target.value)}>
+                                    <option value="">— Sélectionner —</option>
+                                    <option value="bon">Bon état</option>
+                                    <option value="moyen">État moyen</option>
+                                    <option value="mauvais">Mauvais état</option>
+                                    <option value="hors_service">Hors service</option>
+                                  </select>
+                                </Field>
+                                <Field label="Régulation existante">
+                                  <select style={SEL} value={getCh('regulation')} onChange={e => setCh('regulation', e.target.value)}>
+                                    <option value="">— Sélectionner —</option>
+                                    <option value="aucune">Aucune</option>
+                                    <option value="thermostat_simple">Thermostat simple</option>
+                                    <option value="programmable">Thermostat programmable</option>
+                                    <option value="gestion_technique">Gestion technique bâtiment</option>
+                                  </select>
+                                </Field>
+                                <Field label="Brûleur présent ?">
+                                  <select style={SEL} value={getCh('bruleur')} onChange={e => setCh('bruleur', e.target.value)}>
+                                    <option value="">— Sélectionner —</option>
+                                    <option value="oui">Oui</option>
+                                    <option value="non">Non</option>
+                                  </select>
+                                </Field>
+                                {getCh('bruleur') === 'oui' && <>
+                                  <Field label="Marque brûleur"><input style={INP} value={getCh('bruleur_marque')} onChange={e => setCh('bruleur_marque', e.target.value)} placeholder="Ex: Riello" /></Field>
+                                  <Field label="Modèle brûleur"><input style={INP} value={getCh('bruleur_modele')} onChange={e => setCh('bruleur_modele', e.target.value)} /></Field>
+                                </>}
+                                <Field label="Puissance convectif à installer (kW)" hint="(déstratificateurs, soufflantes)">
+                                  <input style={INP} type="number" min="0" step="0.5" value={getCh('puissance_convectif_kw')} onChange={e => setCh('puissance_convectif_kw', e.target.value)} placeholder="Ex: 80" />
+                                </Field>
+                                <Field label="Puissance radiatif à installer (kW)" hint="(panneaux rayonnants)">
+                                  <input style={INP} type="number" min="0" step="0.5" value={getCh('puissance_radiatif_kw')} onChange={e => setCh('puissance_radiatif_kw', e.target.value)} placeholder="Ex: 40" />
+                                </Field>
+                                <Field label="Plaque constructeur" hint="(photo ci-dessus)" full>
+                                  <textarea style={{ ...INP, resize: 'vertical', minHeight: 60 }} value={getCh('plaque_constructeur_notes')} onChange={e => setCh('plaque_constructeur_notes', e.target.value)} placeholder="Informations relevées sur la plaque constructeur…" />
+                                </Field>
+                              </div>
+
+                              {/* kWh cumac si IND-BA-110 */}
+                              {selectedFiches.includes('IND-BA-110') && v('zone_climatique') && (parseFloat(getCh('puissance_convectif_kw')) > 0 || parseFloat(getCh('puissance_radiatif_kw')) > 0) && (() => {
+                                const COEF = { convectif: { H1: 7200, H2: 8000, H3: 8500 }, radiatif: { H1: 2500, H2: 2800, H3: 3000 } }
+                                const zc = v('zone_climatique')
+                                const kwh = Math.round((COEF.convectif[zc] || 0) * (parseFloat(getCh('puissance_convectif_kw')) || 0) + (COEF.radiatif[zc] || 0) * (parseFloat(getCh('puissance_radiatif_kw')) || 0))
+                                return (
+                                  <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '12px 16px', margin: '0 14px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                    <span style={{ fontSize: 24 }}>⚡</span>
+                                    <div>
+                                      <div style={{ fontSize: 11, color: '#1D4ED8', fontWeight: 700 }}>Estimation IND-BA-110 — Installation {idx + 1}</div>
+                                      <div style={{ fontSize: 20, fontWeight: 800, color: '#1D4ED8' }}>{kwh.toLocaleString('fr-FR')} kWh cumac</div>
+                                    </div>
+                                  </div>
+                                )
+                              })()}
+                            </div>
+                          )
+                        })}
 
                         {/* Distribution */}
                         <SubSection title="🌡 Distribution">
@@ -918,45 +1039,59 @@ export default function VisiteTechniqueDetail() {
                       </div>
                     )}
 
-                    {/* ══ ÉQUIPEMENTS & CEE ══ */}
-                    {zone.id === 'equipements' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                        <PhotoSection visiteId={visiteId} photos={photos} onPhotosChange={handlePhotosChange} showCategories={zone.photoCats} />
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-                          <Field label="Puissance convectif à installer (kW)" hint="(aérothermes, soufflantes)">
-                            <input style={INP} type="number" min="0" step="0.5" value={v('puissance_convectif_kw')} onChange={e => set('puissance_convectif_kw', e.target.value)} placeholder="Ex: 80" />
-                          </Field>
-                          <Field label="Puissance radiatif à installer (kW)" hint="(panneaux rayonnants)">
-                            <input style={INP} type="number" min="0" step="0.5" value={v('puissance_radiatif_kw')} onChange={e => set('puissance_radiatif_kw', e.target.value)} placeholder="Ex: 40" />
-                          </Field>
-                        </div>
-
-                        {/* kWh cumac IND-BA-110 */}
-                        {selectedFiches.includes('IND-BA-110') && v('zone_climatique') && (parseFloat(v('puissance_convectif_kw')) > 0 || parseFloat(v('puissance_radiatif_kw')) > 0) && (() => {
-                          const COEF = { convectif: { H1: 7200, H2: 8000, H3: 8500 }, radiatif: { H1: 2500, H2: 2800, H3: 3000 } }
-                          const z    = v('zone_climatique')
-                          const kwh  = Math.round((COEF.convectif[z] || 0) * (parseFloat(v('puissance_convectif_kw')) || 0) + (COEF.radiatif[z] || 0) * (parseFloat(v('puissance_radiatif_kw')) || 0))
-                          return (
-                            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
-                              <span style={{ fontSize: 28 }}>⚡</span>
-                              <div>
-                                <div style={{ fontSize: 11, color: '#1D4ED8', fontWeight: 700 }}>Estimation kWh cumac IND-BA-110</div>
-                                <div style={{ fontSize: 24, fontWeight: 800, color: '#1D4ED8' }}>{kwh.toLocaleString('fr-FR')} kWh</div>
-                                <div style={{ fontSize: 11, color: '#3B82F6' }}>Zone {z} · Convectif {v('puissance_convectif_kw') || 0} kW · Radiatif {v('puissance_radiatif_kw') || 0} kW</div>
-                              </div>
-                            </div>
-                          )
-                        })()}
-                      </div>
-                    )}
-
                     {/* ══ OBSERVATIONS ══ */}
                     {zone.id === 'observations' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                        <PhotoSection visiteId={visiteId} photos={photos} onPhotosChange={handlePhotosChange} showCategories={zone.photoCats} />
+                        <PhotoSection visiteId={visiteId} photos={photos} onPhotosChange={handlePhotosChange} showCategories={['observations']} />
                         <Field label="Observations" full>
                           <textarea style={{ ...INP, resize: 'vertical', minHeight: 120 }} value={v('observations_generales')} onChange={e => set('observations_generales', e.target.value)} placeholder="Horaires d'accès, digicode, interlocuteur sur site, remarques, contraintes particulières, travaux à prévoir…" />
                         </Field>
+
+                        {/* Nacelle */}
+                        <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
+                          <div style={{ background: C.bg, padding: '8px 14px', fontSize: 12, fontWeight: 700, color: C.textMid, borderBottom: `1px solid ${C.border}` }}>
+                            🏗 Nacelle et circulation
+                          </div>
+                          <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+                            <Field label="Nacelle disponible sur site ?">
+                              <select style={SEL} value={v('nacelle_disponible')} onChange={e => set('nacelle_disponible', e.target.value)}>
+                                <option value="">— Sélectionner —</option>
+                                <option value="oui">Oui</option>
+                                <option value="non">Non</option>
+                                <option value="a_prevoir">À prévoir par le client</option>
+                              </select>
+                            </Field>
+                            {v('nacelle_disponible') === 'oui' && <>
+                              <Field label="Type de nacelle">
+                                <select style={SEL} value={v('nacelle_type')} onChange={e => set('nacelle_type', e.target.value)}>
+                                  <option value="">— Sélectionner —</option>
+                                  <option value="ciseaux">Nacelle ciseaux</option>
+                                  <option value="articule">Nacelle articulée</option>
+                                  <option value="telescopique">Nacelle télescopique</option>
+                                  <option value="spider">Spider / araignée</option>
+                                  <option value="autre">Autre</option>
+                                </select>
+                              </Field>
+                              <Field label="Hauteur max (m)">
+                                <input style={INP} type="number" min="0" step="0.5" value={v('nacelle_hauteur_max')} onChange={e => set('nacelle_hauteur_max', e.target.value)} placeholder="Ex: 12" />
+                              </Field>
+                            </>}
+                            <Field label="Passage de nacelle">
+                              <select style={SEL} value={v('passage_nacelle')} onChange={e => set('passage_nacelle', e.target.value)}>
+                                <option value="">— Sélectionner —</option>
+                                <option value="libre">Libre dans tout le bâtiment</option>
+                                <option value="zones_difficiles">Certaines zones difficiles</option>
+                                <option value="impossible">Passage impossible</option>
+                              </select>
+                            </Field>
+                            <Field label="Observations nacelle / accès" full>
+                              <textarea style={{ ...INP, resize: 'vertical', minHeight: 70 }} value={v('nacelle_observations')} onChange={e => set('nacelle_observations', e.target.value)} placeholder="Zones difficiles, obstacles, contraintes de circulation…" />
+                            </Field>
+                          </div>
+                        </div>
+
+                        {/* Photos nacelle */}
+                        <PhotoSection visiteId={visiteId} photos={photos} onPhotosChange={handlePhotosChange} showCategories={['nacelle', 'autres']} />
                       </div>
                     )}
 

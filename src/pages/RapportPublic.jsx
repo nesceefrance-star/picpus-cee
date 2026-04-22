@@ -14,6 +14,21 @@ const ETAT_LABELS    = { bon: 'Bon état', moyen: 'État moyen', mauvais: 'Mauva
 const COMBUST_LABELS = { gaz_naturel: 'Gaz naturel', gpl: 'GPL', fioul: 'Fioul', electricite: 'Électricité', bois_granules: 'Bois/Granulés', autre: 'Autre' }
 const INSTAL_LABELS  = { chaudiere: 'Chaudière', aerotherme: 'Aérotherme', radiateur: 'Radiateur', generateur_air: 'Générateur air chaud', plancher_chauffant: 'Plancher chauffant', pompe_chaleur: 'Pompe à chaleur', autre: 'Autre' }
 const BATIM_LABELS   = { atelier_industriel: 'Atelier industriel', entrepot_logistique: 'Entrepôt logistique', atelier_artisanal: 'Atelier artisanal', batiment_agricole: 'Bâtiment agricole', autre: 'Autre' }
+const REGUL_LABELS   = { aucune: 'Aucune', thermostat_simple: 'Thermostat simple', programmable: 'Thermostat programmable', gestion_technique: 'Gestion technique bâtiment' }
+
+const getChaudieres = (d) => {
+  if (Array.isArray(d.chaudieres) && d.chaudieres.length > 0) return d.chaudieres
+  if (d.type_installation || d.marque) return [{
+    type_installation: d.type_installation, marque: d.marque, modele: d.modele,
+    annee_fabrication: d.annee_fabrication, puissance_nominale_kw: d.puissance_nominale_kw,
+    combustible: d.combustible, temperature_consigne: d.temperature_consigne,
+    heures_fonctionnement: d.heures_fonctionnement, etat_general: d.etat_general,
+    regulation: d.regulation, bruleur: d.bruleur, bruleur_marque: d.bruleur_marque,
+    bruleur_modele: d.bruleur_modele, plaque_constructeur_notes: d.plaque_constructeur_notes,
+    puissance_convectif_kw: d.puissance_convectif_kw, puissance_radiatif_kw: d.puissance_radiatif_kw,
+  }]
+  return []
+}
 
 function Field({ label, value }) {
   if (!value || value === '—') return null
@@ -143,33 +158,59 @@ export default function RapportPublic() {
           </div>
         </Section>
 
-        {/* Équipements */}
-        <Section title="Équipements existants" icon="🔧">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 0 }}>
-            <Field label="Type d'installation" value={INSTAL_LABELS[d.type_installation] || d.type_installation} />
-            <Field label="État général" value={ETAT_LABELS[d.etat_general] || d.etat_general} />
-            <Field label="Marque" value={d.marque} />
-            <Field label="Modèle" value={d.modele} />
-            <Field label="Année de fabrication" value={d.annee_fabrication} />
-            <Field label="Puissance nominale" value={d.puissance_nominale_kw ? `${d.puissance_nominale_kw} kW` : null} />
-            <Field label="Combustible actuel" value={COMBUST_LABELS[d.combustible] || d.combustible} />
-            <Field label="Régulation" value={d.regulation} />
-          </div>
-        </Section>
+        {/* Chaufferie */}
+        {getChaudieres(d).length > 0 && (
+          <Section title="Chaufferie" icon="🔥">
+            {getChaudieres(d).map((ch, idx) => (
+              <div key={idx} style={{ marginBottom: idx < getChaudieres(d).length - 1 ? 20 : 0 }}>
+                {getChaudieres(d).length > 1 && (
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.textMid, marginBottom: 8, paddingBottom: 6, borderBottom: `1px solid ${C.border}` }}>
+                    Installation {idx + 1}
+                  </div>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 0 }}>
+                  <Field label="Type d'installation" value={INSTAL_LABELS[ch.type_installation] || ch.type_installation} />
+                  <Field label="État général" value={ETAT_LABELS[ch.etat_general] || ch.etat_general} />
+                  <Field label="Marque" value={ch.marque} />
+                  <Field label="Modèle" value={ch.modele} />
+                  <Field label="Année de fabrication" value={ch.annee_fabrication} />
+                  <Field label="Puissance nominale" value={ch.puissance_nominale_kw ? `${ch.puissance_nominale_kw} kW` : null} />
+                  <Field label="Combustible actuel" value={COMBUST_LABELS[ch.combustible] || ch.combustible} />
+                  <Field label="Régulation" value={REGUL_LABELS[ch.regulation] || ch.regulation} />
+                  <Field label="Température de consigne" value={ch.temperature_consigne ? `${ch.temperature_consigne} °C` : null} />
+                  <Field label="Heures de fonctionnement / an" value={ch.heures_fonctionnement ? `${ch.heures_fonctionnement} h` : null} />
+                  <Field label="Puissance convectif" value={ch.puissance_convectif_kw ? `${ch.puissance_convectif_kw} kW` : null} />
+                  <Field label="Puissance radiatif" value={ch.puissance_radiatif_kw ? `${ch.puissance_radiatif_kw} kW` : null} />
+                </div>
+                {ch.plaque_constructeur_notes && (
+                  <div style={{ marginTop: 8, padding: '10px 14px', background: C.bg, borderRadius: 8, fontSize: 13, color: C.text }}>
+                    <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Plaque constructeur</div>
+                    {ch.plaque_constructeur_notes}
+                  </div>
+                )}
+              </div>
+            ))}
+          </Section>
+        )}
 
         {/* Données techniques */}
-        <Section title="Données techniques — IND-BA-110" icon="⚡">
+        <Section title="Données techniques" icon="⚡">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 0 }}>
             <Field label="Zone climatique" value={d.zone_climatique} />
             <Field label="Type de bâtiment" value={BATIM_LABELS[d.type_batiment] || d.type_batiment} />
             <Field label="Surface chauffée" value={d.surface_chauffee_m2 ? `${d.surface_chauffee_m2} m²` : null} />
-            <Field label="Hauteur sous plafond" value={d.hauteur_sous_plafond_m ? `${d.hauteur_sous_plafond_m} m` : null} />
-            <Field label="Puissance convectif" value={d.puissance_convectif_kw ? `${d.puissance_convectif_kw} kW` : null} />
-            <Field label="Puissance radiatif" value={d.puissance_radiatif_kw ? `${d.puissance_radiatif_kw} kW` : null} />
-            <Field label="Heures de fonctionnement / an" value={d.heures_fonctionnement ? `${d.heures_fonctionnement} h` : null} />
-            <Field label="Température de consigne" value={d.temperature_consigne ? `${d.temperature_consigne} °C` : null} />
             <Field label="Isolation bâtiment" value={d.isolation_batiment} />
+            <Field label="Type de charpente" value={d.type_charpente === 'metallique' ? 'Métallique' : d.type_charpente === 'bois' ? 'Bois' : d.type_charpente === 'beton' ? 'Béton' : d.type_charpente} />
+            <Field label="Type de toiture" value={d.type_toiture === 'plat' ? 'Plate/Terrasse' : d.type_toiture === 'double_pans' ? 'Double pans' : d.type_toiture === 'shed' ? 'Shed' : d.type_toiture === 'bac_acier' ? 'Bac acier' : d.type_toiture} />
           </div>
+          {(d.zones_hauteur || []).length > 0 && (
+            <div style={{ padding: '8px 0', borderBottom: `1px solid ${C.bg}` }}>
+              <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Hauteurs sous plafond</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
+                {(d.zones_hauteur || []).map(zh => `${zh.zone || 'Zone'} : ${zh.hauteur_m || '?'} m`).join(' · ')}
+              </div>
+            </div>
+          )}
           {kwhCumac > 0 && (
             <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '14px 18px', marginTop: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
               <span style={{ fontSize: 28 }}>⚡</span>
@@ -198,8 +239,21 @@ export default function RapportPublic() {
 
         {/* Observations */}
         {d.observations_generales && (
-          <Section title="Observations générales" icon="📝">
+          <Section title="Observations et contrainte opérationnel" icon="📝">
             <p style={{ margin: 0, fontSize: 14, color: C.text, lineHeight: 1.7 }}>{d.observations_generales}</p>
+          </Section>
+        )}
+
+        {/* Nacelle */}
+        {(d.nacelle_disponible || d.passage_nacelle) && (
+          <Section title="Nacelle et circulation" icon="🏗">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 0 }}>
+              <Field label="Nacelle disponible" value={d.nacelle_disponible === 'oui' ? 'Oui' : d.nacelle_disponible === 'non' ? 'Non' : d.nacelle_disponible === 'a_prevoir' ? 'À prévoir' : d.nacelle_disponible} />
+              <Field label="Type de nacelle" value={d.nacelle_type} />
+              <Field label="Hauteur max" value={d.nacelle_hauteur_max ? `${d.nacelle_hauteur_max} m` : null} />
+              <Field label="Passage de nacelle" value={d.passage_nacelle === 'libre' ? 'Libre' : d.passage_nacelle === 'zones_difficiles' ? 'Zones difficiles' : d.passage_nacelle === 'impossible' ? 'Impossible' : d.passage_nacelle} />
+              <Field label="Observations" value={d.nacelle_observations} />
+            </div>
           </Section>
         )}
 
