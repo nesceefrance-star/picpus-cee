@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useStore from '../../store/useStore'
 import { refDefault } from '../../lib/genRef'
@@ -26,6 +26,10 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
   const [simuStep, setSimuStep] = useState(1)
   const [sForm, setSForm] = useState(sFormInit || switchFicheDefault(dossier.fiche_cee))
   const setS = (k, v) => setSForm(f => ({ ...f, [k]: v }))
+
+  useEffect(() => {
+    if (sFormInit) setSForm(sFormInit)
+  }, [sFormInit])
   const [simuResult, setSimuResult] = useState(null)
   const [savingSimu, setSavingSimu] = useState(false)
 
