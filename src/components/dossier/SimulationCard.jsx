@@ -79,10 +79,11 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
       const nb      = parseInt(sForm.nb_destrat) || nbAuto
       const { kwhCumac } = calculerCumac110({ zone, pConvectif: pConv, pRadiatif: pRad })
       const prime = Math.round(kwhCumac * (prix / 1000) * 100) / 100
+      const primeNette = Math.round(prime * 0.9 * 100) / 100
       const mwh   = Math.round(kwhCumac / 1000 * 10) / 10
       const coutTotal = nb * cout
-      const marge = Math.round((prime - coutTotal) * 100) / 100
-      setSimuResult({ fiche: 'IND-BA-110', kwhCumac, mwh, prime, coutTotal, marge, rentable: marge > 0, nb, nbAuto, pConv, pRad })
+      const marge = Math.round((primeNette - coutTotal) * 100) / 100
+      setSimuResult({ fiche: 'IND-BA-110', kwhCumac, mwh, prime, primeNette, coutTotal, marge, rentable: marge > 0, nb, nbAuto, pConv, pRad })
 
     } else if (sForm.fiche_cee === 'BAT-TH-163') {
       const res = calculerCumac163({ zone, puissancePac: sForm.puissance_pac, etasBracket: sForm.etas_bracket, copBracket: sForm.cop_bracket, surface: parseFloat(sForm.surface_m2) || 0, secteur: sForm.secteur_163 })
@@ -262,9 +263,18 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
           <InfoRow label="kWh cumac" value={simParams.kwh_cumac != null ? `${Number(simParams.kwh_cumac).toLocaleString('fr')} kWh` : null} />
           <InfoRow label="MWh cumac" value={sim.mwh_cumac != null ? `${sim.mwh_cumac} MWh` : null} />
           <div style={{ height: 1, background: C.border, margin: '10px 0' }} />
-          <InfoRow label="Prime CEE" value={sim.prime_estimee != null ? `${Number(sim.prime_estimee).toLocaleString('fr')} €` : null} color="#7C3AED" />
-          <InfoRow label="Coût prestation" value={simParams.cout_total != null ? `${Number(simParams.cout_total).toLocaleString('fr')} €` : null} color="#D97706" />
-          <InfoRow label="Marge nette" value={simParams.marge != null ? `${Number(simParams.marge).toLocaleString('fr')} €` : null} color={simParams.marge >= 0 ? '#16A34A' : '#DC2626'} />
+          {(() => {
+            const primeBrute = sim.prime_estimee ?? null
+            const primeNette = primeBrute != null ? Math.round(primeBrute * 0.9 * 100) / 100 : null
+            const coutTotal  = simParams.cout_total != null ? Number(simParams.cout_total) : null
+            const margeNette = primeNette != null && coutTotal != null ? Math.round((primeNette - coutTotal) * 100) / 100 : null
+            return <>
+              <InfoRow label="Prime CEE brute" value={primeBrute != null ? `${Number(primeBrute).toLocaleString('fr')} €` : null} color="#7C3AED" />
+              <InfoRow label="Prime CEE nette (×0,9)" value={primeNette != null ? `${primeNette.toLocaleString('fr')} €` : null} color="#818cf8" />
+              <InfoRow label="Coût prestation" value={coutTotal != null ? `${coutTotal.toLocaleString('fr')} €` : null} color="#D97706" />
+              <InfoRow label="Marge nette" value={margeNette != null ? `${margeNette.toLocaleString('fr')} €` : null} color={margeNette != null && margeNette >= 0 ? '#16A34A' : '#DC2626'} />
+            </>
+          })()}
           <InfoRow label="Prix MWh" value={sim.prix_mwh != null ? `${sim.prix_mwh} €/MWh` : null} />
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
             <button
