@@ -315,7 +315,7 @@ function ContactRow({ contact, societeNom, onLusha, lushaLoading, onSetLinkedin 
 
   const handleOpenLinkedin = () => {
     if (contact.linkedin_url) window.open(contact.linkedin_url, '_blank');
-    else window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`"${contact.prenom} ${contact.nom}" "${societeNom}"`)}`, '_blank');
+    else window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${contact.prenom} ${contact.nom} ${societeNom}`)}`, '_blank');
   };
 
   return (
@@ -331,8 +331,15 @@ function ContactRow({ contact, societeNom, onLusha, lushaLoading, onSetLinkedin 
           <span style={{ fontSize: 11, color: C.textSub }}>{contact.fonction}</span>
           {contact.rang_poste === 1 && <Badge label="Cible prioritaire" color={C.green} bg={C.greenSoft} />}
         </div>
+        {(contact.email || contact.tel_societe) && (
+          <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
+            {contact.email && <a href={`mailto:${contact.email}`} style={{ fontSize: 11, color: C.accent, textDecoration: 'none', opacity: .85 }}>✉ {contact.email}</a>}
+            {contact.tel_societe && <a href={`tel:${contact.tel_societe}`} style={{ fontSize: 11, color: C.green, textDecoration: 'none', opacity: .85 }}>☎ {contact.tel_societe}</a>}
+          </div>
+        )}
         {contact.lusha_fetched && (
-          <div style={{ display: 'flex', gap: 12, marginTop: 4, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap', borderLeft: `2px solid ${C.lusha}40`, paddingLeft: 8 }}>
+            <span style={{ fontSize: 10, color: C.lusha, fontWeight: 700, alignSelf: 'center' }}>Lusha</span>
             {contact.lusha_email && <a href={`mailto:${contact.lusha_email}`} style={{ fontSize: 12, color: C.accent, textDecoration: 'none' }}>✉ {contact.lusha_email}</a>}
             {contact.lusha_phone && <a href={`tel:${contact.lusha_phone}`} style={{ fontSize: 12, color: C.green, textDecoration: 'none' }}>☎ {contact.lusha_phone}</a>}
             {contact.lusha_mobile && contact.lusha_mobile !== contact.lusha_phone && <a href={`tel:${contact.lusha_mobile}`} style={{ fontSize: 12, color: C.yellow, textDecoration: 'none' }}>📱 {contact.lusha_mobile}</a>}
@@ -360,7 +367,7 @@ function ContactRow({ contact, societeNom, onLusha, lushaLoading, onSetLinkedin 
 }
 
 // ─── CARTE SOCIÉTÉ ────────────────────────────────────────────────
-function SocieteCard({ soc, cadastreLoading, lushaLoading, onCadastre, onLusha, onSetLinkedin, onStatut, onConvertir }) {
+function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastre, onLusha, onGmb, onSetLinkedin, onStatut, onConvertir }) {
   const [open,    setOpen]    = useState(false);
   const [showMap, setShowMap] = useState(false);
   const statCfg = STATUT_CFG[soc.statut_qualification] ?? STATUT_CFG['À qualifier'];
@@ -376,9 +383,10 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, onCadastre, onLusha, 
             <Badge label={soc.statut_qualification} color={statCfg.color} bg={statCfg.bg} />
             {soc.cadastre_fetched && soc.surface_bati_m2 > 0 && <Badge label={`🏗 ${soc.surface_bati_m2.toLocaleString()} m²`} color={C.yellow} bg={C.yellowSoft} />}
           </div>
-          <div style={{ fontSize: 11, color: C.textSub, marginTop: 3 }}>
-            📍 {soc.ville} {soc.cp} · {soc.activite}
-            {soc.web && <a href={soc.web} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 8, color: C.accent, textDecoration: 'none' }} onClick={e => e.stopPropagation()}>🌐 Site</a>}
+          <div style={{ fontSize: 11, color: C.textSub, marginTop: 3, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+            <span>📍 {soc.ville} {soc.cp} · {soc.activite}</span>
+            {soc.tel_societe && <a href={`tel:${soc.tel_societe}`} style={{ color: C.green, textDecoration: 'none', fontWeight: 600 }} onClick={e => e.stopPropagation()}>📞 {soc.tel_societe}</a>}
+            {soc.web && <a href={soc.web} target="_blank" rel="noopener noreferrer" style={{ color: C.accent, textDecoration: 'none' }} onClick={e => e.stopPropagation()}>🌐 Site</a>}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
@@ -396,6 +404,7 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, onCadastre, onLusha, 
               {Object.keys(STATUT_CFG).map(s => <option key={s}>{s}</option>)}
             </select>
             <Btn onClick={() => onCadastre(soc.id)} loading={cadastreLoading[soc.id]} icon="📐" label={soc.cadastre_fetched ? 'Recalculer' : 'Cadastre'} color={C.yellow} />
+            <Btn onClick={() => onGmb(soc.id)} loading={gmbLoading[soc.id]} icon="📍" label="Google Maps" color={C.orange} />
             <Btn onClick={() => { setShowMap(m => !m); if (!open) setOpen(true); }} icon="🗺" label={showMap ? 'Masquer carte' : 'Carte parcelles'} color={C.purple} />
             {soc.lien_geoportail && <Btn onClick={() => window.open(soc.lien_geoportail, '_blank')} icon="🌍" label="Géoportail" color={C.orange} />}
             {soc.lien_googlemaps && <Btn onClick={() => window.open(soc.lien_googlemaps, '_blank')} icon="🛰" label="Satellite" color={C.accent} />}
@@ -462,7 +471,7 @@ export default function LeadsModule() {
     cadastreLoading, lushaLoading,
     searchQuery, setSearchQuery, filterStatut, setFilterStatut, sortBy, setSortBy,
     importerExcel, analyserImport, clearAnalyse, analyseData, analyseEnCours,
-    enrichirCadastre, enrichirLusha,
+    enrichirCadastre, enrichirLusha, enrichirGMB, gmbLoading,
     setLinkedinUrl, setStatutSociete, convertirEnDossier,
     profiles, isAdmin,
   } = useLeads();
@@ -602,8 +611,8 @@ export default function LeadsModule() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {societes.map(soc => (
                 <SocieteCard key={soc.id} soc={soc}
-                  cadastreLoading={cadastreLoading} lushaLoading={lushaLoading}
-                  onCadastre={enrichirCadastre} onLusha={enrichirLusha}
+                  cadastreLoading={cadastreLoading} lushaLoading={lushaLoading} gmbLoading={gmbLoading}
+                  onCadastre={enrichirCadastre} onLusha={enrichirLusha} onGmb={enrichirGMB}
                   onSetLinkedin={setLinkedinUrl} onStatut={setStatutSociete} onConvertir={convertirEnDossier} />
               ))}
             </div>

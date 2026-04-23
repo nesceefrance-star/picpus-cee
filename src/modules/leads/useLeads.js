@@ -345,6 +345,7 @@ export function useLeads() {
   const [filterStatut,    setFilterStatut]    = useState('Tous');
   const [sortBy,          setSortBy]          = useState('score');
 
+  const [gmbLoading,     setGmbLoading]     = useState({});
   const [analyseData,    setAnalyseData]    = useState(null);
   const [analyseEnCours, setAnalyseEnCours] = useState(false);
 
@@ -558,6 +559,37 @@ export function useLeads() {
     setLushaLoading(prev => ({ ...prev, [contactId]: false }));
   }, [societes]);
 
+  // ── Google My Business (Overpass OSM + ouverture Maps) ─────────
+  const enrichirGMB = useCallback(async (importId) => {
+    const soc = societes.find(s => s.id === importId);
+    if (!soc) return;
+
+    // Ouvrir Google Maps search pour que l'utilisateur confirme
+    const q = [soc.raison_sociale, soc.cp, soc.ville].filter(Boolean).join(' ');
+    window.open(`https://www.google.com/maps/search/${encodeURIComponent(q)}`, '_blank');
+
+    // Tenter de récupérer le tel depuis OpenStreetMap (Overpass)
+    setGmbLoading(prev => ({ ...prev, [importId]: true }));
+    try {
+      const name = soc.raison_sociale.replace(/["\\\[\]{}()|+?*^$]/g, ' ').trim().substring(0, 60);
+      const query = `[out:json][timeout:8];(node["name"~"${name}",i]["phone"]["addr:postcode"="${soc.cp}"];way["name"~"${name}",i]["phone"]["addr:postcode"="${soc.cp}"];);out 1;`;
+      const res = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: `data=${encodeURIComponent(query)}`,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const phone = data.elements?.[0]?.tags?.phone;
+        if (phone) {
+          const normalized = phone.replace(/\s|-/g, '').replace(/^\+33/, '0');
+          const { error: eUp } = await supabase.from('leads_import').update({ tel_societe: normalized }).eq('id', importId);
+          if (!eUp) setSocietes(prev => prev.map(s => s.id === importId ? { ...s, tel_societe: normalized } : s));
+        }
+      }
+    } catch { /* silencieux */ }
+    setGmbLoading(prev => ({ ...prev, [importId]: false }));
+  }, [societes]);
+
   // ── LinkedIn & Statut ───────────────────────────────────────────
   const setLinkedinUrl = useCallback(async (contactId, url) => {
     await supabase.from('leads_contacts').update({ linkedin_url: url, linkedin_fetched_at: new Date().toISOString() }).eq('id', contactId);
@@ -609,7 +641,7 @@ export function useLeads() {
     searchQuery, setSearchQuery, filterStatut, setFilterStatut, sortBy, setSortBy,
     // Actions
     importerExcel, analyserImport, clearAnalyse, analyseData, analyseEnCours,
-    enrichirCadastre, enrichirLusha,
+    enrichirCadastre, enrichirLusha, enrichirGMB, gmbLoading,
     setLinkedinUrl, setStatutSociete, convertirEnDossier,
     refresh: () => { loadBatches(); loadSocietes(selectedBatchId); },
     // Utilisateurs (pour admin)
