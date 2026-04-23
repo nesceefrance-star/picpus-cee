@@ -104,7 +104,7 @@ export default function DossierDetail() {
       } else if (fiche === 'BAT-EN-103') {
         setSFormInit({ fiche_cee: 'BAT-EN-103', zone_climatique: sim?.zone_climatique || '', secteur_103: p.secteur || 'bureaux_enseignement_commerces', surface_isolant_103: p.surface_isolant ?? '', resistance_r_103: p.resistance_r ?? '', cout_installation_103: p.cout_installation || '', prix_mwh: sim?.prix_mwh ?? '7.5' })
       } else {
-        setSFormInit({ fiche_cee: fiche, zone_climatique: sim?.zone_climatique || '', type_local: p.type_local || 'sport_transport', hauteur_m: sim?.hauteur_m ?? '', eqs_conv: p.eqs_conv || [], eqs_rad: p.eqs_rad || [], nb_destrat: p.nb_destrat ?? '', cout_unitaire_destrat: p.cout_unitaire_destrat || '2750', prix_mwh: sim?.prix_mwh ?? '7.5' })
+        setSFormInit({ fiche_cee: fiche, zone_climatique: sim?.zone_climatique || '', type_local: p.type_local || 'sport_transport', hauteur_m: sim?.hauteur_m ?? '', eqs_conv: p.eqs_conv || [], eqs_rad: p.eqs_rad || [], nb_destrat: p.nb_destrat_manuel ?? p.nb_destrat ?? '', cout_unitaire_destrat: p.cout_unitaire_destrat || '2750', prix_mwh: sim?.prix_mwh ?? '7.5' })
       }
     }
     setLoading(false)

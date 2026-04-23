@@ -104,33 +104,37 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
       const kwhCumac = Math.round(res.kwhCumac * bonifCoeff)
       const mwh = Math.round(kwhCumac / 1000 * 10) / 10
       const prime = Math.round(kwhCumac * (prix / 1000) * 100) / 100
+      const primeNette = Math.round(prime * 0.9 * 100) / 100
       const coutTotal = parseFloat(sForm.cout_installation_116) || 0
-      const marge = Math.round((prime - coutTotal) * 100) / 100
-      setSimuResult({ fiche: 'BAT-TH-116', kwhCumac, mwh, prime, coutTotal, marge, margeNette: marge, rentable: marge > 0, bonifCoeff, zoneCoeff: res.zoneCoeff })
+      const margeNette = Math.round((primeNette - coutTotal) * 100) / 100
+      setSimuResult({ fiche: 'BAT-TH-116', kwhCumac, mwh, prime, primeNette, coutTotal, marge: margeNette, rentable: margeNette > 0, bonifCoeff, zoneCoeff: res.zoneCoeff })
 
     } else if (sForm.fiche_cee === 'BAT-TH-125') {
       const res = calculerCumac125({ zone, typeVentil: sForm.type_ventil, secteur: sForm.secteur_ventil, surface: parseFloat(sForm.surface_ventilee) || 0 })
       const mwh = Math.round(res.kwhCumac / 1000 * 10) / 10
       const prime = Math.round(res.kwhCumac * (prix / 1000) * 100) / 100
+      const primeNette = Math.round(prime * 0.9 * 100) / 100
       const coutTotal = parseFloat(sForm.cout_installation_ventil) || 0
-      const marge = Math.round((prime - coutTotal) * 100) / 100
-      setSimuResult({ fiche: 'BAT-TH-125', kwhCumac: res.kwhCumac, mwh, prime, coutTotal, marge, margeNette: marge, rentable: marge > 0 })
+      const margeNette = Math.round((primeNette - coutTotal) * 100) / 100
+      setSimuResult({ fiche: 'BAT-TH-125', kwhCumac: res.kwhCumac, mwh, prime, primeNette, coutTotal, marge: margeNette, rentable: margeNette > 0 })
 
     } else if (sForm.fiche_cee === 'BAT-TH-126') {
       const res = calculerCumac126({ zone, typeVentil: sForm.type_ventil, secteur: sForm.secteur_ventil, surface: parseFloat(sForm.surface_ventilee) || 0 })
       const mwh = Math.round(res.kwhCumac / 1000 * 10) / 10
       const prime = Math.round(res.kwhCumac * (prix / 1000) * 100) / 100
+      const primeNette = Math.round(prime * 0.9 * 100) / 100
       const coutTotal = parseFloat(sForm.cout_installation_ventil) || 0
-      const marge = Math.round((prime - coutTotal) * 100) / 100
-      setSimuResult({ fiche: 'BAT-TH-126', kwhCumac: res.kwhCumac, mwh, prime, coutTotal, marge, margeNette: marge, rentable: marge > 0 })
+      const margeNette = Math.round((primeNette - coutTotal) * 100) / 100
+      setSimuResult({ fiche: 'BAT-TH-126', kwhCumac: res.kwhCumac, mwh, prime, primeNette, coutTotal, marge: margeNette, rentable: margeNette > 0 })
 
     } else if (sForm.fiche_cee === 'BAT-EN-103') {
       const res = calculerCumac103({ zone, secteur: sForm.secteur_103, surface: parseFloat(sForm.surface_isolant_103) || 0 })
       const mwh = Math.round(res.kwhCumac / 1000 * 10) / 10
       const prime = Math.round(res.kwhCumac * (prix / 1000) * 100) / 100
+      const primeNette = Math.round(prime * 0.9 * 100) / 100
       const coutTotal = parseFloat(sForm.cout_installation_103) || 0
-      const marge = Math.round((prime - coutTotal) * 100) / 100
-      setSimuResult({ fiche: 'BAT-EN-103', kwhCumac: res.kwhCumac, mwh, prime, coutTotal, marge, margeNette: marge, rentable: marge > 0 })
+      const margeNette = Math.round((primeNette - coutTotal) * 100) / 100
+      setSimuResult({ fiche: 'BAT-EN-103', kwhCumac: res.kwhCumac, mwh, prime, primeNette, coutTotal, marge: margeNette, rentable: margeNette > 0 })
 
     } else {
       const h     = parseFloat(sForm.hauteur_m) || 0
@@ -138,11 +142,12 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
       const pConv = (sForm.eqs_conv || []).reduce((s, e) => s + eqPuissance(e), 0)
       const pRad  = (sForm.eqs_rad  || []).reduce((s, e) => s + eqPuissance(e), 0)
       const { kwhCumac } = calculerCumac142({ typeLocal: sForm.type_local, zone, hauteur: h, pConvectif: pConv, pRadiatif: pRad })
-      const prime     = Math.round(kwhCumac * (prix / 1000) * 100) / 100
-      const mwh       = Math.round(kwhCumac / 1000 * 10) / 10
-      const coutTotal = nb * cout
-      const marge     = Math.round((prime - coutTotal) * 100) / 100
-      setSimuResult({ fiche: 'BAT-TH-142', kwhCumac, mwh, prime, coutTotal, marge, rentable: marge > 0, nb, pConv, pRad })
+      const prime      = Math.round(kwhCumac * (prix / 1000) * 100) / 100
+      const primeNette = Math.round(prime * 0.9 * 100) / 100
+      const mwh        = Math.round(kwhCumac / 1000 * 10) / 10
+      const coutTotal  = nb * cout
+      const margeNette = Math.round((primeNette - coutTotal) * 100) / 100
+      setSimuResult({ fiche: 'BAT-TH-142', kwhCumac, mwh, prime, primeNette, coutTotal, marge: margeNette, rentable: margeNette > 0, nb, pConv, pRad })
     }
   }
 
@@ -711,20 +716,28 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
                       <div style={{fontSize:10,color:C.textSoft,marginTop:2}}>Prime nette ({simuResult.primeNette?.toLocaleString('fr')} €) − Coût ({simuResult.coutTotal?.toLocaleString('fr')} €)</div>
                     </div>
                   </> : <>
-                    {[
-                      { label: 'kWh cumac',    value: `${simuResult.kwhCumac?.toLocaleString('fr')} kWh`, color: '#94A3B8' },
-                      { label: '⚡ MWh cumac',  value: `${simuResult.mwh} MWh`,                           color: C.accent  },
-                      { label: '💶 Prime CEE',  value: `${simuResult.prime.toLocaleString('fr')} €`,       color: '#7C3AED' },
-                      { label: '🔧 Coût',       value: `${simuResult.coutTotal.toLocaleString('fr')} €`,   color: '#D97706' },
-                      { label: simuResult.rentable ? '✅ Marge nette' : '❌ Marge nette',
-                        value: `${simuResult.marge.toLocaleString('fr')} €`,
-                        color: simuResult.rentable ? '#16A34A' : '#DC2626' },
-                    ].map(item => (
-                      <div key={item.label} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px 12px' }}>
-                        <div style={{ fontSize:10, color:C.textSoft, marginBottom:3 }}>{item.label}</div>
-                        <div style={{ fontSize:16, fontWeight:800, color:item.color }}>{item.value}</div>
-                      </div>
-                    ))}
+                    <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px 12px' }}>
+                      <div style={{ fontSize:10, color:C.textSoft, marginBottom:3 }}>📊 kWh cumac</div>
+                      <div style={{ fontSize:16, fontWeight:800, color:'#94A3B8' }}>{simuResult.kwhCumac?.toLocaleString('fr')} kWh</div>
+                    </div>
+                    <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px 12px' }}>
+                      <div style={{ fontSize:10, color:C.textSoft, marginBottom:3 }}>💶 Prime brute</div>
+                      <div style={{ fontSize:16, fontWeight:800, color:'#a78bfa' }}>{simuResult.prime?.toLocaleString('fr')} €</div>
+                    </div>
+                    <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px 12px' }}>
+                      <div style={{ fontSize:10, color:C.textSoft, marginBottom:3 }}>💵 Prime nette (hors TVA 10%)</div>
+                      <div style={{ fontSize:16, fontWeight:800, color:'#818cf8' }}>{simuResult.primeNette?.toLocaleString('fr')} €</div>
+                      <div style={{ fontSize:10, color:C.textSoft, marginTop:2 }}>{simuResult.prime?.toLocaleString('fr')} € × 0,9</div>
+                    </div>
+                    <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:'10px 12px' }}>
+                      <div style={{ fontSize:10, color:C.textSoft, marginBottom:3 }}>🔧 Coût installation</div>
+                      <div style={{ fontSize:16, fontWeight:800, color:'#fb923c' }}>{simuResult.coutTotal?.toLocaleString('fr')} €</div>
+                    </div>
+                    <div style={{ gridColumn:'1/-1', background: simuResult.rentable ? '#F0FDF4' : '#FEF2F2', border:`1px solid ${simuResult.rentable ? '#86EFAC' : '#FECACA'}`, borderRadius:8, padding:'10px 12px' }}>
+                      <div style={{ fontSize:10, color:C.textSoft, marginBottom:3 }}>{simuResult.rentable ? '✅' : '❌'} Marge nette</div>
+                      <div style={{ fontSize:20, fontWeight:800, color: simuResult.rentable ? '#16A34A' : '#DC2626' }}>{simuResult.marge?.toLocaleString('fr')} €</div>
+                      <div style={{ fontSize:10, color:C.textSoft, marginTop:2 }}>Prime nette ({simuResult.primeNette?.toLocaleString('fr')} €) − Coût ({simuResult.coutTotal?.toLocaleString('fr')} €)</div>
+                    </div>
                   </>}
                 </div>
               )}
