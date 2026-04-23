@@ -5,7 +5,9 @@ import { refDefault } from '../../lib/genRef'
 import { C, Field, InfoRow } from './theme'
 import {
   calculerCumac110, calculerCumac142, calculerCumac163,
-  FACTEURS_SECTEUR_163, eqPuissance,
+  calculerCumac116, calculerCumac125, calculerCumac126, calculerCumac103,
+  FACTEURS_SECTEUR_163, USAGES_116_LABELS, BONIF_COEFF_116, LABELS_SECTEUR_103,
+  eqPuissance,
 } from './ceeFormulas'
 
 function switchFicheDefault(ficheId) {
@@ -14,6 +16,23 @@ function switchFicheDefault(ficheId) {
   }
   if (ficheId === 'BAT-TH-163') {
     return { fiche_cee: 'BAT-TH-163', zone_climatique: '', surface_m2: '', puissance_pac: 'small', etas_bracket: 'etas_111_126', cop_bracket: 'cop_3_4_4_5', secteur_163: 'bureaux', cout_installation_163: '', bonification_x3: false, prix_mwh: '7.5' }
+  }
+  if (ficheId === 'BAT-TH-116') {
+    return { fiche_cee: 'BAT-TH-116', zone_climatique: '', classe_116: 'A', secteur_116: 'bureaux',
+      surf_116_chauffage: '', surf_116_refroidissement: '', surf_116_ecs: '', surf_116_eclairage: '', surf_116_auxiliaires: '',
+      cout_installation_116: '', bonification_116: 'none', prix_mwh: '7.5' }
+  }
+  if (ficheId === 'BAT-TH-125') {
+    return { fiche_cee: 'BAT-TH-125', zone_climatique: '', type_ventil: 'modulee_proportionnelle',
+      secteur_ventil: 'enseignement', surface_ventilee: '', cout_installation_ventil: '', prix_mwh: '7.5' }
+  }
+  if (ficheId === 'BAT-TH-126') {
+    return { fiche_cee: 'BAT-TH-126', zone_climatique: '', type_ventil: 'modulee_proportionnelle',
+      secteur_ventil: 'enseignement', surface_ventilee: '', cout_installation_ventil: '', prix_mwh: '7.5' }
+  }
+  if (ficheId === 'BAT-EN-103') {
+    return { fiche_cee: 'BAT-EN-103', zone_climatique: '', secteur_103: 'bureaux_enseignement_commerces',
+      surface_isolant_103: '', resistance_r_103: '', cout_installation_103: '', prix_mwh: '7.5' }
   }
   return { fiche_cee: ficheId || 'BAT-TH-142', zone_climatique: '', type_local: 'sport_transport', hauteur_m: '', eqs_conv: [], eqs_rad: [], nb_destrat: '', cout_unitaire_destrat: '2750', prix_mwh: '7.5' }
 }
@@ -39,6 +58,9 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
   const canCalculerLocal = sForm.zone_climatique && (
     sForm.fiche_cee === 'IND-BA-110' ? true
     : sForm.fiche_cee === 'BAT-TH-163' ? (sForm.surface_m2 && parseFloat(sForm.surface_m2) > 0)
+    : sForm.fiche_cee === 'BAT-TH-116' ? ['chauffage','refroidissement','ecs','eclairage','auxiliaires'].some(u => parseFloat(sForm[`surf_116_${u}`]) > 0)
+    : (sForm.fiche_cee === 'BAT-TH-125' || sForm.fiche_cee === 'BAT-TH-126') ? (sForm.surface_ventilee && parseFloat(sForm.surface_ventilee) > 0)
+    : sForm.fiche_cee === 'BAT-EN-103' ? (sForm.surface_isolant_103 && parseFloat(sForm.surface_isolant_103) > 0)
     : (sForm.hauteur_m && parseFloat(sForm.hauteur_m) >= 5)
   )
 
@@ -72,6 +94,44 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
       const margeNette = Math.round((primeNette - coutTotal) * 100) / 100
       setSimuResult({ fiche: 'BAT-TH-163', kwhCumac, kwhCumacBase, prime, primeNette, coutTotal, marge: margeNette, rentable: margeNette > 0, forfait: res.forfait, facteurSecteur: res.facteurSecteur })
 
+    } else if (sForm.fiche_cee === 'BAT-TH-116') {
+      const surfaces = {
+        chauffage: sForm.surf_116_chauffage, refroidissement: sForm.surf_116_refroidissement,
+        ecs: sForm.surf_116_ecs, eclairage: sForm.surf_116_eclairage, auxiliaires: sForm.surf_116_auxiliaires,
+      }
+      const res = calculerCumac116({ classe: sForm.classe_116, secteur: sForm.secteur_116, zone, surfaces })
+      const bonifCoeff = BONIF_COEFF_116[sForm.bonification_116] || 1
+      const kwhCumac = Math.round(res.kwhCumac * bonifCoeff)
+      const mwh = Math.round(kwhCumac / 1000 * 10) / 10
+      const prime = Math.round(kwhCumac * (prix / 1000) * 100) / 100
+      const coutTotal = parseFloat(sForm.cout_installation_116) || 0
+      const marge = Math.round((prime - coutTotal) * 100) / 100
+      setSimuResult({ fiche: 'BAT-TH-116', kwhCumac, mwh, prime, coutTotal, marge, margeNette: marge, rentable: marge > 0, bonifCoeff, zoneCoeff: res.zoneCoeff })
+
+    } else if (sForm.fiche_cee === 'BAT-TH-125') {
+      const res = calculerCumac125({ zone, typeVentil: sForm.type_ventil, secteur: sForm.secteur_ventil, surface: parseFloat(sForm.surface_ventilee) || 0 })
+      const mwh = Math.round(res.kwhCumac / 1000 * 10) / 10
+      const prime = Math.round(res.kwhCumac * (prix / 1000) * 100) / 100
+      const coutTotal = parseFloat(sForm.cout_installation_ventil) || 0
+      const marge = Math.round((prime - coutTotal) * 100) / 100
+      setSimuResult({ fiche: 'BAT-TH-125', kwhCumac: res.kwhCumac, mwh, prime, coutTotal, marge, margeNette: marge, rentable: marge > 0 })
+
+    } else if (sForm.fiche_cee === 'BAT-TH-126') {
+      const res = calculerCumac126({ zone, typeVentil: sForm.type_ventil, secteur: sForm.secteur_ventil, surface: parseFloat(sForm.surface_ventilee) || 0 })
+      const mwh = Math.round(res.kwhCumac / 1000 * 10) / 10
+      const prime = Math.round(res.kwhCumac * (prix / 1000) * 100) / 100
+      const coutTotal = parseFloat(sForm.cout_installation_ventil) || 0
+      const marge = Math.round((prime - coutTotal) * 100) / 100
+      setSimuResult({ fiche: 'BAT-TH-126', kwhCumac: res.kwhCumac, mwh, prime, coutTotal, marge, margeNette: marge, rentable: marge > 0 })
+
+    } else if (sForm.fiche_cee === 'BAT-EN-103') {
+      const res = calculerCumac103({ zone, secteur: sForm.secteur_103, surface: parseFloat(sForm.surface_isolant_103) || 0 })
+      const mwh = Math.round(res.kwhCumac / 1000 * 10) / 10
+      const prime = Math.round(res.kwhCumac * (prix / 1000) * 100) / 100
+      const coutTotal = parseFloat(sForm.cout_installation_103) || 0
+      const marge = Math.round((prime - coutTotal) * 100) / 100
+      setSimuResult({ fiche: 'BAT-EN-103', kwhCumac: res.kwhCumac, mwh, prime, coutTotal, marge, margeNette: marge, rentable: marge > 0 })
+
     } else {
       const h     = parseFloat(sForm.hauteur_m) || 0
       const nb    = parseInt(sForm.nb_destrat) || 0
@@ -89,29 +149,41 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
   const saveSimulation = async () => {
     if (!simuResult) return
     setSavingSimu(true)
-    const is110 = sForm.fiche_cee === 'IND-BA-110'
-    const is163 = sForm.fiche_cee === 'BAT-TH-163'
+    const fiche = sForm.fiche_cee
+    const is110 = fiche === 'IND-BA-110'
+    const is163 = fiche === 'BAT-TH-163'
+    const is116 = fiche === 'BAT-TH-116'
+    const is125 = fiche === 'BAT-TH-125'
+    const is126 = fiche === 'BAT-TH-126'
+    const is103 = fiche === 'BAT-EN-103'
+
     const parametres163 = { puissance_pac: sForm.puissance_pac, etas_bracket: sForm.etas_bracket, cop_bracket: sForm.cop_bracket, secteur: sForm.secteur_163, surface_m2: sForm.surface_m2, bonification_x3: sForm.bonification_x3, kwh_cumac: simuResult.kwhCumac, kwh_cumac_base: simuResult.kwhCumacBase, forfait: simuResult.forfait, facteur_secteur: simuResult.facteurSecteur, cout_installation: sForm.cout_installation_163, cout_total: simuResult.coutTotal, marge: simuResult.marge }
+    const parametres116 = { classe: sForm.classe_116, secteur: sForm.secteur_116, surfaces: { chauffage: sForm.surf_116_chauffage, refroidissement: sForm.surf_116_refroidissement, ecs: sForm.surf_116_ecs, eclairage: sForm.surf_116_eclairage, auxiliaires: sForm.surf_116_auxiliaires }, bonification: sForm.bonification_116, cout_installation: sForm.cout_installation_116, kwh_cumac: simuResult.kwhCumac, cout_total: simuResult.coutTotal, marge: simuResult.marge }
+    const parametres125or126 = { type_ventil: sForm.type_ventil, secteur: sForm.secteur_ventil, surface_ventilee: sForm.surface_ventilee, cout_installation: sForm.cout_installation_ventil, kwh_cumac: simuResult.kwhCumac, cout_total: simuResult.coutTotal, marge: simuResult.marge }
+    const parametres103 = { secteur: sForm.secteur_103, surface_isolant: sForm.surface_isolant_103, resistance_r: sForm.resistance_r_103, cout_installation: sForm.cout_installation_103, kwh_cumac: simuResult.kwhCumac, cout_total: simuResult.coutTotal, marge: simuResult.marge }
+
+    const getParametres = () => {
+      if (is163) return parametres163
+      if (is116) return parametres116
+      if (is125 || is126) return parametres125or126
+      if (is103) return parametres103
+      if (is110) return { eqs_conv: sForm.eqs_conv, eqs_rad: sForm.eqs_rad, p_convectif: simuResult.pConv, p_radiatif: simuResult.pRad, surface_m2: sForm.surface_m2, debit_unitaire: sForm.debit_unitaire, kwh_cumac: simuResult.kwhCumac, nb_destrat: simuResult.nb, cout_unitaire_destrat: sForm.cout_unitaire_destrat, cout_total: simuResult.coutTotal, marge: simuResult.marge }
+      return { type_local: sForm.type_local, eqs_conv: sForm.eqs_conv, eqs_rad: sForm.eqs_rad, p_convectif: simuResult.pConv, p_radiatif: simuResult.pRad, kwh_cumac: simuResult.kwhCumac, nb_destrat: simuResult.nb, cout_unitaire_destrat: sForm.cout_unitaire_destrat, cout_total: simuResult.coutTotal, marge: simuResult.marge }
+    }
+
+    const isSimpleKwh = is116 || is125 || is126 || is103
     const payload = {
       dossier_id: dossierId,
-      fiche_cee: sForm.fiche_cee || 'BAT-TH-142',
-      hauteur_m: parseFloat(sForm.hauteur_m) || null,
+      fiche_cee: fiche || 'BAT-TH-142',
+      hauteur_m: (is163 || isSimpleKwh) ? null : parseFloat(sForm.hauteur_m) || null,
       zone_climatique: sForm.zone_climatique,
-      nb_equipements: is163 ? 1 : simuResult.nb,
-      puissance_kw: is163 ? null : simuResult.pConv + simuResult.pRad,
-      mwh_cumac: is163 ? Math.round(simuResult.kwhCumac / 100) / 10 : simuResult.mwh,
+      nb_equipements: (is163 || isSimpleKwh) ? 1 : simuResult.nb,
+      puissance_kw: (is163 || isSimpleKwh) ? null : simuResult.pConv + simuResult.pRad,
+      mwh_cumac: simuResult.mwh,
       prime_estimee: simuResult.prime,
       prix_mwh: parseFloat(sForm.prix_mwh),
       rentable: simuResult.rentable,
-      parametres: is163 ? parametres163 : is110 ? {
-        eqs_conv: sForm.eqs_conv, eqs_rad: sForm.eqs_rad, p_convectif: simuResult.pConv, p_radiatif: simuResult.pRad,
-        surface_m2: sForm.surface_m2, debit_unitaire: sForm.debit_unitaire, kwh_cumac: simuResult.kwhCumac,
-        nb_destrat: simuResult.nb, cout_unitaire_destrat: sForm.cout_unitaire_destrat, cout_total: simuResult.coutTotal, marge: simuResult.marge,
-      } : {
-        type_local: sForm.type_local, eqs_conv: sForm.eqs_conv, eqs_rad: sForm.eqs_rad,
-        p_convectif: simuResult.pConv, p_radiatif: simuResult.pRad, kwh_cumac: simuResult.kwhCumac,
-        nb_destrat: simuResult.nb, cout_unitaire_destrat: sForm.cout_unitaire_destrat, cout_total: simuResult.coutTotal, marge: simuResult.marge,
-      },
+      parametres: getParametres(),
     }
     await createSimulation(payload)
     const { data: updatedDossier } = await updateDossier(dossierId, { prime_estimee: simuResult.prime, montant_devis: simuResult.coutTotal })
@@ -156,6 +228,24 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
             <InfoRow label="Secteur"     value={simParams.secteur} />
             <InfoRow label="Forfait"     value={simParams.forfait != null ? `${simParams.forfait} kWh/m²` : null} />
             <InfoRow label="Bonification" value={simParams.bonification_x3 ? '×3 ACTIF' : null} color="#4ade80" />
+          </> : sim.fiche_cee === 'BAT-TH-116' ? <>
+            <InfoRow label="Zone"        value={sim.zone_climatique} />
+            <InfoRow label="Classe"      value={simParams.classe} />
+            <InfoRow label="Secteur"     value={simParams.secteur} />
+            {simParams.surfaces && Object.entries(simParams.surfaces).filter(([,v]) => v && parseFloat(v) > 0).map(([k, v]) => (
+              <InfoRow key={k} label={USAGES_116_LABELS[k] || k} value={`${v} m²`} />
+            ))}
+            <InfoRow label="Bonification" value={simParams.bonification && simParams.bonification !== 'none' ? `${simParams.bonification} (×${BONIF_COEFF_116[simParams.bonification]})` : null} color="#4ade80" />
+          </> : (sim.fiche_cee === 'BAT-TH-125' || sim.fiche_cee === 'BAT-TH-126') ? <>
+            <InfoRow label="Zone"            value={sim.zone_climatique} />
+            <InfoRow label="Type ventilation" value={simParams.type_ventil?.replace(/_/g,' ')} />
+            <InfoRow label="Secteur"          value={simParams.secteur} />
+            <InfoRow label="Surface ventilée" value={simParams.surface_ventilee ? `${simParams.surface_ventilee} m²` : null} />
+          </> : sim.fiche_cee === 'BAT-EN-103' ? <>
+            <InfoRow label="Zone"           value={sim.zone_climatique} />
+            <InfoRow label="Secteur"        value={LABELS_SECTEUR_103[simParams.secteur] || simParams.secteur} />
+            <InfoRow label="Surface isolant" value={simParams.surface_isolant ? `${simParams.surface_isolant} m²` : null} />
+            <InfoRow label="Résistance R"   value={simParams.resistance_r ? `${simParams.resistance_r} m²K/W` : null} />
           </> : <>
             <InfoRow label="Type local"  value={simParams.type_local === 'sport_transport' ? 'Sport / Transport' : simParams.type_local === 'commerce_loisirs' ? 'Commerce / Loisirs' : null} />
             <InfoRow label="Hauteur"     value={sim.hauteur_m != null ? `${sim.hauteur_m} m` : null} />
@@ -163,7 +253,7 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
             <InfoRow label="P convectif" value={simParams.p_convectif != null ? `${simParams.p_convectif} kW` : null} />
             <InfoRow label="P radiatif"  value={simParams.p_radiatif  != null ? `${simParams.p_radiatif}  kW` : null} />
           </>}
-          {sim.fiche_cee !== 'BAT-TH-163' && <InfoRow label="Nb destrats" value={sim.nb_equipements} />}
+          {sim.fiche_cee !== 'BAT-TH-163' && sim.fiche_cee !== 'BAT-TH-116' && sim.fiche_cee !== 'BAT-TH-125' && sim.fiche_cee !== 'BAT-TH-126' && sim.fiche_cee !== 'BAT-EN-103' && <InfoRow label="Nb destrats" value={sim.nb_equipements} />}
           <InfoRow label="kWh cumac" value={simParams.kwh_cumac != null ? `${Number(simParams.kwh_cumac).toLocaleString('fr')} kWh` : null} />
           <InfoRow label="MWh cumac" value={sim.mwh_cumac != null ? `${sim.mwh_cumac} MWh` : null} />
           <div style={{ height: 1, background: C.border, margin: '10px 0' }} />
@@ -391,8 +481,120 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
                 </div>
               )}
 
+              {/* BAT-TH-116 */}
+              {sForm.fiche_cee === 'BAT-TH-116' && (
+                <div style={{ background: '#F0F7FF', border: `1px solid #BFDBFE`, borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, marginBottom: 14 }}>🏢 GTB tertiaire — BAT-TH-116</div>
+                  {/* Classe */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display:'block', fontSize:11, fontWeight:600, color:C.textMid, marginBottom:6, textTransform:'uppercase', letterSpacing:.4 }}>Classe d'efficacité *</label>
+                    <div style={{ display:'flex', gap:8 }}>
+                      {['A','B'].map(c => (
+                        <button key={c} type="button" onClick={() => setS('classe_116', c)}
+                          style={{ flex:1, padding:'10px', borderRadius:8, cursor:'pointer', fontFamily:'inherit', fontSize:14, fontWeight:800,
+                            background: sForm.classe_116 === c ? '#EFF6FF' : C.surface,
+                            border: `1px solid ${sForm.classe_116 === c ? C.accent : C.border}`,
+                            color: sForm.classe_116 === c ? C.accent : C.textMid }}>
+                          Classe {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Secteur */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display:'block', fontSize:11, fontWeight:600, color:C.textMid, marginBottom:6, textTransform:'uppercase', letterSpacing:.4 }}>Secteur d'activité *</label>
+                    <select value={sForm.secteur_116} onChange={e => setS('secteur_116', e.target.value)}
+                      style={{ width:'100%', background:C.bg, border:`1px solid ${C.border}`, borderRadius:7, padding:'9px 12px', color:C.text, fontSize:13, outline:'none', fontFamily:'inherit' }}>
+                      <option value="bureaux">Bureaux</option>
+                      <option value="enseignement">Enseignement</option>
+                      <option value="commerce">Commerce</option>
+                      <option value="hotellerie_restauration">Hôtellerie / Restauration</option>
+                      <option value="sante">Santé</option>
+                      <option value="autres">Autres</option>
+                    </select>
+                  </div>
+                  {/* Surfaces par usage */}
+                  {Object.entries(USAGES_116_LABELS).map(([usage, label]) => (
+                    <Field key={usage} label={`Surface ${label} (m²)`} value={String(sForm[`surf_116_${usage}`] ?? '')} onChange={v => setS(`surf_116_${usage}`, v)} type="number" placeholder="0" suffix="m²" />
+                  ))}
+                  {/* Bonification */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display:'block', fontSize:11, fontWeight:600, color:C.textMid, marginBottom:6, textTransform:'uppercase', letterSpacing:.4 }}>Bonification</label>
+                    <div style={{ display:'flex', gap:6 }}>
+                      {[{id:'none',label:'Aucune'},{id:'creation',label:'Création (×2)'},{id:'amelioration',label:'Amélioration (×1,5)'}].map(b => (
+                        <button key={b.id} type="button" onClick={() => setS('bonification_116', b.id)}
+                          style={{ flex:1, padding:'8px 6px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700,
+                            background: sForm.bonification_116 === b.id ? '#EFF6FF' : C.surface,
+                            border: `1px solid ${sForm.bonification_116 === b.id ? C.accent : C.border}`,
+                            color: sForm.bonification_116 === b.id ? C.accent : C.textMid }}>
+                          {b.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <Field label="Coût installation" value={String(sForm.cout_installation_116 ?? '')} onChange={v => setS('cout_installation_116', v)} type="number" placeholder="ex : 15000" suffix="€" />
+                </div>
+              )}
+
+              {/* BAT-TH-125 / BAT-TH-126 */}
+              {(sForm.fiche_cee === 'BAT-TH-125' || sForm.fiche_cee === 'BAT-TH-126') && (
+                <div style={{ background: '#F0F7FF', border: `1px solid #BFDBFE`, borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, marginBottom: 14 }}>💨 Ventilation double flux — {sForm.fiche_cee}</div>
+                  {/* Type de ventilation */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display:'block', fontSize:11, fontWeight:600, color:C.textMid, marginBottom:6, textTransform:'uppercase', letterSpacing:.4 }}>Type de ventilation *</label>
+                    <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                      {[{id:'modulee_proportionnelle',label:'Modulée proportionnelle'},{id:'modulee_presence',label:'Modulée présence'},{id:'debit_constant',label:'Débit constant'}].map(t => (
+                        <button key={t.id} type="button" onClick={() => setS('type_ventil', t.id)}
+                          style={{ flex:1, minWidth:100, padding:'9px 6px', borderRadius:7, cursor:'pointer', fontFamily:'inherit', fontSize:11, fontWeight:700,
+                            background: sForm.type_ventil === t.id ? '#EFF6FF' : C.surface,
+                            border: `1px solid ${sForm.type_ventil === t.id ? C.accent : C.border}`,
+                            color: sForm.type_ventil === t.id ? C.accent : C.textMid }}>
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Secteur */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display:'block', fontSize:11, fontWeight:600, color:C.textMid, marginBottom:6, textTransform:'uppercase', letterSpacing:.4 }}>Secteur *</label>
+                    <select value={sForm.secteur_ventil} onChange={e => setS('secteur_ventil', e.target.value)}
+                      style={{ width:'100%', background:C.bg, border:`1px solid ${C.border}`, borderRadius:7, padding:'9px 12px', color:C.text, fontSize:13, outline:'none', fontFamily:'inherit' }}>
+                      <option value="bureaux">Bureaux</option>
+                      <option value="enseignement">Enseignement</option>
+                      <option value="restauration">Restauration</option>
+                      {sForm.fiche_cee === 'BAT-TH-126' && <option value="sportif">Sportif</option>}
+                      {sForm.fiche_cee === 'BAT-TH-126' && <option value="salles_250">Salles &gt; 250 m²</option>}
+                      <option value="autres">Autres</option>
+                    </select>
+                  </div>
+                  <Field label="Surface ventilée" value={String(sForm.surface_ventilee ?? '')} onChange={v => setS('surface_ventilee', v)} type="number" placeholder="Ex: 5000" suffix="m²" />
+                  <Field label="Coût installation" value={String(sForm.cout_installation_ventil ?? '')} onChange={v => setS('cout_installation_ventil', v)} type="number" placeholder="ex : 30000" suffix="€" />
+                </div>
+              )}
+
+              {/* BAT-EN-103 */}
+              {sForm.fiche_cee === 'BAT-EN-103' && (
+                <div style={{ background: '#F0F7FF', border: `1px solid #BFDBFE`, borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, marginBottom: 14 }}>🏗️ Isolation toiture / combles — BAT-EN-103</div>
+                  {/* Secteur */}
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display:'block', fontSize:11, fontWeight:600, color:C.textMid, marginBottom:6, textTransform:'uppercase', letterSpacing:.4 }}>Secteur d'activité *</label>
+                    <select value={sForm.secteur_103} onChange={e => setS('secteur_103', e.target.value)}
+                      style={{ width:'100%', background:C.bg, border:`1px solid ${C.border}`, borderRadius:7, padding:'9px 12px', color:C.text, fontSize:13, outline:'none', fontFamily:'inherit' }}>
+                      {Object.entries(LABELS_SECTEUR_103).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <Field label="Surface isolant" value={String(sForm.surface_isolant_103 ?? '')} onChange={v => setS('surface_isolant_103', v)} type="number" placeholder="Ex: 1000" suffix="m²" />
+                  <Field label="Résistance thermique R" value={String(sForm.resistance_r_103 ?? '')} onChange={v => setS('resistance_r_103', v)} type="number" placeholder="Ex: 7" suffix="m²K/W" />
+                  <Field label="Coût installation" value={String(sForm.cout_installation_103 ?? '')} onChange={v => setS('cout_installation_103', v)} type="number" placeholder="ex : 20000" suffix="€" />
+                </div>
+              )}
+
               {/* Équipements BAT-TH-142 + IND-BA-110 */}
-              {sForm.fiche_cee !== 'BAT-TH-163' && (<>
+              {sForm.fiche_cee !== 'BAT-TH-163' && sForm.fiche_cee !== 'BAT-TH-116' && sForm.fiche_cee !== 'BAT-TH-125' && sForm.fiche_cee !== 'BAT-TH-126' && sForm.fiche_cee !== 'BAT-EN-103' && (<>
                 <div style={{ fontSize:11, fontWeight:600, color:C.textMid, marginBottom:4, textTransform:'uppercase', letterSpacing:.4 }}>🌀 Chauffage convectif</div>
                 {(sForm.eqs_conv || []).map((eq, i) => {
                   const upd = p => setS('eqs_conv', sForm.eqs_conv.map((x,j) => j===i ? {...x,...p} : x))
@@ -457,6 +659,18 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
                   {' · '}<span style={{color:'#60A5FA'}}>{sForm.puissance_pac === 'small' ? (sForm.etas_bracket||'').replace(/_/g,' ') : (sForm.cop_bracket||'').replace(/_/g,' ')}</span>
                   {' · '}{sForm.secteur_163} (×{FACTEURS_SECTEUR_163[sForm.secteur_163]})
                   {sForm.bonification_x3 && <span style={{color:'#4ade80',fontWeight:700}}> · ×3 ACTIF</span>}
+                </> : sForm.fiche_cee === 'BAT-TH-116' ? <>
+                  {' · '}Classe <strong>{sForm.classe_116}</strong>
+                  {' · '}{sForm.secteur_116}
+                  {sForm.bonification_116 !== 'none' && <span style={{color:'#4ade80',fontWeight:700}}> · Bonif. {sForm.bonification_116} (×{BONIF_COEFF_116[sForm.bonification_116]})</span>}
+                </> : (sForm.fiche_cee === 'BAT-TH-125' || sForm.fiche_cee === 'BAT-TH-126') ? <>
+                  {' · '}{sForm.type_ventil?.replace(/_/g,' ')}
+                  {' · '}{sForm.secteur_ventil}
+                  {sForm.surface_ventilee && <> · <strong>{sForm.surface_ventilee} m²</strong></>}
+                </> : sForm.fiche_cee === 'BAT-EN-103' ? <>
+                  {' · '}{LABELS_SECTEUR_103[sForm.secteur_103] || sForm.secteur_103}
+                  {sForm.surface_isolant_103 && <> · <strong>{sForm.surface_isolant_103} m²</strong></>}
+                  {sForm.resistance_r_103 && <> · R={sForm.resistance_r_103} m²K/W</>}
                 </> : <>
                   {' · '}Hauteur <strong>{sForm.hauteur_m || '—'} m</strong><br/>
                   <span>Convectif : <strong>{(sForm.eqs_conv||[]).reduce((s,e)=>s+eqPuissance(e),0).toFixed(1)} kW</strong></span>

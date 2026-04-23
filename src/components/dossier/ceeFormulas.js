@@ -107,6 +107,10 @@ export const COEFFICIENTS_116 = {
 }
 export const ZONE_COEFF_116 = { H1: 1.1, H2: 0.9, H3: 0.6 }
 export const USAGES_116 = ['chauffage', 'refroidissement', 'ecs', 'eclairage', 'auxiliaires']
+export const USAGES_116_LABELS = {
+  chauffage: 'Chauffage', refroidissement: 'Refroidissement / Climatisation',
+  ecs: 'Eau chaude sanitaire (ECS)', eclairage: 'Éclairage', auxiliaires: 'Auxiliaires',
+}
 export const BONIF_COEFF_116 = { none: 1, creation: 2, amelioration: 1.5 }
 
 export const calculerCumac116 = ({ classe, secteur, zone, surfaces }) => {
@@ -124,6 +128,60 @@ export const calculerCumac116 = ({ classe, secteur, zone, surfaces }) => {
     }
   })
   return { kwhCumac: Math.round(kwhCumac), zoneCoeff, details }
+}
+
+// BAT-TH-125 — Ventilation double flux tertiaire (< 10 000 m²)
+export const COEFFICIENTS_125 = {
+  modulee_proportionnelle: { H1: 770,  H2: 630, H3: 420 },
+  modulee_presence:        { H1: 690,  H2: 560, H3: 380 },
+  debit_constant:          { H1: 400,  H2: 330, H3: 220 },
+}
+export const FACTEURS_SECTEUR_125 = {
+  modulee_proportionnelle: { bureaux: 0.48, enseignement: 1, restauration: 0.59, autres: 0.54 },
+  modulee_presence:        { bureaux: 0.40, enseignement: 1, restauration: 0.45, autres: 0.51 },
+  debit_constant:          { bureaux: 0.40, enseignement: 1, restauration: 0.53, autres: 0.58 },
+}
+export const calculerCumac125 = ({ zone, typeVentil, secteur, surface }) => {
+  const coeff = COEFFICIENTS_125[typeVentil]?.[zone] || 0
+  const facteurSecteur = FACTEURS_SECTEUR_125[typeVentil]?.[secteur] || 1
+  return { kwhCumac: Math.round(coeff * facteurSecteur * surface), coeff, facteurSecteur }
+}
+
+// BAT-TH-126 — Ventilation double flux tertiaire (≥ 10 000 m²)
+export const COEFFICIENTS_126 = {
+  modulee_proportionnelle: { H1: 1000, H2: 830, H3: 560 },
+  modulee_presence:        { H1: 970,  H2: 800, H3: 530 },
+  debit_constant:          { H1: 850,  H2: 700, H3: 460 },
+}
+export const FACTEURS_SECTEUR_126 = {
+  modulee_proportionnelle: { bureaux: 0.53, enseignement: 1, restauration: 0.68, sportif: 0.22, autres: 0.71, salles_250: 1.88 },
+  modulee_presence:        { bureaux: 0.51, enseignement: 1, restauration: 0.63, sportif: 0.17, autres: 0.71 },
+  debit_constant:          { bureaux: 0.48, enseignement: 1, restauration: 0.61, sportif: 0.52, autres: 0.71, salles_250: 1.44 },
+}
+export const calculerCumac126 = ({ zone, typeVentil, secteur, surface }) => {
+  const coeff = COEFFICIENTS_126[typeVentil]?.[zone] || 0
+  const facteurSecteur = FACTEURS_SECTEUR_126[typeVentil]?.[secteur] || 1
+  return { kwhCumac: Math.round(coeff * facteurSecteur * surface), coeff, facteurSecteur }
+}
+
+// BAT-EN-103 — Isolation de toiture ou de combles
+export const COEFFICIENTS_103 = { H1: 5200, H2: 4200, H3: 2800 }
+export const FACTEURS_SECTEUR_103 = {
+  bureaux_enseignement_commerces: 0.6,
+  hotellerie_restauration: 0.7,
+  sante: 1.2,
+  autres: 0.6,
+}
+export const LABELS_SECTEUR_103 = {
+  bureaux_enseignement_commerces: 'Bureaux / Enseignement / Commerces',
+  hotellerie_restauration: 'Hôtellerie / Restauration',
+  sante: 'Santé',
+  autres: 'Autres secteurs',
+}
+export const calculerCumac103 = ({ zone, secteur, surface }) => {
+  const coeff = COEFFICIENTS_103[zone] || 0
+  const facteurSecteur = FACTEURS_SECTEUR_103[secteur] || 0.6
+  return { kwhCumac: Math.round(coeff * facteurSecteur * surface), coeff, facteurSecteur }
 }
 
 export const eqPuissance = (eq) => {

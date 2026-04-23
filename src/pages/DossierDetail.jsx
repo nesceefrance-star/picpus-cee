@@ -96,6 +96,13 @@ export default function DossierDetail() {
         setSFormInit({ fiche_cee: 'IND-BA-110', zone_climatique: sim?.zone_climatique || '', eqs_conv: p.eqs_conv || [], eqs_rad: p.eqs_rad || [], surface_m2: p.surface_m2 ?? '', hauteur_m: sim?.hauteur_m ?? '', debit_unitaire: p.debit_unitaire || '14000', nb_destrat: p.nb_destrat ?? '', cout_unitaire_destrat: p.cout_unitaire_destrat || '2750', prix_mwh: sim?.prix_mwh ?? '7.5' })
       } else if (fiche === 'BAT-TH-163') {
         setSFormInit({ fiche_cee: 'BAT-TH-163', zone_climatique: sim?.zone_climatique || '', surface_m2: p.surface_m2 ?? '', puissance_pac: p.puissance_pac || 'small', etas_bracket: p.etas_bracket || 'etas_111_126', cop_bracket: p.cop_bracket || 'cop_3_4_4_5', secteur_163: p.secteur || 'bureaux', cout_installation_163: p.cout_installation || '', bonification_x3: p.bonification_x3 || false, prix_mwh: sim?.prix_mwh ?? '7.5' })
+      } else if (fiche === 'BAT-TH-116') {
+        const surfs = p.surfaces || {}
+        setSFormInit({ fiche_cee: 'BAT-TH-116', zone_climatique: sim?.zone_climatique || '', classe_116: p.classe || 'A', secteur_116: p.secteur || 'bureaux', surf_116_chauffage: surfs.chauffage ?? '', surf_116_refroidissement: surfs.refroidissement ?? '', surf_116_ecs: surfs.ecs ?? '', surf_116_eclairage: surfs.eclairage ?? '', surf_116_auxiliaires: surfs.auxiliaires ?? '', cout_installation_116: p.cout_installation || '', bonification_116: p.bonification || 'none', prix_mwh: sim?.prix_mwh ?? '7.5' })
+      } else if (fiche === 'BAT-TH-125' || fiche === 'BAT-TH-126') {
+        setSFormInit({ fiche_cee: fiche, zone_climatique: sim?.zone_climatique || '', type_ventil: p.type_ventil || 'modulee_proportionnelle', secteur_ventil: p.secteur || 'enseignement', surface_ventilee: p.surface_ventilee ?? '', cout_installation_ventil: p.cout_installation || '', prix_mwh: sim?.prix_mwh ?? '7.5' })
+      } else if (fiche === 'BAT-EN-103') {
+        setSFormInit({ fiche_cee: 'BAT-EN-103', zone_climatique: sim?.zone_climatique || '', secteur_103: p.secteur || 'bureaux_enseignement_commerces', surface_isolant_103: p.surface_isolant ?? '', resistance_r_103: p.resistance_r ?? '', cout_installation_103: p.cout_installation || '', prix_mwh: sim?.prix_mwh ?? '7.5' })
       } else {
         setSFormInit({ fiche_cee: fiche, zone_climatique: sim?.zone_climatique || '', type_local: p.type_local || 'sport_transport', hauteur_m: sim?.hauteur_m ?? '', eqs_conv: p.eqs_conv || [], eqs_rad: p.eqs_rad || [], nb_destrat: p.nb_destrat ?? '', cout_unitaire_destrat: p.cout_unitaire_destrat || '2750', prix_mwh: sim?.prix_mwh ?? '7.5' })
       }
