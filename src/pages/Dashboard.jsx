@@ -36,6 +36,16 @@ const fmtK = (n) => {
   if (n >= 1000) return Math.round(n / 1000) + ' k€'
   return Math.round(n) + ' €'
 }
+const fmtE = (n) => {
+  if (n == null || isNaN(n)) return '—'
+  return n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
+}
+const fmtMwh = (n) => {
+  if (!n || isNaN(n)) return '—'
+  return n.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' MWh'
+}
+
+const STATUTS_EN_COURS = ['visio_planifiee','visio_effectuee','visite_planifiee','visite_effectuee','devis','ah','conforme','facture']
 
 function computeFinancials(devis) {
   const lignes = (devis.lignes || []).filter(l => l.inclus !== false)
@@ -87,6 +97,7 @@ export default function Dashboard() {
   const [confirmDeleteId, setConfirmDeleteId]   = useState(null)
   const [deletingIds, setDeletingIds]           = useState(new Set())
   const [devisMap, setDevisMap]                 = useState({}) // dossier_id → {ca, marge, prime}
+  const [simuMap, setSimuMap]                   = useState({}) // dossier_id → {mwh_cumac}
   const [rappelsMap, setRappelsMap]             = useState({}) // dossier_id → rappel_at
   const [briefingOpen, setBriefingOpen]         = useState(null) // tâche key ouverte
 
@@ -116,6 +127,21 @@ export default function Dashboard() {
     }
     loadDevis()
   }, [user?.id, profile?.role])
+
+  // Charge les simulations pour volume cumac
+  useEffect(() => {
+    if (!user?.id) return
+    const loadSimu = async () => {
+      const { data } = await supabase.from('simulations').select('dossier_id, mwh_cumac')
+      if (!data) return
+      const map = {}
+      for (const s of data) {
+        if (!map[s.dossier_id]) map[s.dossier_id] = { mwh_cumac: s.mwh_cumac }
+      }
+      setSimuMap(map)
+    }
+    loadSimu()
+  }, [user?.id])
 
   // Charge les rappels planifiés depuis la table appels
   useEffect(() => {
@@ -157,10 +183,8 @@ export default function Dashboard() {
     if (sortBy === 'date')   { va = new Date(a.created_at); vb = new Date(b.created_at) }
     if (sortBy === 'fiche')  { va = a.fiche_cee || ''; vb = b.fiche_cee || '' }
     if (sortBy === 'statut') { va = a.statut || ''; vb = b.statut || '' }
-    const finA = devisMap[a.id] || (a.montant_devis > 0 ? { ca: a.montant_devis, marge: null } : null)
-    const finB = devisMap[b.id] || (b.montant_devis > 0 ? { ca: b.montant_devis, marge: null } : null)
-    if (sortBy === 'ca')     { va = finA?.ca || 0; vb = finB?.ca || 0 }
-    if (sortBy === 'marge')  { va = finA?.ca > 0 && finA.marge != null ? finA.marge / finA.ca : -1; vb = finB?.ca > 0 && finB.marge != null ? finB.marge / finB.ca : -1 }
+    if (sortBy === 'prime')  { va = a.prime_estimee || 0; vb = b.prime_estimee || 0 }
+    if (sortBy === 'marge')  { va = a.prime_estimee > 0 ? a.prime_estimee * 0.9 - (a.montant_devis || 0) : -Infinity; vb = b.prime_estimee > 0 ? b.prime_estimee * 0.9 - (b.montant_devis || 0) : -Infinity }
     if (va < vb) return sortDir === 'asc' ? -1 : 1
     if (va > vb) return sortDir === 'asc' ? 1 : -1
     return 0
@@ -186,13 +210,13 @@ export default function Dashboard() {
   }
   const sortIcon = (col) => sortBy === col ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''
 
-  // Financier global (pour KPIs) — priorité devis_hub, fallback montant_devis
+  // Financier global (pour KPIs) — prime brute et marge nette depuis dossiers
   const finGlobal = myDossiers.reduce((acc, d) => {
-    const f = devisMap[d.id] || (d.montant_devis > 0 ? { ca: d.montant_devis, marge: null, prime: d.prime_estimee || 0 } : null)
-    if (!f) return acc
-    return { ca: acc.ca + f.ca, marge: f.marge != null ? acc.marge + f.marge : acc.marge, prime: acc.prime + (f.prime || 0), hasMarge: acc.hasMarge || f.marge != null }
-  }, { ca: 0, marge: 0, prime: 0, hasMarge: false })
-  const margePct = finGlobal.ca > 0 && finGlobal.hasMarge ? Math.round(finGlobal.marge / finGlobal.ca * 100) : null
+    const prime = d.prime_estimee || 0
+    const cout  = d.montant_devis || 0
+    const marge = prime > 0 ? Math.round((prime * 0.9 - cout) * 100) / 100 : 0
+    return { prime: acc.prime + prime, marge: acc.marge + marge }
+  }, { prime: 0, marge: 0 })
 
   // Tâches du jour
   const tachesByKey = TACHES.map(t => ({
@@ -376,12 +400,11 @@ export default function Dashboard() {
         {/* ── KPIs financiers ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10, marginBottom: 24 }}>
           {[
-            { label: 'Dossiers actifs', value: myDossiers.filter(d => !['facture','archive'].includes(d.statut)).length, color: C.accent },
-            { label: 'CA devis',        value: fmtK(finGlobal.ca),    color: '#2563EB' },
-            { label: 'Marge brute',     value: fmtK(finGlobal.marge), color: finGlobal.marge >= 0 ? '#16A34A' : '#DC2626', sub: margePct != null ? `${margePct}% du CA` : undefined },
-            { label: 'Prime CEE',       value: fmtK(finGlobal.prime), color: '#7C3AED' },
-            { label: 'AH signés',       value: myDossiers.filter(d => ['ah','conforme','facture'].includes(d.statut)).length, color: '#16A34A' },
-            { label: 'Facturés',        value: myDossiers.filter(d => d.statut === 'facture').length, color: '#64748B' },
+            { label: 'Dossiers en cours', value: myDossiers.filter(d => STATUTS_EN_COURS.includes(d.statut)).length, color: C.accent, sub: 'visio planifiée → facturé' },
+            { label: 'CA généré',         value: fmtK(finGlobal.prime), color: '#7C3AED', sub: 'Total primes brutes' },
+            { label: 'Marges nettes',     value: fmtK(finGlobal.marge), color: finGlobal.marge >= 0 ? '#16A34A' : '#DC2626', sub: 'Prime nette − coût install.' },
+            { label: 'AH signés',         value: myDossiers.filter(d => ['ah','conforme','facture'].includes(d.statut)).length, color: '#16A34A' },
+            { label: 'Facturés',          value: myDossiers.filter(d => d.statut === 'facture').length, color: '#64748B' },
           ].map(k => (
             <div key={k.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>{k.label}</div>
@@ -438,15 +461,15 @@ export default function Dashboard() {
         ) : (
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
             {/* En-tête */}
-            <div style={{ display: 'grid', gridTemplateColumns: '36px 80px 1fr 150px 110px 130px 90px 70px 110px 80px 44px', gap: 10, padding: '10px 16px', background: '#F8FAFC', borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .4, alignItems: 'center' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '36px 80px 1fr 110px 130px 80px 120px 120px 110px 80px 44px', gap: 10, padding: '10px 16px', background: '#F8FAFC', borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .4, alignItems: 'center' }}>
               <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: C.accent }}/>
               <span>Référence</span>
               <span>Prospect</span>
-              <span>Contact</span>
-              <button onClick={() => toggleSort('fiche')} style={{ background: 'none', border: 'none', color: C.textSoft, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'left', textTransform: 'uppercase', letterSpacing: .4 }}>Fiche CEE{sortIcon('fiche')}</button>
+              <button onClick={() => toggleSort('fiche')} style={{ background: 'none', border: 'none', color: C.textSoft, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'left', textTransform: 'uppercase', letterSpacing: .4 }}>Fiche{sortIcon('fiche')}</button>
               <span>Statut</span>
-              <button onClick={() => toggleSort('ca')} style={{ background: 'none', border: 'none', color: C.textSoft, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'right', textTransform: 'uppercase', letterSpacing: .4, width: '100%' }}>CA{sortIcon('ca')}</button>
-              <button onClick={() => toggleSort('marge')} style={{ background: 'none', border: 'none', color: C.textSoft, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'right', textTransform: 'uppercase', letterSpacing: .4, width: '100%' }}>Marge{sortIcon('marge')}</button>
+              <span style={{ textAlign: 'right' }}>MWh cumac</span>
+              <button onClick={() => toggleSort('prime')} style={{ background: 'none', border: 'none', color: C.textSoft, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'right', textTransform: 'uppercase', letterSpacing: .4, width: '100%' }}>Prime brute{sortIcon('prime')}</button>
+              <button onClick={() => toggleSort('marge')} style={{ background: 'none', border: 'none', color: C.textSoft, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'right', textTransform: 'uppercase', letterSpacing: .4, width: '100%' }}>Marge nette{sortIcon('marge')}</button>
               {isAdmin ? <span>Commercial</span> : <span>J+</span>}
               <button onClick={() => toggleSort('date')} style={{ background: 'none', border: 'none', color: C.textSoft, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'left', textTransform: 'uppercase', letterSpacing: .4 }}>Date{sortIcon('date')}</button>
               <span/>
@@ -457,13 +480,15 @@ export default function Dashboard() {
               const isSelected = selected.has(d.id)
               const isDeleting = deletingIds.has(d.id)
               const isConfirm  = confirmDeleteId === d.id
-              const fin        = devisMap[d.id] || (d.montant_devis > 0 ? { ca: d.montant_devis, marge: null, prime: d.prime_estimee || 0 } : null)
-              const margePctD  = fin?.ca > 0 && fin.marge != null ? Math.round(fin.marge / fin.ca * 100) : null
+              const prime      = d.prime_estimee || 0
+              const cout       = d.montant_devis || 0
+              const margeNette = prime > 0 ? Math.round((prime * 0.9 - cout) * 100) / 100 : null
+              const mwh        = simuMap[d.id]?.mwh_cumac || null
               const jPlus      = daysSince(d.created_at)
               return (
                 <div key={d.id}
                   onClick={() => !isDeleting && openDossier(d)}
-                  style={{ display: 'grid', gridTemplateColumns: '36px 80px 1fr 150px 110px 130px 90px 70px 110px 80px 44px', gap: 10, padding: '12px 16px', alignItems: 'center', background: isSelected ? '#EFF6FF' : idx % 2 === 0 ? C.surface : '#FAFBFC', borderBottom: `1px solid ${C.border}`, cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? .5 : 1, transition: 'background .1s' }}
+                  style={{ display: 'grid', gridTemplateColumns: '36px 80px 1fr 110px 130px 80px 120px 120px 110px 80px 44px', gap: 10, padding: '12px 16px', alignItems: 'center', background: isSelected ? '#EFF6FF' : idx % 2 === 0 ? C.surface : '#FAFBFC', borderBottom: `1px solid ${C.border}`, cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? .5 : 1, transition: 'background .1s' }}
                   onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#F0F7FF' }}
                   onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = idx % 2 === 0 ? C.surface : '#FAFBFC' }}>
 
@@ -473,19 +498,7 @@ export default function Dashboard() {
 
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.prospects?.raison_sociale || '—'}</div>
-                  </div>
-
-                  <div style={{ minWidth: 0 }}>
-                    {d.prospects?.contact_nom && (
-                      <div style={{ fontSize: 12, color: C.textMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.prospects.contact_nom}</div>
-                    )}
-                    {d.prospects?.contact_tel && (
-                      <a href={`tel:${d.prospects.contact_tel}`} onClick={e => e.stopPropagation()}
-                        style={{ fontSize: 11, color: C.accent, fontWeight: 600, textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        📞 {d.prospects.contact_tel}
-                      </a>
-                    )}
-                    {!d.prospects?.contact_nom && !d.prospects?.contact_tel && <span style={{ fontSize: 11, color: C.textSoft }}>—</span>}
+                    {d.prospects?.contact_nom && <div style={{ fontSize: 11, color: C.textMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.prospects.contact_nom}</div>}
                   </div>
 
                   <span style={{ fontSize: 11, color: C.textMid, fontWeight: 600 }}>{d.fiche_cee}</span>
@@ -493,15 +506,16 @@ export default function Dashboard() {
                   <StatutBadge statut={d.statut} />
 
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: fin?.ca > 0 ? '#2563EB' : C.textSoft }}>{fmtK(fin?.ca)}</div>
-                    {fin?.prime > 0 && <div style={{ fontSize: 10, color: '#7C3AED' }}>⚡ {fmtK(fin.prime)}</div>}
+                    <div style={{ fontSize: 12, fontWeight: 700, color: mwh ? C.accent : C.textSoft }}>{fmtMwh(mwh)}</div>
                   </div>
 
                   <div style={{ textAlign: 'right' }}>
-                    {margePctD != null ? (
-                      <span style={{ fontSize: 12, fontWeight: 700, color: margePctD >= 20 ? '#16A34A' : margePctD >= 0 ? '#D97706' : '#DC2626', background: margePctD >= 20 ? '#F0FDF4' : margePctD >= 0 ? '#FFFBEB' : '#FEF2F2', border: `1px solid ${margePctD >= 20 ? '#86EFAC' : margePctD >= 0 ? '#FDE68A' : '#FCA5A5'}`, borderRadius: 5, padding: '2px 6px' }}>
-                        {margePctD}%
-                      </span>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: prime > 0 ? '#7C3AED' : C.textSoft }}>{prime > 0 ? fmtE(prime) : '—'}</div>
+                  </div>
+
+                  <div style={{ textAlign: 'right' }}>
+                    {margeNette != null ? (
+                      <div style={{ fontSize: 12, fontWeight: 700, color: margeNette >= 0 ? '#16A34A' : '#DC2626' }}>{fmtE(margeNette)}</div>
                     ) : <span style={{ fontSize: 11, color: C.textSoft }}>—</span>}
                   </div>
 
