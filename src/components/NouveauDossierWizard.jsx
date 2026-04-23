@@ -140,10 +140,11 @@ const calculerCumac142 = ({ typeLocal, zone, hauteur, pConvectif, pRadiatif }) =
 
 const getZoneClimatique = (codePostal) => {
   const cp = parseInt(codePostal?.substring(0, 2) || '0')
-  if ([97, 98].includes(cp) || [13, 83, 84, 30, 34, 11, 66].includes(cp)) return 'H3'
-  if ([17, 16, 33, 40, 64, 65, 32, 31, 9, 12, 46, 47, 82, 81, 48,
-       44, 85, 49, 53, 72, 37, 41, 28, 45, 36, 23, 87, 19, 15,
-       43, 63, 3, 18, 58, 71, 21, 89, 10].includes(cp)) return 'H2'
+  // Source : Répartition des départements par zone climatique — Ministère de l'Écologie
+  if ([6, 11, 13, 20, 30, 34, 66, 83, 97, 98].includes(cp)) return 'H3'
+  if ([4, 7, 9, 12, 16, 17, 18, 22, 24, 26, 29, 31, 32, 33, 35, 36, 37,
+       40, 41, 44, 46, 47, 48, 49, 50, 53, 56, 64, 65, 72, 79, 81, 82,
+       84, 85, 86].includes(cp)) return 'H2'
   return 'H1'
 }
 
