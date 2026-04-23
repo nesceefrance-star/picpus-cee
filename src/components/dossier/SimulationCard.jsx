@@ -15,7 +15,7 @@ function switchFicheDefault(ficheId) {
   if (ficheId === 'BAT-TH-163') {
     return { fiche_cee: 'BAT-TH-163', zone_climatique: '', surface_m2: '', puissance_pac: 'small', etas_bracket: 'etas_111_126', cop_bracket: 'cop_3_4_4_5', secteur_163: 'bureaux', cout_installation_163: '', bonification_x3: false, prix_mwh: '7.5' }
   }
-  return { fiche_cee: 'BAT-TH-142', zone_climatique: '', type_local: 'sport_transport', hauteur_m: '', eqs_conv: [], eqs_rad: [], nb_destrat: '', cout_unitaire_destrat: '2750', prix_mwh: '7.5' }
+  return { fiche_cee: ficheId || 'BAT-TH-142', zone_climatique: '', type_local: 'sport_transport', hauteur_m: '', eqs_conv: [], eqs_rad: [], nb_destrat: '', cout_unitaire_destrat: '2750', prix_mwh: '7.5' }
 }
 
 export default function SimulationCard({ dossier, dossierId, simulation, sFormInit, onSaved }) {

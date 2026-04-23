@@ -97,7 +97,7 @@ export default function DossierDetail() {
       } else if (fiche === 'BAT-TH-163') {
         setSFormInit({ fiche_cee: 'BAT-TH-163', zone_climatique: sim?.zone_climatique || '', surface_m2: p.surface_m2 ?? '', puissance_pac: p.puissance_pac || 'small', etas_bracket: p.etas_bracket || 'etas_111_126', cop_bracket: p.cop_bracket || 'cop_3_4_4_5', secteur_163: p.secteur || 'bureaux', cout_installation_163: p.cout_installation || '', bonification_x3: p.bonification_x3 || false, prix_mwh: sim?.prix_mwh ?? '7.5' })
       } else {
-        setSFormInit({ fiche_cee: 'BAT-TH-142', zone_climatique: sim?.zone_climatique || '', type_local: p.type_local || 'sport_transport', hauteur_m: sim?.hauteur_m ?? '', eqs_conv: p.eqs_conv || [], eqs_rad: p.eqs_rad || [], nb_destrat: p.nb_destrat ?? '', cout_unitaire_destrat: p.cout_unitaire_destrat || '2750', prix_mwh: sim?.prix_mwh ?? '7.5' })
+        setSFormInit({ fiche_cee: fiche, zone_climatique: sim?.zone_climatique || '', type_local: p.type_local || 'sport_transport', hauteur_m: sim?.hauteur_m ?? '', eqs_conv: p.eqs_conv || [], eqs_rad: p.eqs_rad || [], nb_destrat: p.nb_destrat ?? '', cout_unitaire_destrat: p.cout_unitaire_destrat || '2750', prix_mwh: sim?.prix_mwh ?? '7.5' })
       }
     }
     setLoading(false)
