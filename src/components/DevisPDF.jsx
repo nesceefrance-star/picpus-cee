@@ -55,14 +55,14 @@ const s = StyleSheet.create({
   parapheLbl:{ fontSize: 5.5, color: '#bbb', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 2 },
   parapheArea:{ height: 18 },
   // Récap signature
-  recapBox:  { backgroundColor: LGRAY, borderWidth: 0.5, borderColor: BORDER, padding: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginBottom: 12 },
+  recapBox:  { backgroundColor: '#fff', borderWidth: 0.5, borderColor: BORDER, padding: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginBottom: 12 },
   recapItem: { minWidth: 90 },
   recapLbl:  { fontSize: 6, color: GRAY, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 1 },
   recapVal:  { fontSize: 8.5, fontFamily: 'Helvetica-Bold' },
   // Champs signature
   sigLabel:  { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: '#333', marginBottom: 3 },
   sigLine:   { borderBottomWidth: 1, borderBottomColor: '#999', width: '55%', height: 18, marginBottom: 12 },
-  sigBox:    { borderWidth: 0.5, borderColor: BORDER, height: 38, borderRadius: 2, backgroundColor: LGRAY, marginBottom: 2 },
+  sigBox:    { borderWidth: 0.5, borderColor: BORDER, height: 38, borderRadius: 2, backgroundColor: '#fff', marginBottom: 2 },
   sigGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 12 },
   sigGridItem:{ width: '47%' },
   // Alerte
