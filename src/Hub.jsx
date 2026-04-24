@@ -1518,8 +1518,12 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
   const L = {display:"block",fontSize:11,fontWeight:600,color:C.textMid,marginBottom:4,textTransform:"uppercase",letterSpacing:.4};
 
   const handleSave = () => {
+    const selectedDossier = form.dossierId ? dossiersList.find(d => d.id === form.dossierId) : null;
+    const primeFromDossier = selectedDossier?.prime_estimee ?? null;
     onSave({
       dossierId:       form.dossierId || null,
+      // Met à jour la prime CEE si un dossier est associé et a une prime_estimee
+      ...(primeFromDossier != null ? { prime: primeFromDossier } : {}),
       nomClient:       form.nomClient,
       siret:           form.siret,
       codeNAF:         form.codeNAF,
@@ -1641,7 +1645,20 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
                     <option key={d.id} value={d.id}>{d.ref}{d.prospects?.raison_sociale ? ` — ${d.prospects.raison_sociale}` : ""}</option>
                   ))}
                 </select>
-                {form.dossierId && <div style={{fontSize:11,color:"#22C55E",marginTop:4}}>✓ Le bouton "💾 Dossier" sera disponible dans l'éditeur pour sauvegarder le PDF dans ce dossier.</div>}
+                {form.dossierId && (() => {
+                  const d = dossiersList.find(x => x.id === form.dossierId);
+                  return (
+                    <div style={{marginTop:6,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                      <span style={{fontSize:11,color:"#22C55E"}}>✓ Bouton "💾 Dossier" disponible dans l'éditeur.</span>
+                      {d?.prime_estimee > 0
+                        ? <span style={{fontSize:11,fontWeight:700,color:"#7C3AED",background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:5,padding:"2px 8px"}}>
+                            Prime CEE : {Number(d.prime_estimee).toLocaleString("fr-FR")} € → sera chargée dans le devis
+                          </span>
+                        : <span style={{fontSize:11,color:"#94A3B8"}}>Aucune prime CEE enregistrée sur ce dossier.</span>
+                      }
+                    </div>
+                  );
+                })()}
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
                 {[
@@ -1952,7 +1969,7 @@ function MargesDevis({ prefill }) {
   const [dossiersList, setDossiersList] = useState([]);
 
   useEffect(() => {
-    supabase.from("dossiers").select("id, ref, prospects(raison_sociale)").order("updated_at", { ascending: false }).limit(150)
+    supabase.from("dossiers").select("id, ref, prime_estimee, montant_devis, fiche_cee, prospects(raison_sociale)").order("updated_at", { ascending: false }).limit(150)
       .then(({ data }) => { if (data) setDossiersList(data); });
   }, []);
 
