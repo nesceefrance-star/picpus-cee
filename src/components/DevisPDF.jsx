@@ -258,12 +258,12 @@ export function DevisPDFDoc({ devis, lignes, cats, batPuVente, batQte, primeFaci
           <View style={{ flex: 1 }}>
             <Text style={s.clientSub}>
               <Text style={{ fontFamily: 'Helvetica-Bold' }}>Posé par : </Text>
-              {devis.sousTraitant || 'DC LINK'}
+              {devis.sousTraitant || 'DC LINK'}{params.infoLegalPrestataire ? ` — ${params.infoLegalPrestataire}` : ''}
             </Text>
-            {params.dateVisiteTechnique ? (
+            {(params.dateVisiteTechnique || params.nomVisiteurVT) ? (
               <Text style={[s.clientSub, { marginTop: 2 }]}>
                 <Text style={{ fontFamily: 'Helvetica-Bold' }}>Visite technique : </Text>
-                Réalisée le {params.dateVisiteTechnique} par {devis.sousTraitant || 'DC LINK'}
+                {[params.dateVisiteTechnique ? `le ${params.dateVisiteTechnique}` : null, devis.sousTraitant || 'DC LINK', params.nomVisiteurVT || null].filter(Boolean).join(' — ')}
               </Text>
             ) : null}
           </View>
@@ -330,6 +330,14 @@ export function DevisPDFDoc({ devis, lignes, cats, batPuVente, batQte, primeFaci
           </>
         ) : null}
 
+        {params.mentionReleve ? (
+          <>
+            <HR />
+            <Text style={[s.condTitle, { fontSize: 8, marginBottom: 3 }]}>Relevé technique du site — Fiche CEE</Text>
+            <Text style={s.condText}>{params.mentionReleve}</Text>
+          </>
+        ) : null}
+
         <Footer params={params} />
       </Page>
 
@@ -379,12 +387,6 @@ export function DevisPDFDoc({ devis, lignes, cats, batPuVente, batQte, primeFaci
         <View>
           <Text style={s.sigLabel}>5) Cachet :</Text>
           <View style={[s.sigBox, { width: '46%', height: 55 }]} />
-        </View>
-
-        <View style={s.alertBox}>
-          <Text style={s.alertText}>
-            ⚠ Important : Devis valable {validite} jours. L'acceptation vaut commande ferme et engage le client à fournir tous les documents CEE requis avant tout début de travaux.
-          </Text>
         </View>
 
         <Footer params={params} />

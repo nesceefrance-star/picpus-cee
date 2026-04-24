@@ -103,6 +103,63 @@ const calculerCumac116Hub = ({ classe, secteur, zone, surfaces }) => {
   return Math.round(Object.keys(surfaces).reduce((s, u) => s + (coeffs[u] || 0) * (parseFloat(surfaces[u]) || 0) * zc, 0));
 };
 
+// ─── GÉNÉRATION AUTOMATIQUE DU RELEVÉ TECHNIQUE ─────────────────────────────
+function genereReleve({ ficheDevis, batQte, batDebit }) {
+  const fiche  = ficheDevis || 'BAT-TH-142';
+  const debit  = Number(batDebit || 14000).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const nb     = batQte ? `${batQte} unité${batQte > 1 ? 's' : ''}` : '[à compléter]';
+
+  if (fiche === 'BAT-TH-142' || fiche === 'IND-BA-110') {
+    return `${fiche} : Mise en place d'un système de déstratification d'air pour l'homogénéisation de la température de l'air d'un local de grande hauteur chauffé par un système convectif.
+• Nombre d'unités : ${nb}
+• Marque TECH, référence DES-14000
+• Le système de déstratification d'air est asservi à une mesure de température de l'air dans la zone située entre le système de déstratification d'air et le plafond ou le faîtage
+• Débit d'air : ${debit} m³/h
+• Déstratification par écoulement d'air vertical : l'écoulement a une vitesse au sol à un mètre de hauteur de : 0,11 m/s
+• Niveau du bruit au sol : 38,00 dB
+• Puissance nominale du système de chauffage convectif du local P : [à compléter] kW`;
+  }
+  if (fiche === 'BAT-TH-163') {
+    return `BAT-TH-163 : Installation d'une pompe à chaleur (PAC) air/eau pour le chauffage et/ou la production d'eau chaude sanitaire d'un bâtiment tertiaire.
+• Marque : [à compléter], référence : [à compléter]
+• Puissance nominale : [à compléter] kW
+• Etas (PAC ≤ 400 kW) : [à compléter] % ou COP (PAC > 400 kW) : [à compléter]
+• Surface chauffée : [à compléter] m²
+• Secteur d'activité : [à compléter]`;
+  }
+  if (fiche === 'BAT-TH-116') {
+    return `BAT-TH-116 : Mise en place d'un système de gestion technique du bâtiment (GTB) permettant de gérer et optimiser les consommations énergétiques du bâtiment.
+• Classe d'efficacité énergétique : [A ou B]
+• Secteur d'activité : [à compléter]
+• Usages couverts : Chauffage / Refroidissement / ECS / Éclairage / Auxiliaires
+• Surface totale gérée : [à compléter] m²`;
+  }
+  if (fiche === 'BAT-TH-125') {
+    return `BAT-TH-125 : Installation d'un système de ventilation simple flux hygroréglable de type B dans un bâtiment tertiaire.
+• Type de ventilation : [à compléter]
+• Secteur d'activité : [à compléter]
+• Surface ventilée : [à compléter] m²
+• Marque : [à compléter], référence : [à compléter]`;
+  }
+  if (fiche === 'BAT-TH-126') {
+    return `BAT-TH-126 : Installation d'un système de ventilation double flux avec échangeur à récupération de chaleur dans un bâtiment tertiaire.
+• Type de ventilation : [à compléter]
+• Secteur d'activité : [à compléter]
+• Surface ventilée : [à compléter] m²
+• Efficacité de l'échangeur : [à compléter] %
+• Marque : [à compléter], référence : [à compléter]`;
+  }
+  if (fiche === 'BAT-EN-103') {
+    return `BAT-EN-103 : Isolation de combles ou toiture d'un bâtiment tertiaire.
+• Secteur d'activité : [à compléter]
+• Surface isolée : [à compléter] m²
+• Résistance thermique R : [à compléter] m²K/W
+• Matériau isolant : [à compléter]
+• Marque : [à compléter], référence : [à compléter]`;
+  }
+  return `${fiche} : [Description du système mis en place]\n• Marque : [à compléter]\n• Référence : [à compléter]\n• Caractéristiques principales : [à compléter]`;
+}
+
 const NIV = {
   CRITIQUE: { bg:"#FEF2F2", border:"#FCA5A5", badge:"#DC2626", text:"#7F1D1D" },
   ATTENTION:{ bg:"#FFFBEB", border:"#FCD34D", badge:"#D97706", text:"#78350F" },
@@ -1487,10 +1544,12 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
     nomContact:       devis.nomContact       || "",
     fonctionContact:  devis.fonctionContact  || "",
     // Onglet Prestataire
-    sousTraitant:     devis.sousTraitant     || "DC LINK",
-    rgeNum:           devis.rgeNum           || "AU 084 742",
-    rgeValidite:      devis.rgeValidite      || "31/12/2026",
-    adresseSite:      devis.adresseSite      || "",
+    sousTraitant:         devis.sousTraitant         || "DC LINK",
+    rgeNum:               devis.rgeNum               || "AU 084 742",
+    rgeValidite:          devis.rgeValidite           || "31/12/2026",
+    adresseSite:          devis.adresseSite           || "",
+    nomVisiteurVT:        p.nomVisiteurVT             || "",
+    infoLegalPrestataire: p.infoLegalPrestataire      || "",
     // Onglet Devis
     ficheDevis:           devis.ficheDevis            || p.ficheDevis           || "BAT-TH-142",
     refDevis:             devis.refDevis             || "",
@@ -1501,6 +1560,7 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
     mentionCEE:           p.mentionCEE                || "",
     cgv:                  p.cgv                       || "",
     mentionLegale:        p.mentionLegale             || "",
+    mentionReleve:        p.mentionReleve             || "",
     // Dossier lié
     dossierId: devis.dossierId || "",
     // Onglet Société
@@ -1548,6 +1608,9 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
         mentionCEE:          form.mentionCEE,
         cgv:                 form.cgv,
         mentionLegale:       form.mentionLegale,
+        mentionReleve:       form.mentionReleve,
+        nomVisiteurVT:       form.nomVisiteurVT,
+        infoLegalPrestataire:form.infoLegalPrestataire,
         societeNom:          form.societeNom,
         societeAdresse:      form.societeAdresse,
         societeSiret:        form.societeSiret,
@@ -1615,10 +1678,12 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
           {activeTab === "prestataire" && (
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
               {[
-                {l:"Sous-traitant / Poseur",  k:"sousTraitant", ph:"DC LINK",       full:true},
-                {l:"N° RGE",                  k:"rgeNum",       ph:"AU 084 742"},
-                {l:"RGE valable jusqu'au",    k:"rgeValidite",  ph:"31/12/2026"},
-                {l:"Adresse du site (travaux)",k:"adresseSite",  ph:"771 Rue de la Plaine…", full:true},
+                {l:"Sous-traitant / Poseur",  k:"sousTraitant",         ph:"DC LINK",                          full:true},
+                {l:"N° RGE",                  k:"rgeNum",               ph:"AU 084 742"},
+                {l:"RGE valable jusqu'au",    k:"rgeValidite",           ph:"31/12/2026"},
+                {l:"Adresse du site (travaux)",k:"adresseSite",          ph:"771 Rue de la Plaine…",            full:true},
+                {l:"Info légal prestataire",   k:"infoLegalPrestataire", ph:"SARL DC LINK — SIRET 000 000 000 00000 — RCS Paris", full:true},
+                {l:"Nom de la personne — Visite technique", k:"nomVisiteurVT", ph:"Jean Dupont",                full:true},
               ].map(f => (
                 <div key={f.k} style={{gridColumn:f.full?"1/-1":"auto"}}>
                   <label style={L}>{f.l}</label>
@@ -1691,6 +1756,25 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
                 <label style={L}>Mentions légales supplémentaires (optionnel)</label>
                 <textarea value={form.mentionLegale} onChange={e=>set("mentionLegale",e.target.value)} rows={3}
                   placeholder="Assurance décennale n°..." style={{...F,resize:"vertical"}}/>
+              </div>
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                  <label style={{...L,marginBottom:0}}>Relevé technique du site — Fiche CEE</label>
+                  <button type="button"
+                    onClick={() => set("mentionReleve", genereReleve({ ficheDevis: form.ficheDevis }))}
+                    style={{fontSize:11,padding:"3px 10px",background:"#EFF6FF",border:"1px solid #BFDBFE",color:"#2563EB",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontWeight:600,whiteSpace:"nowrap"}}>
+                    ✨ Auto-générer
+                  </button>
+                  {form.mentionReleve && (
+                    <button type="button" onClick={() => set("mentionReleve", "")}
+                      style={{fontSize:11,padding:"3px 8px",background:"transparent",border:"1px solid #E2E8F0",color:"#94A3B8",borderRadius:6,cursor:"pointer",fontFamily:"inherit"}}>
+                      Effacer
+                    </button>
+                  )}
+                </div>
+                <textarea value={form.mentionReleve} onChange={e=>set("mentionReleve",e.target.value)} rows={6}
+                  placeholder="Cliquez sur « Auto-générer » ou saisissez le relevé technique manuellement…"
+                  style={{...F,resize:"vertical",lineHeight:1.6,fontSize:12}}/>
               </div>
             </div>
           )}
