@@ -963,7 +963,7 @@ function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
       const isParSections  = structureDevis === "par_sections";
 
       // Modèle : Sonnet pour docs complexes multi-pages (par_sections), Haiku pour fiches simples
-      const model = isParSections ? "claude-sonnet-4-5-20251001" : "claude-haiku-4-5-20251001";
+      const model = isParSections ? "claude-3-5-sonnet-20241022" : "claude-haiku-4-5-20251001";
 
       // Prompt adapté selon le prestataire et la fiche CEE
       const promptTexte = isParSections
