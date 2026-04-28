@@ -1018,7 +1018,7 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
 
       const resp = await fetch("/api/claude", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "anthropic-beta": "pdfs-2024-09-25" },
         body: JSON.stringify({
           model,
           max_tokens: 8192,
