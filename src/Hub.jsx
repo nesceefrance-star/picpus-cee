@@ -1683,6 +1683,10 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
 function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave, onCancel }) {
   const p = devis.pdfParams || {};
   const [activeTab, setActiveTab] = useState(initTab);
+  const [prestaList, setPrestaList] = useState([]);
+  useEffect(() => {
+    supabase.from("prestataires").select("*").order("nom").then(({ data }) => { if (data) setPrestaList(data); });
+  }, []);
   const [form, setForm] = useState({
     // Onglet Client
     nomClient:        devis.nomClient        || "",
@@ -1826,20 +1830,44 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
 
           {/* ── Prestataire ── */}
           {activeTab === "prestataire" && (
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-              {[
-                {l:"Sous-traitant / Poseur",  k:"sousTraitant",         ph:"DC LINK",                          full:true},
-                {l:"N° RGE",                  k:"rgeNum",               ph:"AU 084 742"},
-                {l:"RGE valable jusqu'au",    k:"rgeValidite",           ph:"31/12/2026"},
-                {l:"Adresse du site (travaux)",k:"adresseSite",          ph:"771 Rue de la Plaine…",            full:true},
-                {l:"Info légal prestataire",   k:"infoLegalPrestataire", ph:"SARL DC LINK — SIRET 000 000 000 00000 — RCS Paris", full:true},
-                {l:"Nom de la personne — Visite technique", k:"nomVisiteurVT", ph:"Jean Dupont",                full:true},
-              ].map(f => (
-                <div key={f.k} style={{gridColumn:f.full?"1/-1":"auto"}}>
-                  <label style={L}>{f.l}</label>
-                  <input value={form[f.k]} onChange={e=>set(f.k,e.target.value)} placeholder={f.ph} style={F}/>
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              {/* Sélecteur prestataire enregistré */}
+              {prestaList.length > 0 && (
+                <div>
+                  <label style={L}>Charger un prestataire enregistré</label>
+                  <select defaultValue=""
+                    onChange={e => {
+                      const p = prestaList.find(x => x.id === e.target.value);
+                      if (!p) return;
+                      set("sousTraitant",         p.nom);
+                      set("rgeNum",               p.rge_num      || "");
+                      set("rgeValidite",           p.rge_validite || "");
+                      set("infoLegalPrestataire",  p.info_legal   || "");
+                    }}
+                    style={{...F, appearance:"auto"}}>
+                    <option value="">— Sélectionner pour remplir automatiquement —</option>
+                    {prestaList.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}
+                  </select>
+                  <div style={{fontSize:11,color:C.textSoft,marginTop:4}}>
+                    Les champs ci-dessous sont remplis automatiquement. Modifiez-les si besoin.
+                  </div>
                 </div>
-              ))}
+              )}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+                {[
+                  {l:"Sous-traitant / Poseur",  k:"sousTraitant",         ph:"DC LINK",                                               full:true},
+                  {l:"N° RGE",                  k:"rgeNum",               ph:"AU 084 742"},
+                  {l:"RGE valable jusqu'au",    k:"rgeValidite",           ph:"31/12/2026"},
+                  {l:"Adresse du site (travaux)",k:"adresseSite",          ph:"771 Rue de la Plaine…",                                 full:true},
+                  {l:"Info légal prestataire",   k:"infoLegalPrestataire", ph:"SARL DC LINK — SIRET 000 000 000 00000 — RCS Paris",    full:true},
+                  {l:"Nom visiteur — Visite technique", k:"nomVisiteurVT", ph:"Jean Dupont",                                           full:true},
+                ].map(f => (
+                  <div key={f.k} style={{gridColumn:f.full?"1/-1":"auto"}}>
+                    <label style={L}>{f.l}</label>
+                    <input value={form[f.k]} onChange={e=>set(f.k,e.target.value)} placeholder={f.ph} style={F}/>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
