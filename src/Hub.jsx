@@ -963,7 +963,7 @@ function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
       const isParSections  = structureDevis === "par_sections";
 
       // Modèle : Sonnet pour docs complexes multi-pages (par_sections), Haiku pour fiches simples
-      const model = isParSections ? "claude-3-5-sonnet-20241022" : "claude-haiku-4-5-20251001";
+      const model = isParSections ? "claude-sonnet-4-5" : "claude-haiku-4-5-20251001";
 
       // Prompt adapté selon le prestataire et la fiche CEE
       const promptTexte = isParSections
@@ -1032,12 +1032,13 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
         }),
       });
 
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err?.error?.message || `Erreur API ${resp.status}`);
-      }
-
       const result = await resp.json();
+
+      if (!resp.ok) {
+        // Log complet pour diagnostic
+        const errMsg = result?.error?.message || result?.message || JSON.stringify(result).substring(0, 300);
+        throw new Error(`API ${resp.status} — ${errMsg}`);
+      }
       const raw = result.content?.[0]?.text?.trim() || "";
 
       // Extraire le JSON : chercher le premier [ et le dernier ] dans la réponse brute
