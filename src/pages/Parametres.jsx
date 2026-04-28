@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import useStore from '../store/useStore'
+import PrestatairesSettings from '../components/PrestatairesSettings'
 
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -77,6 +78,7 @@ function IntegrationCard({ icon, name, description, status, onConnect, onDisconn
 
 export default function Parametres() {
   const { session, user, profile } = useStore()
+  const [activeTab, setActiveTab] = useState('integrations')
 
   const [googleStatus,   setGoogleStatus]   = useState({ connected: false, email: null, loaded: false })
   const [disconnecting,  setDisconnecting]  = useState(false)
@@ -139,14 +141,31 @@ export default function Parametres() {
   return (
     <Box sx={{ minHeight: '100vh', background: DARK.bg, p: { xs: 2, md: 3 } }}>
     <Box sx={{ maxWidth: 720, mx: 'auto' }}>
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: 800, color: DARK.text, mb: 0.5 }}>
           Paramètres
         </Typography>
-        <Typography sx={{ fontSize: 13, color: DARK.textSoft }}>
-          Gérez vos intégrations et connexions aux services tiers.
-        </Typography>
       </Box>
+
+      {/* Onglets */}
+      <div style={{ display: 'flex', gap: 0, borderBottom: `2px solid ${DARK.border}`, marginBottom: 24 }}>
+        {[['integrations', '⚡ Intégrations'], ['prestataires', '🏗 Prestataires']].map(([t, l]) => (
+          <button key={t} onClick={() => setActiveTab(t)} style={{
+            padding: '9px 20px', fontSize: 13, fontWeight: activeTab === t ? 700 : 500,
+            cursor: 'pointer', fontFamily: 'inherit', background: 'transparent', border: 'none',
+            borderBottom: `2px solid ${activeTab === t ? DARK.accent : 'transparent'}`,
+            marginBottom: -2, color: activeTab === t ? DARK.accent : DARK.textMid, transition: 'all .15s',
+          }}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Onglet Prestataires ── */}
+      {activeTab === 'prestataires' && <PrestatairesSettings />}
+
+      {/* ── Onglet Intégrations ── */}
+      {activeTab === 'integrations' && <>
 
       {/* Section Intégrations */}
       <Typography sx={{ fontSize: 11, fontWeight: 700, color: DARK.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', mb: 1.5 }}>
@@ -249,6 +268,8 @@ export default function Parametres() {
           </Box>
         </Box>
       </Paper>
+      </> /* fin onglet intégrations */}
+
     </Box>
     </Box>
   )

@@ -904,8 +904,36 @@ function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState("");
   const [preview, setPreview]     = useState(null);
-  const [prestataire, setPrestataire] = useState(infosClient.sousTraitant || "DC LINK");
+  const [prestataire, setPrestataire] = useState(infosClient.sousTraitant || "");
+  const [prestaList, setPrestaList]   = useState([]);
+  const [selectedPrestaId, setSelectedPrestaId] = useState("");
   const fileRef = useRef();
+
+  // Charger les prestataires depuis Supabase
+  useEffect(() => {
+    supabase.from("prestataires").select("*").order("nom").then(({ data }) => {
+      if (data) setPrestaList(data);
+    });
+  }, []);
+
+  // Quand on sélectionne un prestataire dans la liste
+  const handleSelectPresta = (id) => {
+    setSelectedPrestaId(id);
+    if (!id) return;
+    const p = prestaList.find(x => x.id === id);
+    if (p) setPrestataire(p.nom);
+  };
+
+  // structure_devis du prestataire sélectionné (ou détection par nom pour retro-compat)
+  const getStructureDevis = () => {
+    if (selectedPrestaId) {
+      const p = prestaList.find(x => x.id === selectedPrestaId);
+      return p?.structure_devis || "standard";
+    }
+    // Fallback : détection OPEN GTC par nom (rétro-compatibilité)
+    if (/open.?gtc/i.test(prestataire.trim())) return "par_sections";
+    return "standard";
+  };
 
   // Détecte la catégorie à partir de mots-clés (uniquement pour fiches avec destrat)
   const detectCat = txt => {
@@ -930,14 +958,15 @@ function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
       }
       const b64 = btoa(binary);
 
-      // Détection OPEN GTC : structure par tranches/sections, multi-pages
-      const isOpenGTC = /open.?gtc/i.test(prestataire.trim());
+      // Structure du devis selon le prestataire sélectionné (ou fallback regex)
+      const structureDevis = getStructureDevis();
+      const isParSections  = structureDevis === "par_sections";
 
-      // Modèle : Sonnet pour docs complexes multi-pages (OPEN GTC), Haiku pour fiches simples
-      const model = isOpenGTC ? "claude-sonnet-4-5-20251001" : "claude-haiku-4-5-20251001";
+      // Modèle : Sonnet pour docs complexes multi-pages (par_sections), Haiku pour fiches simples
+      const model = isParSections ? "claude-sonnet-4-5-20251001" : "claude-haiku-4-5-20251001";
 
       // Prompt adapté selon le prestataire et la fiche CEE
-      const promptTexte = isOpenGTC
+      const promptTexte = isParSections
         ? `Ce PDF est un devis multi-pages du prestataire "${prestataire}" pour la fiche CEE ${ficheCEE}.
 
 STRUCTURE DU DOCUMENT :
@@ -1078,9 +1107,39 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
             <label style={{display:"block",fontSize:11,fontWeight:600,color:C.textMid,marginBottom:4,textTransform:"uppercase",letterSpacing:.4}}>
               Prestataire (sous-traitant)
             </label>
-            <input value={prestataire} onChange={e=>setPrestataire(e.target.value)} placeholder="DC LINK, Nom du prestataire..."
-              style={{width:"100%",boxSizing:"border-box",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
-            <div style={{fontSize:11,color:C.textSoft,marginTop:4}}>Préciser le prestataire aide l'IA à mieux interpréter la structure du devis.</div>
+            {prestaList.length > 0 ? (
+              <>
+                <select value={selectedPrestaId} onChange={e => handleSelectPresta(e.target.value)}
+                  style={{width:"100%",boxSizing:"border-box",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit",appearance:"auto",marginBottom:6}}>
+                  <option value="">— Saisie manuelle —</option>
+                  {prestaList.map(p => <option key={p.id} value={p.id}>{p.nom}{p.structure_devis === "par_sections" ? " ✨ Sonnet" : ""}</option>)}
+                </select>
+                {!selectedPrestaId && (
+                  <input value={prestataire} onChange={e=>setPrestataire(e.target.value)} placeholder="Nom du prestataire…"
+                    style={{width:"100%",boxSizing:"border-box",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
+                )}
+                {selectedPrestaId && (() => {
+                  const p = prestaList.find(x => x.id === selectedPrestaId);
+                  return p ? (
+                    <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:7,padding:"8px 12px",fontSize:12,color:"#1E3A8A"}}>
+                      <strong>{p.nom}</strong>
+                      {p.info_legal && <> — {p.info_legal}</>}
+                      {p.rge_num && <> · RGE {p.rge_num}</>}
+                      <br/>
+                      <span style={{fontWeight:700,color: p.structure_devis === "par_sections" ? "#7C3AED" : "#16A34A"}}>
+                        {p.structure_devis === "par_sections" ? "✨ Sonnet — extraction par tranches/sections" : "⚡ Haiku — extraction standard"}
+                      </span>
+                    </div>
+                  ) : null;
+                })()}
+              </>
+            ) : (
+              <input value={prestataire} onChange={e=>setPrestataire(e.target.value)} placeholder="DC LINK, Nom du prestataire..."
+                style={{width:"100%",boxSizing:"border-box",background:C.bg,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 12px",color:C.text,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
+            )}
+            <div style={{fontSize:11,color:C.textSoft,marginTop:4}}>
+              Gérer les prestataires dans <strong>Paramètres → Prestataires</strong>.
+            </div>
           </div>
         )}
 
@@ -2153,6 +2212,8 @@ function MargesDevis({ prefill }) {
     if (!prefill) return;
     const enrichAndGo = async () => {
       let infos = { ...prefill };
+      // Mapper ficheCee (SimulationCard) → ficheDevis (UploadPrestaDevis)
+      if (infos.ficheCee && !infos.ficheDevis) infos.ficheDevis = infos.ficheCee;
       if (prefill.siret && !prefill.codeNAF) {
         try {
           const r = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(prefill.siret)}&per_page=1`);
