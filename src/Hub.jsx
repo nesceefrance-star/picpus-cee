@@ -930,8 +930,39 @@ function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
       }
       const b64 = btoa(binary);
 
-      // Prompt adapté selon la fiche CEE
-      const promptTexte = avecCat
+      // Détection OPEN GTC : structure par tranches/sections, multi-pages
+      const isOpenGTC = /open.?gtc/i.test(prestataire.trim());
+
+      // Modèle : Sonnet pour docs complexes multi-pages (OPEN GTC), Haiku pour fiches simples
+      const model = isOpenGTC ? "claude-sonnet-4-5-20251001" : "claude-haiku-4-5-20251001";
+
+      // Prompt adapté selon le prestataire et la fiche CEE
+      const promptTexte = isOpenGTC
+        ? `Ce PDF est un devis multi-pages du prestataire "${prestataire}" pour la fiche CEE ${ficheCEE}.
+
+STRUCTURE DU DOCUMENT :
+- Des TITRES DE TRANCHES (texte en gras coloré, SANS valeurs dans les colonnes Qté/Prix/Montant) : ex. "Supervision GTB - Reprise du poste de supervision existant", "Travaux sur les Aérothermes - TD gestion Aérothermes - 6 TD", "Travaux sur la Chaufferie", etc.
+- Des LIGNES DE POSTES (avec Qté, Prix Unitaire HT, Montant HT) — les descriptions peuvent couvrir plusieurs lignes et regrouper plusieurs opérations dans un seul poste
+- Des SOUS-TOTAUX (commençant par "Sous-total") et TOTAUX → À IGNORER
+- ATTENTION DOUBLONS : certaines descriptions sont COUPÉES entre deux pages. La description commence en fin d'une page avec ses valeurs (Qté, Prix), et sa suite apparaît en début de la page suivante SANS valeurs. Il faut RECONSTITUER la description complète et ne créer QU'UNE SEULE ligne.
+
+RÈGLES STRICTES :
+1. Inclure chaque titre de tranche avec isSection: true, qte: 0, puAchat: 0, unite: ""
+2. Inclure chaque ligne de poste avec isSection: false, ses vraies valeurs qte et puAchat
+3. IGNORER : "Sous-total", "Total", TVA, "Net à payer", "Mode de règlement", en-têtes de colonnes ("Désignation", "Unité", "Qté"…), récapitulatifs, mentions légales, infos facturation
+4. ASSEMBLER les descriptions coupées entre pages : si une description se termine en fin de page et continue en début de page suivante sans nouveau prix → c'est UNE SEULE ligne, prendre la description COMPLÈTE avec le prix de la première occurrence
+5. NE JAMAIS DUPLIQUER une ligne (vérifier que chaque combinaison description+prix n'apparaît qu'une fois)
+6. Conserver l'ORDRE EXACT du document
+7. Ne jamais découper un poste en plusieurs lignes, ne jamais fusionner deux postes distincts
+8. Conserver la description COMPLÈTE, y compris toutes les opérations regroupées dans un poste
+
+FORMAT ATTENDU (tableau JSON, sans markdown, sans commentaires) :
+[
+  {"designation":"Supervision GTB - Reprise du poste de supervision existant","isSection":true,"qte":0,"puAchat":0,"unite":""},
+  {"designation":"Licence EC-NET + Supervision Enyvision à installer sur le poste existant","isSection":false,"qte":1,"puAchat":4125.00,"unite":"U"},
+  {"designation":"Installation du logiciel sur le poste de supervision\\nCréation de la navigation de la supervision Enyvision\\nTests, essais et mise en service des points sur la supervision","isSection":false,"qte":1,"puAchat":4095.00,"unite":"U"}
+]`
+        : avecCat
         ? `Devis du prestataire "${prestataire}" pour la fiche CEE ${ficheCEE}.
 Analyse le tableau et extrais CHAQUE ligne produit/prestation (SAUF totaux, sous-totaux, TVA, acomptes, en-têtes).
 IMPORTANT : conserve la désignation COMPLÈTE sans tronquer, même si elle est longue.
@@ -960,7 +991,7 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
+          model,
           max_tokens: 8192,
           messages: [{
             role: "user",
@@ -993,19 +1024,21 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
 
       const cent = v => Math.round(v * 100) / 100;
       const lignes = items
-        .filter(it => it.puAchat > 0 && it.designation?.length > 2)
+        .filter(it => it.isSection === true || (it.puAchat > 0 && it.designation?.length > 2))
         .map((it, idx) => {
-          const cat   = avecCat ? detectCat(it.designation) : "MATÉRIEL";
-          const marge = avecCat ? (cat === "MAIN D'ŒUVRE" ? 25 : cat === "DIVERS" ? 10 : 30) : 30;
+          const isSec = it.isSection === true;
+          const cat   = isSec ? "SECTION" : (avecCat ? detectCat(it.designation) : "MATÉRIEL");
+          const marge = isSec ? 0 : (avecCat ? (cat === "MAIN D'ŒUVRE" ? 25 : cat === "DIVERS" ? 10 : 30) : 30);
           return {
             id: idx + 1,
+            isSection: isSec,
             cat,
-            designation: String(it.designation).substring(0, 500),
-            qte:     cent(Number(it.qte)     || 1),
-            unite:   it.unite || "U",
-            puAchat: cent(Number(it.puAchat) || 0),
+            designation: String(it.designation).substring(0, 600),
+            qte:      isSec ? 0 : cent(Number(it.qte)     || 1),
+            unite:    isSec ? ""  : (it.unite || "U"),
+            puAchat:  isSec ? 0 : cent(Number(it.puAchat) || 0),
             margePct: marge,
-            puVente: cent((Number(it.puAchat) || 0) * (1 + marge / 100)),
+            puVente:  isSec ? 0 : cent((Number(it.puAchat) || 0) * (1 + marge / 100)),
             inclus: true,
           };
         });
@@ -1136,8 +1169,9 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
   const setBatPuVente = v => setDevis(d => ({...d, batPuVente: v, updatedAt: Date.now()}));
   const setBatQte = v => setDevis(d => ({...d, batQte: v, updatedAt: Date.now()}));
 
-  const actives = lignes.filter(l => l.inclus);
-  const cats    = [...new Set(actives.map(l => l.cat))];
+  const actives     = lignes.filter(l => l.inclus);
+  const hasSections = lignes.some(l => l.isSection);
+  const cats        = [...new Set(actives.filter(l => !l.isSection).map(l => l.cat))];
   // Prime CEE simulateur — référence interne, lecture seule
   const primeCEESimu = devis.prime || 0;
   const batPuVente = devis.batPuVente || 0;
@@ -1152,8 +1186,9 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
   }, [primeFaciale]);
 
   const stats = useMemo(() => {
-    const achat    = actives.reduce((s,l) => s+l.qte*l.puAchat, 0);
-    const sousTot  = actives.reduce((s,l) => s+l.qte*l.puVente, 0);
+    const sl       = actives.filter(l => !l.isSection);
+    const achat    = sl.reduce((s,l) => s+l.qte*l.puAchat, 0);
+    const sousTot  = sl.reduce((s,l) => s+l.qte*l.puVente, 0);
     const totalHT  = sousTot + batQte * batPuVente;
     const totalTVA = totalHT * .20;
     const totalTTC = totalHT + totalTVA;
@@ -1172,7 +1207,9 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
     return u;
   }));
 
-  const applyGlobal = pct => setLignes(ls => ls.map(l => ({...l, margePct: pct, puVente: parseFloat((l.puAchat*(1+pct/100)).toFixed(2))})));
+  const applyGlobal = pct => setLignes(ls => ls.map(l =>
+    l.isSection ? l : {...l, margePct: pct, puVente: parseFloat((l.puAchat*(1+pct/100)).toFixed(2))}
+  ));
 
   const addLigne = () => {
     const newId = Math.max(0, ...lignes.map(l=>l.id)) + 1;
@@ -1376,56 +1413,109 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
                 <th style={{...TH,width:24}}></th>
               </tr></thead>
               <tbody>
-                {cats.map(cat => {
-                  const cl = actives.filter(l => l.cat === cat);
-                  const cs = CAT_S[cat] || {bg:C.bg,text:C.text,border:C.border};
-                  const ct = cl.reduce((s,l) => s+l.qte*l.puVente, 0);
-                  return [
-                    <tr key={"c"+cat}>
-                      <td colSpan={7} style={{background:cs.bg,padding:"6px 10px",fontWeight:700,fontSize:11,color:cs.text,textTransform:"uppercase",border:`1px solid ${cs.border}`}}>{cat}</td>
-                      <td style={{background:cs.bg,padding:"6px 10px",textAlign:"right",fontWeight:700,fontSize:11,color:cs.text,border:`1px solid ${cs.border}`}}>{fmt(ct)} €</td>
-                    </tr>,
-                    ...cl.map((l, ri) => {
-                      const mc = MC2(l.margePct);
+                {hasSections ? (
+                  // ── Mode sections OPEN GTC : ordre original préservé ──
+                  lignes.map((l, ri) => {
+                    if (l.isSection) {
                       return (
-                        <tr key={l.id} style={{background:ri%2===0?C.surface:C.bg}}>
-                          <td style={{...TD,textAlign:"center"}}>
-                            <input type="checkbox" checked={l.inclus} onChange={e=>upd(l.id,"inclus",e.target.checked)} style={{cursor:"pointer",width:14,height:14}}/>
+                        <tr key={l.id}>
+                          <td style={{...TD,textAlign:"center",color:C.textSoft,fontSize:11}}>—</td>
+                          <td colSpan={6} style={{...TD,background:"#1E3A8A",color:"#fff",fontWeight:700,fontSize:11,letterSpacing:.3}}>
+                            📁 {l.designation}
                           </td>
-                          <td style={{...TD,minWidth:220,maxWidth:340}}>
-                            <input value={l.designation} onChange={e=>upd(l.id,"designation",e.target.value)}
-                              style={{...INP,width:"100%",fontSize:12,padding:"4px 6px"}}/>
-                            <div style={{display:"flex",gap:4,marginTop:3}}>
-                              <select value={l.cat} onChange={e=>upd(l.id,"cat",e.target.value)}
-                                style={{...INP,fontSize:11,padding:"2px 5px"}}>
-                                {["MATÉRIEL","MAIN D'ŒUVRE","DIVERS"].map(c=><option key={c}>{c}</option>)}
-                              </select>
-                              <input value={l.unite} onChange={e=>upd(l.id,"unite",e.target.value)}
-                                style={{...INP,width:42,fontSize:11,padding:"2px 5px"}}/>
-                            </div>
-                          </td>
-                          <td style={{...TD,textAlign:"center"}}>
-                            <input type="number" value={l.qte} onChange={e=>upd(l.id,"qte",e.target.value)} style={{...INP,width:54,textAlign:"center"}}/>
-                          </td>
-                          <td style={{...TD,textAlign:"right"}}>
-                            <input type="number" value={l.puAchat} onChange={e=>upd(l.id,"puAchat",e.target.value)} style={{...INP,width:78,textAlign:"right",color:C.textMid}}/>
-                          </td>
-                          <td style={{...TD,textAlign:"center"}}>
-                            <input type="number" value={l.margePct} onChange={e=>upd(l.id,"margePct",e.target.value)} style={{...INP,width:50,textAlign:"center",color:mc,fontWeight:700}}/>
-                            <span style={{color:mc,fontSize:12,fontWeight:700,marginLeft:1}}>%</span>
-                          </td>
-                          <td style={{...TD,textAlign:"right"}}>
-                            <input type="number" value={l.puVente} onChange={e=>upd(l.id,"puVente",e.target.value)} style={{...INP,width:78,textAlign:"right",fontWeight:700,color:C.accent}}/>
-                          </td>
-                          <td style={{...TD,textAlign:"right",fontWeight:700,color:C.text,fontSize:12}}>{fmt(l.qte*l.puVente)} €</td>
-                          <td style={{...TD,textAlign:"center"}}>
-                            <button onClick={()=>delLigne(l.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:14,padding:"2px"}}>✕</button>
+                          <td style={{...TD,textAlign:"center",background:"#1E3A8A"}}>
+                            <button onClick={()=>delLigne(l.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#93C5FD",fontSize:14,padding:"2px"}}>✕</button>
                           </td>
                         </tr>
                       );
-                    })
-                  ];
-                })}
+                    }
+                    const mc = MC2(l.margePct);
+                    return (
+                      <tr key={l.id} style={{background:ri%2===0?C.surface:C.bg}}>
+                        <td style={{...TD,textAlign:"center"}}>
+                          <input type="checkbox" checked={l.inclus} onChange={e=>upd(l.id,"inclus",e.target.checked)} style={{cursor:"pointer",width:14,height:14}}/>
+                        </td>
+                        <td style={{...TD,minWidth:220,maxWidth:340}}>
+                          <input value={l.designation} onChange={e=>upd(l.id,"designation",e.target.value)}
+                            style={{...INP,width:"100%",fontSize:12,padding:"4px 6px"}}/>
+                          <div style={{display:"flex",gap:4,marginTop:3}}>
+                            <input value={l.unite} onChange={e=>upd(l.id,"unite",e.target.value)}
+                              style={{...INP,width:42,fontSize:11,padding:"2px 5px"}}/>
+                          </div>
+                        </td>
+                        <td style={{...TD,textAlign:"center"}}>
+                          <input type="number" value={l.qte} onChange={e=>upd(l.id,"qte",e.target.value)} style={{...INP,width:54,textAlign:"center"}}/>
+                        </td>
+                        <td style={{...TD,textAlign:"right"}}>
+                          <input type="number" value={l.puAchat} onChange={e=>upd(l.id,"puAchat",e.target.value)} style={{...INP,width:78,textAlign:"right",color:C.textMid}}/>
+                        </td>
+                        <td style={{...TD,textAlign:"center"}}>
+                          <input type="number" value={l.margePct} onChange={e=>upd(l.id,"margePct",e.target.value)} style={{...INP,width:50,textAlign:"center",color:mc,fontWeight:700}}/>
+                          <span style={{color:mc,fontSize:12,fontWeight:700,marginLeft:1}}>%</span>
+                        </td>
+                        <td style={{...TD,textAlign:"right"}}>
+                          <input type="number" value={l.puVente} onChange={e=>upd(l.id,"puVente",e.target.value)} style={{...INP,width:78,textAlign:"right",fontWeight:700,color:C.accent}}/>
+                        </td>
+                        <td style={{...TD,textAlign:"right",fontWeight:700,color:C.text,fontSize:12}}>{fmt(l.qte*l.puVente)} €</td>
+                        <td style={{...TD,textAlign:"center"}}>
+                          <button onClick={()=>delLigne(l.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:14,padding:"2px"}}>✕</button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  // ── Mode catégories (MATÉRIEL / MO / DIVERS) ──
+                  cats.map(cat => {
+                    const cl = actives.filter(l => l.cat === cat);
+                    const cs = CAT_S[cat] || {bg:C.bg,text:C.text,border:C.border};
+                    const ct = cl.reduce((s,l) => s+l.qte*l.puVente, 0);
+                    return [
+                      <tr key={"c"+cat}>
+                        <td colSpan={7} style={{background:cs.bg,padding:"6px 10px",fontWeight:700,fontSize:11,color:cs.text,textTransform:"uppercase",border:`1px solid ${cs.border}`}}>{cat}</td>
+                        <td style={{background:cs.bg,padding:"6px 10px",textAlign:"right",fontWeight:700,fontSize:11,color:cs.text,border:`1px solid ${cs.border}`}}>{fmt(ct)} €</td>
+                      </tr>,
+                      ...cl.map((l, ri) => {
+                        const mc = MC2(l.margePct);
+                        return (
+                          <tr key={l.id} style={{background:ri%2===0?C.surface:C.bg}}>
+                            <td style={{...TD,textAlign:"center"}}>
+                              <input type="checkbox" checked={l.inclus} onChange={e=>upd(l.id,"inclus",e.target.checked)} style={{cursor:"pointer",width:14,height:14}}/>
+                            </td>
+                            <td style={{...TD,minWidth:220,maxWidth:340}}>
+                              <input value={l.designation} onChange={e=>upd(l.id,"designation",e.target.value)}
+                                style={{...INP,width:"100%",fontSize:12,padding:"4px 6px"}}/>
+                              <div style={{display:"flex",gap:4,marginTop:3}}>
+                                <select value={l.cat} onChange={e=>upd(l.id,"cat",e.target.value)}
+                                  style={{...INP,fontSize:11,padding:"2px 5px"}}>
+                                  {["MATÉRIEL","MAIN D'ŒUVRE","DIVERS"].map(c=><option key={c}>{c}</option>)}
+                                </select>
+                                <input value={l.unite} onChange={e=>upd(l.id,"unite",e.target.value)}
+                                  style={{...INP,width:42,fontSize:11,padding:"2px 5px"}}/>
+                              </div>
+                            </td>
+                            <td style={{...TD,textAlign:"center"}}>
+                              <input type="number" value={l.qte} onChange={e=>upd(l.id,"qte",e.target.value)} style={{...INP,width:54,textAlign:"center"}}/>
+                            </td>
+                            <td style={{...TD,textAlign:"right"}}>
+                              <input type="number" value={l.puAchat} onChange={e=>upd(l.id,"puAchat",e.target.value)} style={{...INP,width:78,textAlign:"right",color:C.textMid}}/>
+                            </td>
+                            <td style={{...TD,textAlign:"center"}}>
+                              <input type="number" value={l.margePct} onChange={e=>upd(l.id,"margePct",e.target.value)} style={{...INP,width:50,textAlign:"center",color:mc,fontWeight:700}}/>
+                              <span style={{color:mc,fontSize:12,fontWeight:700,marginLeft:1}}>%</span>
+                            </td>
+                            <td style={{...TD,textAlign:"right"}}>
+                              <input type="number" value={l.puVente} onChange={e=>upd(l.id,"puVente",e.target.value)} style={{...INP,width:78,textAlign:"right",fontWeight:700,color:C.accent}}/>
+                            </td>
+                            <td style={{...TD,textAlign:"right",fontWeight:700,color:C.text,fontSize:12}}>{fmt(l.qte*l.puVente)} €</td>
+                            <td style={{...TD,textAlign:"center"}}>
+                              <button onClick={()=>delLigne(l.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#DC2626",fontSize:14,padding:"2px"}}>✕</button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ];
+                  })
+                )}
 
                 {/* BAT-TH ligne — rétro-compatibilité anciens devis uniquement */}
                 {batQte > 0 && <tr>

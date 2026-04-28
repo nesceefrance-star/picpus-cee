@@ -151,6 +151,7 @@ function Footer({ params }) {
 }
 
 function LigneTableau({ lignes, cats, batQte, batPuVente }) {
+  const hasSections = lignes.some(l => l.isSection)
   return (
     <View>
       {/* En-tête tableau */}
@@ -178,15 +179,14 @@ function LigneTableau({ lignes, cats, batQte, batPuVente }) {
         </>
       )}
 
-      {/* Lignes par catégorie */}
-      {cats.map(cat => {
-        const cl = lignes.filter(l => l.cat === cat)
-        const cc = CAT_COLORS[cat] || { bg: '#F5F5F5', text: '#333' }
-        return [
-          <View key={'h' + cat} style={[s.catRow, { backgroundColor: cc.bg }]}>
-            <Text style={[s.catTxt, { color: cc.text }]}>{cat}</Text>
-          </View>,
-          ...cl.map((l, ri) => (
+      {hasSections ? (
+        /* ── Mode sections OPEN GTC : ordre original préservé ── */
+        lignes.map((l, ri) =>
+          l.isSection ? (
+            <View key={l.id} style={[s.catRow, { backgroundColor: '#1E3A8A' }]}>
+              <Text style={[s.catTxt, { color: '#fff', fontFamily: 'Helvetica-Bold' }]}>{l.designation}</Text>
+            </View>
+          ) : (
             <View key={l.id} style={[s.tdRow, { backgroundColor: ri % 2 === 0 ? '#fff' : '#FAFAFA' }]}>
               <Text style={[s.td, { flex: 1, fontSize: 7, lineHeight: 1.4 }]}>{l.designation}</Text>
               <Text style={[s.td, { width: 35, textAlign: 'center' }]}>{fmt(l.qte)} {l.unite}</Text>
@@ -194,9 +194,29 @@ function LigneTableau({ lignes, cats, batQte, batPuVente }) {
               <Text style={[s.td, { width: 35, textAlign: 'center' }]}>20%</Text>
               <Text style={[s.td, { width: 70, textAlign: 'right', fontFamily: 'Helvetica-Bold' }]}>{fmt(l.qte * l.puVente)}</Text>
             </View>
-          )),
-        ]
-      })}
+          )
+        )
+      ) : (
+        /* ── Mode catégories (MATÉRIEL / MO / DIVERS) ── */
+        cats.map(cat => {
+          const cl = lignes.filter(l => l.cat === cat)
+          const cc = CAT_COLORS[cat] || { bg: '#F5F5F5', text: '#333' }
+          return [
+            <View key={'h' + cat} style={[s.catRow, { backgroundColor: cc.bg }]}>
+              <Text style={[s.catTxt, { color: cc.text }]}>{cat}</Text>
+            </View>,
+            ...cl.map((l, ri) => (
+              <View key={l.id} style={[s.tdRow, { backgroundColor: ri % 2 === 0 ? '#fff' : '#FAFAFA' }]}>
+                <Text style={[s.td, { flex: 1, fontSize: 7, lineHeight: 1.4 }]}>{l.designation}</Text>
+                <Text style={[s.td, { width: 35, textAlign: 'center' }]}>{fmt(l.qte)} {l.unite}</Text>
+                <Text style={[s.td, { width: 65, textAlign: 'right' }]}>{fmt(l.puVente)}</Text>
+                <Text style={[s.td, { width: 35, textAlign: 'center' }]}>20%</Text>
+                <Text style={[s.td, { width: 70, textAlign: 'right', fontFamily: 'Helvetica-Bold' }]}>{fmt(l.qte * l.puVente)}</Text>
+              </View>
+            )),
+          ]
+        })
+      )}
     </View>
   )
 }
