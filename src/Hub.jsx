@@ -1366,7 +1366,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
     <div style={{display:"flex",flexDirection:"column",height:"100%",background:C.bg}}>
       {/* Barre du haut */}
       <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"8px 16px",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-        <button onClick={() => { onSave(devis); onBack(); }}
+        <button onClick={() => { onSave({...devis, primeFaciale}); onBack(); }}
           style={{background:"transparent",border:"none",color:C.textMid,fontSize:13,cursor:"pointer",padding:"4px 8px",marginRight:4,fontFamily:"inherit"}}>
           ← Mes devis
         </button>
@@ -2401,9 +2401,10 @@ function MargesDevis({ prefill }) {
 
   // ── Sauvegarder un devis modifié ──────────────────────────────────────
   const handleSave = async (updatedDevis) => {
-    await supabase.from("devis_hub")
+    const { error } = await supabase.from("devis_hub")
       .update(toRow(updatedDevis))
       .eq("id", updatedDevis.id);
+    if (error) console.error("[handleSave] Supabase error:", error.message, error.details);
     const updated = devisList.map(d => d.id === updatedDevis.id ? updatedDevis : d);
     setDevisList(updated);
     try { localStorage.setItem(CACHE_KEY, JSON.stringify(updated)); } catch {}
