@@ -1715,6 +1715,9 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
     cgv:                  p.cgv                       || "",
     mentionLegale:        p.mentionLegale             || "",
     mentionReleve:        p.mentionReleve             || "",
+    // Onglet Délégataire
+    delegataireNom:       p.delegataireNom            || "SOFT.IA",
+    delegataireSiren:     p.delegataireSiren          || "533 333 118",
     // Dossier lié
     dossierId: devis.dossierId || "",
     // Onglet Société
@@ -1765,6 +1768,8 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
         mentionReleve:       form.mentionReleve,
         nomVisiteurVT:       form.nomVisiteurVT,
         infoLegalPrestataire:form.infoLegalPrestataire,
+        delegataireNom:      form.delegataireNom,
+        delegataireSiren:    form.delegataireSiren,
         societeNom:          form.societeNom,
         societeAdresse:      form.societeAdresse,
         societeSiret:        form.societeSiret,
@@ -1781,6 +1786,7 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
     { id: "client",       label: "👤 Client" },
     { id: "prestataire",  label: "🔧 Prestataire" },
     { id: "devis",        label: "📄 Devis" },
+    { id: "delegataire",  label: "🏦 Délégataire" },
     { id: "societe",      label: "🏢 Société" },
   ];
 
@@ -1957,6 +1963,55 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
             </div>
           )}
 
+          {/* ── Délégataire ── */}
+          {activeTab === "delegataire" && (
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#1E3A8A",lineHeight:1.6}}>
+                Le <strong>délégataire</strong> est l'organisme qui finance la prime CEE (ex&nbsp;: SOFT.IA, Effy, Hellio…). Son nom et SIREN apparaissent dans la clause légale CEE du devis.
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+                <div style={{gridColumn:"1/-1"}}>
+                  <label style={L}>Nom du délégataire</label>
+                  <input value={form.delegataireNom} onChange={e=>set("delegataireNom",e.target.value)} placeholder="SOFT.IA" style={F}/>
+                </div>
+                <div style={{gridColumn:"1/-1"}}>
+                  <label style={L}>SIREN du délégataire</label>
+                  <input value={form.delegataireSiren} onChange={e=>set("delegataireSiren",e.target.value)} placeholder="533 333 118" style={F}/>
+                </div>
+              </div>
+              {/* Générateur de mention CEE */}
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                  <label style={{...L,marginBottom:0}}>Mention CEE (clause légale)</label>
+                  <button type="button"
+                    onClick={() => {
+                      const nom    = form.delegataireNom.trim()   || "SOFT.IA";
+                      const siren  = form.delegataireSiren.trim() || "533 333 118";
+                      const montant = form.mentionCEE.match(/Montant estimé.*?(\d[\d\s,]+€)/)?.[1];
+                      set("mentionCEE",
+                        `Les travaux objet du présent document donneront lieu à une contribution financière de ${nom} (SIREN ${siren}), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : [à compléter] €.`
+                      );
+                    }}
+                    style={{fontSize:11,padding:"3px 10px",background:"#EFF6FF",border:"1px solid #BFDBFE",color:"#2563EB",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontWeight:600,whiteSpace:"nowrap"}}>
+                    ✨ Générer
+                  </button>
+                  {form.mentionCEE && (
+                    <button type="button" onClick={() => set("mentionCEE","")}
+                      style={{fontSize:11,padding:"3px 8px",background:"transparent",border:"1px solid #E2E8F0",color:"#94A3B8",borderRadius:6,cursor:"pointer",fontFamily:"inherit"}}>
+                      Effacer
+                    </button>
+                  )}
+                </div>
+                <textarea value={form.mentionCEE} onChange={e=>set("mentionCEE",e.target.value)} rows={4}
+                  placeholder={`Les travaux objet du présent document donneront lieu à une contribution financière de ${form.delegataireNom || "SOFT.IA"} (SIREN ${form.delegataireSiren || "533 333 118"}), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : [à compléter] €.`}
+                  style={{...F,resize:"vertical",lineHeight:1.6,fontSize:12}}/>
+                <div style={{fontSize:11,color:C.textSoft,marginTop:4}}>
+                  Si vide, la mention par défaut avec SOFT.IA sera utilisée dans le devis.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── Société ── */}
           {activeTab === "societe" && (
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
@@ -1990,7 +2045,7 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
 }
 
 // ── Aperçu devis dynamique (données du devis courant) ─────────────────────
-const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVente, batQte, primeFaciale, primeCEESimu, stats }, ref) {
+const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVente, batQte, primeFaciale, primeCEESimu, stats, params }, ref) {
   const PAGE = {background:"#fff",width:760,fontFamily:"Arial,Helvetica,sans-serif",fontSize:8,color:"#333",boxSizing:"border-box",padding:"12mm 14mm 14mm 14mm",flexShrink:0};
   const HR   = () => <div style={{borderTop:"0.5px solid #ccc",margin:"5px 0"}}/>;
   const AF2E_LOGO = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoH";
@@ -2076,7 +2131,7 @@ const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVent
                 {l:"Total H.T",    v:fmtE(stats.totalHT)},
                 {l:"TVA (20%)",    v:fmtE(stats.totalTVA)},
                 {l:"Total T.T.C",  v:fmtE(stats.totalTTC),  bold:true,bt:true},
-                {l:`Prime CEE (SOFT.IA)`, v:"− "+fmtE(primeFaciale), color:"#16A34A",bt:true},
+                {l:`Prime CEE (${params?.delegataireNom || "SOFT.IA"})`, v:"− "+fmtE(primeFaciale), color:"#16A34A",bt:true},
                 {l:"Reste à charge T.T.C",       v:fmtE(stats.resteTTC), bold:true,bt:true},
               ].map((r,i) => (
                 <tr key={i} style={{borderTop:r.bt?"1px solid #333":"none"}}>
@@ -2111,7 +2166,12 @@ const DevisPreviewDyn = forwardRef(function DPD({ devis, lignes, cats, batPuVent
         ))}
         <div style={{borderTop:"0.5px solid #ccc",margin:"8px 0"}}/>
         <div style={{fontSize:8,fontWeight:800,color:"#111",margin:"4px 0 3px"}}>Termes et conditions CEE</div>
-        <div style={{fontSize:7,color:"#555",lineHeight:1.7,marginBottom:5}}>Les travaux objet du présent document donneront lieu à une contribution financière de <strong>SOFT.IA</strong> (SIREN 533 333 118), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : <strong>{fmtE(primeCEESimu || primeFaciale)}</strong>.</div>
+        <div style={{fontSize:7,color:"#555",lineHeight:1.7,marginBottom:5}}>
+          {params?.mentionCEE
+            ? params.mentionCEE
+            : <>Les travaux objet du présent document donneront lieu à une contribution financière de <strong>{params?.delegataireNom || "SOFT.IA"}</strong> (SIREN {params?.delegataireSiren || "533 333 118"}), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : <strong>{fmtE(primeCEESimu || primeFaciale)}</strong>.</>
+          }
+        </div>
         <Ftr/>
       </div>
 
@@ -2187,6 +2247,7 @@ const devisToRow = (d) => ({
   code_naf: d.codeNAF || "",
   pdf_params: d.pdfParams || {},
   dossier_id: d.dossierId || null,
+  prime_faciale: d.primeFaciale ?? null,
 });
 
 const normalizeDevis = d => ({

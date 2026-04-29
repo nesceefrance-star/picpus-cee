@@ -331,7 +331,7 @@ export function DevisPDFDoc({ devis, lignes, cats, batPuVente, batQte, primeFaci
         <Text style={[s.condTitle, { fontSize: 8, marginBottom: 3 }]}>Termes et conditions CEE</Text>
         <Text style={s.condText}>
           {params.mentionCEE ||
-            `Les travaux objet du présent document donneront lieu à une contribution financière de SOFT.IA (SIREN 533 333 118), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : ${fmtE(primeCEESimu || primeFaciale)}.`}
+            `Les travaux objet du présent document donneront lieu à une contribution financière de ${params.delegataireNom || 'SOFT.IA'} (SIREN ${params.delegataireSiren || '533 333 118'}), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : ${fmtE(primeCEESimu || primeFaciale)}.`}
         </Text>
 
         {params.cgv ? (
