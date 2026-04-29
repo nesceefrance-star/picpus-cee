@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useStore from '../../store/useStore'
+import { supabase } from '../../lib/supabase'
 import { refDefault } from '../../lib/genRef'
 import { C, Field, InfoRow } from './theme'
 import {
@@ -51,6 +52,19 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
   }, [sFormInit])
   const [simuResult, setSimuResult] = useState(null)
   const [savingSimu, setSavingSimu] = useState(false)
+
+  // Devis lié au dossier
+  const [linkedDevis, setLinkedDevis] = useState(null)
+  useEffect(() => {
+    if (!dossierId) return
+    supabase.from('devis_hub')
+      .select('id, ref_devis, nom_client, updated_at')
+      .eq('dossier_id', dossierId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setLinkedDevis(data) })
+  }, [dossierId])
 
   const sim = simulation
   const simParams = sim?.parametres || {}
@@ -276,21 +290,29 @@ export default function SimulationCard({ dossier, dossierId, simulation, sFormIn
             </>
           })()}
           <InfoRow label="Prix MWh" value={sim.prix_mwh != null ? `${sim.prix_mwh} €/MWh` : null} />
-          <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
-            <button
-              onClick={() => navigate('/hub', { state: { module: 'marges', prefill: {
-                nomClient: dossier.prospects?.raison_sociale || '', siret: dossier.prospects?.siret || '',
-                adresseSite: [dossier.prospects?.adresse, dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(', '),
-                nomContact: dossier.prospects?.contact_nom || '', fonctionContact: '',
-                telephoneClient: dossier.prospects?.contact_tel || '', emailClient: dossier.prospects?.contact_email || '',
-                refDevis: dossier.ref || refDefault(), dateDevis: new Date().toLocaleDateString('fr-FR'),
-                prime: sim.prime_estimee || 0, batQte: sim.nb_equipements || 0,
-                batPuVente: simParams.cout_unitaire_destrat ? parseFloat(simParams.cout_unitaire_destrat) : 0,
-                batDebit: simParams.debit_unitaire || '14000', ficheCee: sim.fiche_cee || 'BAT-TH-142',
-              }}})}
-              style={{ width: '100%', padding: '10px', background: C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-              📄 Créer un devis à partir d'un devis prestataire
-            </button>
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {linkedDevis ? (
+              <button
+                onClick={() => navigate('/hub', { state: { module: 'marges', prefill: { openDevisId: linkedDevis.id } } })}
+                style={{ width: '100%', padding: '10px', background: '#16A34A', border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                📂 Ouvrir le devis {linkedDevis.ref_devis || ''}
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('/hub', { state: { module: 'marges', prefill: {
+                  nomClient: dossier.prospects?.raison_sociale || '', siret: dossier.prospects?.siret || '',
+                  adresseSite: [dossier.prospects?.adresse, dossier.prospects?.code_postal, dossier.prospects?.ville].filter(Boolean).join(', '),
+                  nomContact: dossier.prospects?.contact_nom || '', fonctionContact: '',
+                  telephoneClient: dossier.prospects?.contact_tel || '', emailClient: dossier.prospects?.contact_email || '',
+                  refDevis: dossier.ref || refDefault(), dateDevis: new Date().toLocaleDateString('fr-FR'),
+                  prime: sim.prime_estimee || 0, batQte: sim.nb_equipements || 0,
+                  batPuVente: simParams.cout_unitaire_destrat ? parseFloat(simParams.cout_unitaire_destrat) : 0,
+                  batDebit: simParams.debit_unitaire || '14000', ficheCee: sim.fiche_cee || 'BAT-TH-142',
+                }}})}
+                style={{ width: '100%', padding: '10px', background: C.accent, border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                📄 Créer un devis à partir d'un devis prestataire
+              </button>
+            )}
           </div>
         </div>
       )}

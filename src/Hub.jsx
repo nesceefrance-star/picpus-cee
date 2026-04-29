@@ -2299,7 +2299,7 @@ function MargesDevis({ prefill }) {
   // Si on arrive depuis DossierDetail avec un prefill, sauter ModalNouveauDevis
   // et auto-fetch NAF + adresse siège depuis le SIRET
   useEffect(() => {
-    if (!prefill) return;
+    if (!prefill || prefill.openDevisId) return; // openDevisId géré dans fetchDevis useEffect
     const enrichAndGo = async () => {
       let infos = { ...prefill };
       // Mapper ficheCee (SimulationCard) → ficheDevis (UploadPrestaDevis)
@@ -2338,7 +2338,15 @@ function MargesDevis({ prefill }) {
     setLoading(false);
   };
 
-  useEffect(() => { fetchDevis(); }, []);
+  useEffect(() => {
+    const openId = prefill?.openDevisId;
+    fetchDevis().then(() => {
+      if (openId) {
+        setDevisId(openId);
+        setVue("editeur");
+      }
+    });
+  }, []);
 
   // ── Conversion camelCase → snake_case pour Supabase ───────────────────
   const toRow = devisToRow;

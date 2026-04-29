@@ -38,8 +38,20 @@ export default function DocumentsTab({ dossierId, dossier, session, onCountChang
   const [editingNote,    setEditingNote]    = useState(null) // fileName en cours d'édition
   const [noteValue,      setNoteValue]      = useState('')
   const [downloadingPdf, setDownloadingPdf] = useState(null) // visiteId en cours
+  const [linkedDevis,    setLinkedDevis]    = useState(null)
 
   useEffect(() => { load() }, [dossierId])
+
+  useEffect(() => {
+    if (!dossierId) return
+    supabase.from('devis_hub')
+      .select('id, ref_devis, nom_client, updated_at')
+      .eq('dossier_id', dossierId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setLinkedDevis(data) })
+  }, [dossierId])
 
   useEffect(() => {
     setDocValidations(dossier?.doc_validations || {})
@@ -250,6 +262,50 @@ export default function DocumentsTab({ dossierId, dossier, session, onCountChang
           <button onClick={() => setUploadError(null)} style={{ float: 'right', background: 'transparent', border: 'none', color: '#DC2626', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
         </div>
       )}
+
+      {/* ── Section Devis ── */}
+      {linkedDevis && (() => {
+        // PDFs du devis stockés dans dossier-documents (nommés Devis_ref_vN.pdf)
+        const devisPdfs = documents
+          .filter(f => f.name.startsWith('Devis_'))
+          .sort((a, b) => {
+            const va = parseInt(a.name.match(/_v(\d+)\.pdf$/)?.[1] || '0')
+            const vb = parseInt(b.name.match(/_v(\d+)\.pdf$/)?.[1] || '0')
+            return vb - va
+          })
+        const latestPdf = devisPdfs[0] || null
+        return (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.textSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Devis
+            </div>
+            <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>📊</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{linkedDevis.ref_devis || 'Devis'}</div>
+                <div style={{ fontSize: 11, color: C.textSoft }}>
+                  {linkedDevis.nom_client}
+                  {latestPdf ? ` · PDF v${latestPdf.name.match(/_v(\d+)\.pdf$/)?.[1] || '?'} disponible` : ' · Aucun PDF exporté'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                {latestPdf && (
+                  <button
+                    onClick={() => downloadDocument(latestPdf.name)}
+                    style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', color: C.textMid }}>
+                    ⬇ PDF
+                  </button>
+                )}
+                <button
+                  onClick={() => navigate('/hub', { state: { module: 'marges', prefill: { openDevisId: linkedDevis.id } } })}
+                  style={{ background: '#2563EB', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', color: '#fff' }}>
+                  ✏️ Modifier
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Rapports visites techniques */}
       {visites.length > 0 && (
