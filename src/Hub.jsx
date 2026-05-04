@@ -1680,6 +1680,25 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
 }
 
 // ── Modal paramètres devis — 4 onglets fusionnés ────────────────────────────
+// Génère les 8 clauses par défaut à partir des infos devis
+function defaultConditions(sousTraitant, rgeNum, rgeValidite, societeNom, condPaiement) {
+  const st  = sousTraitant || "DC LINK";
+  const rge = rgeNum       || "AU 084 742";
+  const val = rgeValidite  || "31/12/2026";
+  const soc = societeNom   || "AF2E";
+  const pay = condPaiement || "Règlement comptant à réception de facture. Pénalités au taux légal + 5 points (art. L.441-10 Code de commerce). Indemnité forfaitaire 40 €.";
+  return [
+    { t: "1. Portée du devis",          c: "Établi sur la base des informations fournies. Toute modification substantielle fera l'objet d'un avenant signé avant exécution." },
+    { t: "2. Conditions d'exécution",   c: "Conformité NF C 15-100, NF EN 60439-4. Toute contrainte spécifique devra être signalée avant le début des travaux. Les délais sont indicatifs." },
+    { t: "3. Travaux non inclus",       c: "Modification de l'infrastructure électrique existante, génie civil, percement de murs. Toute prestation supplémentaire fera l'objet d'un avenant." },
+    { t: "4. Stockage matériel",        c: "Espace de stockage sécurisé à fournir par le client. Le client est responsable du matériel après livraison jusqu'à réception des travaux." },
+    { t: "5. Site occupé",              c: "Mesures de coordination et sécurité spécifiques requises. Planning d'intervention à valider. Retards liés à l'exploitation peuvent impacter les coûts." },
+    { t: "6. Garanties",                c: `Garantie constructeur sur les équipements. Main-d'œuvre garantie 2 ans à compter de la réception. Assurance décennale ${st} n° ${rge} (valable ${val}).` },
+    { t: "7. Paiement",                 c: pay },
+    { t: "8. Sous-traitance",           c: `Le bénéficiaire accepte l'intervention de ${st}, mandatée par ${soc}, titulaire du RGE n° ${rge} valable jusqu'au ${val}.` },
+  ];
+}
+
 function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave, onCancel }) {
   const p = devis.pdfParams || {};
   const [activeTab, setActiveTab] = useState(initTab);
@@ -1718,6 +1737,11 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
     // Onglet Délégataire
     delegataireNom:       p.delegataireNom            || "SOFT.IA",
     delegataireSiren:     p.delegataireSiren          || "533 333 118",
+    // Onglet Mentions légales
+    conditions: p.conditions || defaultConditions(
+      devis.sousTraitant, devis.rgeNum, devis.rgeValidite,
+      p.societeNom, p.condPaiement
+    ),
     // Dossier lié
     dossierId: devis.dossierId || "",
     // Onglet Société
@@ -1770,6 +1794,7 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
         infoLegalPrestataire:form.infoLegalPrestataire,
         delegataireNom:      form.delegataireNom,
         delegataireSiren:    form.delegataireSiren,
+        conditions:          form.conditions,
         societeNom:          form.societeNom,
         societeAdresse:      form.societeAdresse,
         societeSiret:        form.societeSiret,
@@ -1787,6 +1812,7 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
     { id: "prestataire",  label: "🔧 Prestataire" },
     { id: "devis",        label: "📄 Devis" },
     { id: "delegataire",  label: "🏦 Délégataire" },
+    { id: "mentions",     label: "📜 Mentions" },
     { id: "societe",      label: "🏢 Société" },
   ];
 
@@ -2009,6 +2035,57 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
                   Si vide, la mention par défaut avec SOFT.IA sera utilisée dans le devis.
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ── Mentions légales ── */}
+          {activeTab === "mentions" && (
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#1E3A8A",lineHeight:1.6}}>
+                Ces clauses apparaissent dans la section <strong>«&nbsp;Réserves et conditions&nbsp;»</strong> du devis (page 2). Modifiez le texte librement — cliquez sur <strong>↺</strong> pour remettre le texte par défaut d'une clause.
+              </div>
+              {form.conditions.map((cond, idx) => {
+                const defaults = defaultConditions(
+                  form.sousTraitant, form.rgeNum, form.rgeValidite,
+                  form.societeNom, form.condPaiement
+                );
+                const isModified = cond.c !== defaults[idx]?.c;
+                const updateCond = (newC) => {
+                  const next = [...form.conditions];
+                  next[idx] = { ...next[idx], c: newC };
+                  set("conditions", next);
+                };
+                const resetCond = () => {
+                  const next = [...form.conditions];
+                  next[idx] = { ...defaults[idx] };
+                  set("conditions", next);
+                };
+                return (
+                  <div key={idx} style={{background:C.bg,border:`1px solid ${isModified ? C.accent : C.border}`,borderRadius:8,padding:"12px 14px"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                      <span style={{fontSize:12,fontWeight:700,color:isModified ? C.accent : C.text}}>{cond.t}</span>
+                      {isModified && (
+                        <button type="button" onClick={resetCond}
+                          title="Remettre le texte par défaut"
+                          style={{fontSize:11,padding:"2px 8px",background:"transparent",border:`1px solid ${C.border}`,color:C.textSoft,borderRadius:5,cursor:"pointer",fontFamily:"inherit"}}>
+                          ↺ Défaut
+                        </button>
+                      )}
+                    </div>
+                    <textarea
+                      value={cond.c}
+                      onChange={e => updateCond(e.target.value)}
+                      rows={3}
+                      style={{...F,resize:"vertical",lineHeight:1.6,fontSize:12}}
+                    />
+                  </div>
+                );
+              })}
+              <button type="button"
+                onClick={() => set("conditions", defaultConditions(form.sousTraitant, form.rgeNum, form.rgeValidite, form.societeNom, form.condPaiement))}
+                style={{padding:"8px",background:"transparent",border:`1px solid ${C.border}`,color:C.textMid,borderRadius:8,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>
+                ↺ Tout réinitialiser aux valeurs par défaut
+              </button>
             </div>
           )}
 
