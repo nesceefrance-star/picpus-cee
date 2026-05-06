@@ -37,13 +37,13 @@ const fmtK = (n) => {
   if (n >= 1000) return Math.round(n / 1000) + ' k€'
   return Math.round(n) + ' €'
 }
-
-function computeFinancials(devis) {
-  const lignes = (devis.lignes || []).filter(l => l.inclus !== false)
-  const ca = lignes.reduce((s, l) => s + (l.puVente || 0) * (l.qte || 0), 0)
-    + (devis.bat_qte || 0) * (devis.bat_pu_vente || 0)
-  const achat = lignes.reduce((s, l) => s + (l.puAchat || 0) * (l.qte || 0), 0)
-  return { ca, marge: ca - achat, prime: devis.prime || 0 }
+const fmtE = (n) => {
+  if (n == null || isNaN(n)) return '—'
+  return n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
+}
+const fmtMwh = (n) => {
+  if (!n || isNaN(n)) return '—'
+  return n.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' MWh'
 }
 
 function daysSince(dateStr) {
@@ -79,7 +79,7 @@ export default function Dossiers() {
   const [selected, setSelected]                 = useState(new Set())
   const [confirmDeleteId, setConfirmDeleteId]   = useState(null)
   const [deletingIds, setDeletingIds]           = useState(new Set())
-  const [devisMap, setDevisMap]                 = useState({})
+  const [simuMap, setSimuMap]                   = useState({})
 
   const isAdmin = profile?.role === 'admin'
 
@@ -89,17 +89,17 @@ export default function Dossiers() {
     fetchDossiers().then(() => setLoading(false))
   }, [profile?.id])
 
+  // Simulations pour MWh cumac + prime estimée
   useEffect(() => {
     if (!user?.id) return
     const load = async () => {
-      const { data } = await supabase.from('devis_hub').select('dossier_id, lignes, prime, bat_qte, bat_pu_vente')
+      const { data } = await supabase.from('simulations').select('dossier_id, mwh_cumac')
       if (!data) return
       const map = {}
-      for (const dv of data) {
-        const fin = computeFinancials(dv)
-        if (!map[dv.dossier_id] || fin.ca > (map[dv.dossier_id]?.ca || 0)) map[dv.dossier_id] = fin
+      for (const s of data) {
+        if (!map[s.dossier_id]) map[s.dossier_id] = { mwh_cumac: s.mwh_cumac }
       }
-      setDevisMap(map)
+      setSimuMap(map)
     }
     load()
   }, [user?.id])
@@ -119,10 +119,8 @@ export default function Dossiers() {
     if (sortBy === 'date')   { va = new Date(a.created_at); vb = new Date(b.created_at) }
     if (sortBy === 'fiche')  { va = a.fiche_cee || ''; vb = b.fiche_cee || '' }
     if (sortBy === 'statut') { va = a.statut || ''; vb = b.statut || '' }
-    const finA = devisMap[a.id] || (a.montant_devis > 0 ? { ca: a.montant_devis, marge: null } : null)
-    const finB = devisMap[b.id] || (b.montant_devis > 0 ? { ca: b.montant_devis, marge: null } : null)
-    if (sortBy === 'ca')     { va = finA?.ca || 0; vb = finB?.ca || 0 }
-    if (sortBy === 'marge')  { va = finA?.ca > 0 && finA.marge != null ? finA.marge / finA.ca : -1; vb = finB?.ca > 0 && finB.marge != null ? finB.marge / finB.ca : -1 }
+    if (sortBy === 'prime')  { va = a.prime_estimee || 0; vb = b.prime_estimee || 0 }
+    if (sortBy === 'marge')  { va = a.prime_estimee > 0 ? a.prime_estimee * 0.9 - (a.montant_devis || 0) : -Infinity; vb = b.prime_estimee > 0 ? b.prime_estimee * 0.9 - (b.montant_devis || 0) : -Infinity }
     if (va < vb) return sortDir === 'asc' ? -1 : 1
     if (va > vb) return sortDir === 'asc' ? 1 : -1
     return 0
@@ -174,6 +172,9 @@ export default function Dossiers() {
     setSelected(new Set())
     setDeletingIds(new Set())
   }
+
+  // Même colonnes que Dashboard
+  const COLS = '28px 72px 1fr 90px 110px 72px 105px 105px 70px 62px 34px'
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" }}>
@@ -228,7 +229,7 @@ export default function Dossiers() {
           </div>
         )}
 
-        {/* ── Tableau ── */}
+        {/* ── Tableau identique au Dashboard ── */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px 0', color: C.textMid }}>Chargement…</div>
         ) : filtered.length === 0 ? (
@@ -238,18 +239,19 @@ export default function Dossiers() {
             <div style={{ fontSize: 13, color: C.textMid }}>Créez votre premier dossier pour démarrer</div>
           </div>
         ) : (
-          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflowX: 'auto' }}>
+          <div style={{ minWidth: 820 }}>
             {/* En-tête */}
-            <div style={{ display: 'grid', gridTemplateColumns: '36px 80px 1fr 150px 110px 130px 90px 70px 110px 80px 44px', gap: 10, padding: '10px 16px', background: '#F8FAFC', borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .4, alignItems: 'center' }}>
-              <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: C.accent }}/>
-              <span>Référence</span>
+            <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '9px 14px', background: '#F8FAFC', borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .4, alignItems: 'center' }}>
+              <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} style={{ width: 14, height: 14, cursor: 'pointer', accentColor: C.accent }}/>
+              <span>Réf.</span>
               <span>Prospect</span>
-              <span>Contact</span>
-              <button onClick={() => toggleSort('fiche')} style={{ background: 'none', border: 'none', color: C.textSoft, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'left', textTransform: 'uppercase', letterSpacing: .4 }}>Fiche CEE{sortIcon('fiche')}</button>
+              <button onClick={() => toggleSort('fiche')} style={{ background: 'none', border: 'none', color: C.textSoft, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'left', textTransform: 'uppercase', letterSpacing: .4 }}>Fiche{sortIcon('fiche')}</button>
               <span>Statut</span>
-              <button onClick={() => toggleSort('ca')} style={{ background: 'none', border: 'none', color: C.textSoft, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'right', textTransform: 'uppercase', letterSpacing: .4, width: '100%' }}>CA{sortIcon('ca')}</button>
-              <button onClick={() => toggleSort('marge')} style={{ background: 'none', border: 'none', color: C.textSoft, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'right', textTransform: 'uppercase', letterSpacing: .4, width: '100%' }}>Marge{sortIcon('marge')}</button>
-              {isAdmin ? <span>Commercial</span> : <span>J+</span>}
+              <span style={{ textAlign: 'right' }}>MWh</span>
+              <button onClick={() => toggleSort('prime')} style={{ background: 'none', border: 'none', color: C.textSoft, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'right', textTransform: 'uppercase', letterSpacing: .4, width: '100%' }}>Prime brute{sortIcon('prime')}</button>
+              <button onClick={() => toggleSort('marge')} style={{ background: 'none', border: 'none', color: C.textSoft, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'right', textTransform: 'uppercase', letterSpacing: .4, width: '100%' }}>Marge nette{sortIcon('marge')}</button>
+              {isAdmin ? <span>Comm.</span> : <span>J+</span>}
               <button onClick={() => toggleSort('date')} style={{ background: 'none', border: 'none', color: C.textSoft, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, textAlign: 'left', textTransform: 'uppercase', letterSpacing: .4 }}>Date{sortIcon('date')}</button>
               <span/>
             </div>
@@ -259,50 +261,42 @@ export default function Dossiers() {
               const isSelected = selected.has(d.id)
               const isDeleting = deletingIds.has(d.id)
               const isConfirm  = confirmDeleteId === d.id
-              // Priorité : devis_hub (lignes détaillées) → fallback : montant_devis stocké sur le dossier
-              const fin = devisMap[d.id] || (d.montant_devis > 0 ? { ca: d.montant_devis, marge: null, prime: d.prime_estimee || 0 } : null)
-              const margePctD  = fin?.ca > 0 && fin.marge != null ? Math.round(fin.marge / fin.ca * 100) : null
+              const prime      = d.prime_estimee || 0
+              const cout       = d.montant_devis || 0
+              const margeNette = prime > 0 ? Math.round((prime * 0.9 - cout) * 100) / 100 : null
+              const mwh        = simuMap[d.id]?.mwh_cumac || null
               const jPlus      = daysSince(d.created_at)
               return (
                 <div key={d.id}
                   onClick={() => !isDeleting && openDossier(d)}
-                  style={{ display: 'grid', gridTemplateColumns: '36px 80px 1fr 150px 110px 130px 90px 70px 110px 80px 44px', gap: 10, padding: '12px 16px', alignItems: 'center', background: isSelected ? '#EFF6FF' : idx % 2 === 0 ? C.surface : '#FAFBFC', borderBottom: `1px solid ${C.border}`, cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? .5 : 1, transition: 'background .1s' }}
+                  style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '12px 16px', alignItems: 'center', background: isSelected ? '#EFF6FF' : idx % 2 === 0 ? C.surface : '#FAFBFC', borderBottom: `1px solid ${C.border}`, cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? .5 : 1, transition: 'background .1s' }}
                   onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#F0F7FF' }}
                   onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = idx % 2 === 0 ? C.surface : '#FAFBFC' }}>
 
                   <input type="checkbox" checked={isSelected} onClick={e => toggleSelect(d.id, e)} onChange={() => {}} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: C.accent }}/>
+
                   <span style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', fontFamily: 'monospace' }}>{d.ref}</span>
 
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.prospects?.raison_sociale || '—'}</div>
-                  </div>
-
-                  <div style={{ minWidth: 0 }}>
-                    {d.prospects?.contact_nom && (
-                      <div style={{ fontSize: 12, color: C.textMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.prospects.contact_nom}</div>
-                    )}
-                    {d.prospects?.contact_tel && (
-                      <a href={`tel:${d.prospects.contact_tel}`} onClick={e => e.stopPropagation()}
-                        style={{ fontSize: 11, color: C.accent, fontWeight: 600, textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        📞 {d.prospects.contact_tel}
-                      </a>
-                    )}
-                    {!d.prospects?.contact_nom && !d.prospects?.contact_tel && <span style={{ fontSize: 11, color: C.textSoft }}>—</span>}
+                    {d.prospects?.contact_nom && <div style={{ fontSize: 11, color: C.textMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.prospects.contact_nom}</div>}
                   </div>
 
                   <span style={{ fontSize: 11, color: C.textMid, fontWeight: 600 }}>{d.fiche_cee}</span>
+
                   <StatutBadge statut={d.statut} />
 
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: fin?.ca > 0 ? '#2563EB' : C.textSoft }}>{fmtK(fin?.ca)}</div>
-                    {fin?.prime > 0 && <div style={{ fontSize: 10, color: '#7C3AED' }}>⚡ {fmtK(fin.prime)}</div>}
+                    <div style={{ fontSize: 12, fontWeight: 700, color: mwh ? C.accent : C.textSoft }}>{fmtMwh(mwh)}</div>
                   </div>
 
                   <div style={{ textAlign: 'right' }}>
-                    {margePctD != null ? (
-                      <span style={{ fontSize: 12, fontWeight: 700, color: margePctD >= 20 ? '#16A34A' : margePctD >= 0 ? '#D97706' : '#DC2626', background: margePctD >= 20 ? '#F0FDF4' : margePctD >= 0 ? '#FFFBEB' : '#FEF2F2', border: `1px solid ${margePctD >= 20 ? '#86EFAC' : margePctD >= 0 ? '#FDE68A' : '#FCA5A5'}`, borderRadius: 5, padding: '2px 6px' }}>
-                        {margePctD}%
-                      </span>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: prime > 0 ? '#7C3AED' : C.textSoft }}>{prime > 0 ? fmtE(prime) : '—'}</div>
+                  </div>
+
+                  <div style={{ textAlign: 'right' }}>
+                    {margeNette != null ? (
+                      <div style={{ fontSize: 12, fontWeight: 700, color: margeNette >= 0 ? '#16A34A' : '#DC2626' }}>{fmtE(margeNette)}</div>
                     ) : <span style={{ fontSize: 11, color: C.textSoft }}>—</span>}
                   </div>
 
@@ -327,6 +321,7 @@ export default function Dossiers() {
             <div style={{ padding: '10px 16px', background: '#F8FAFC', borderTop: `1px solid ${C.border}`, fontSize: 12, color: C.textSoft }}>
               {filtered.length} dossier{filtered.length > 1 ? 's' : ''}{filtered.length < myDossiers.length ? ` sur ${myDossiers.length}` : ''}
             </div>
+          </div>
           </div>
         )}
       </div>
