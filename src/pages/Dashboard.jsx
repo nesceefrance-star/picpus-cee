@@ -91,7 +91,7 @@ export default function Dashboard() {
     color: C.textMid, marginBottom: 5,
     textTransform: 'uppercase', letterSpacing: .4,
   }
-  const { dossiers, fetchDossiers, setCurrentDossier, deleteDossier, deleteDossiers, user, profile, signOut, profiles, fetchProfiles } = useStore()
+  const { dossiers, fetchDossiers, setCurrentDossier, deleteDossier, deleteDossiers, user, profile, signOut, profiles, fetchProfiles, session } = useStore()
   const [showModal, setShowModal]               = useState(false)
   const [search, setSearch]                     = useState('')
   const [filtreStatut, setFiltreStatut]         = useState('all')
@@ -107,6 +107,16 @@ export default function Dashboard() {
   const [simuMap, setSimuMap]                   = useState({}) // dossier_id → {mwh_cumac}
   const [rappelsMap, setRappelsMap]             = useState({}) // dossier_id → rappel_at
   const [briefingOpen, setBriefingOpen]         = useState(null) // tâche key ouverte
+  // Tâches todo
+  const [taches, setTaches]                     = useState([])
+  const [tacheInput, setTacheInput]             = useState('')
+  const [tacheDate, setTacheDate]               = useState('')
+  const [tacheTime, setTacheTime]               = useState('')
+  const [tacheDossierId, setTacheDossierId]     = useState('')
+  const [tacheSaving, setTacheSaving]           = useState(false)
+  // Agenda Google Calendar
+  const [agendaEvents, setAgendaEvents]         = useState([])
+  const [googleConnected, setGoogleConnected]   = useState(false)
 
   // Attend que le profil soit chargé avant de fetcher les dossiers (sinon admin = filtré par user.id)
   useEffect(() => {
@@ -168,6 +178,75 @@ export default function Dashboard() {
     }
     loadRappels()
   }, [user?.id])
+
+  // Charge les tâches todo
+  useEffect(() => {
+    if (!user?.id) return
+    const loadTaches = async () => {
+      const { data } = await supabase.from('taches')
+        .select('*, dossiers(ref, prospects(raison_sociale))')
+        .eq('user_id', user.id)
+        .order('echeance', { ascending: true, nullsFirst: false })
+      if (data) setTaches(data)
+    }
+    loadTaches()
+  }, [user?.id])
+
+  // Charge le statut Google + events agenda
+  useEffect(() => {
+    if (!session?.access_token) return
+    const loadAgenda = async () => {
+      try {
+        const statusRes = await fetch('/api/auth-google-status', { headers: { Authorization: `Bearer ${session.access_token}` } })
+        const statusData = await statusRes.json()
+        if (!statusData.connected) return
+        setGoogleConnected(true)
+        const evRes = await fetch('/api/calendar?action=upcoming&days=2', { headers: { Authorization: `Bearer ${session.access_token}` } })
+        const evData = await evRes.json()
+        setAgendaEvents(evData?.events || [])
+      } catch (e) { /* silencieux */ }
+    }
+    loadAgenda()
+  }, [session?.access_token])
+
+  // Ajouter une tâche
+  const addTache = async () => {
+    if (!tacheInput.trim() || tacheSaving) return
+    setTacheSaving(true)
+    let echeance = null
+    if (tacheDate) {
+      echeance = tacheTime ? `${tacheDate}T${tacheTime}:00` : `${tacheDate}T00:00:00`
+    }
+    const { data, error } = await supabase.from('taches').insert({
+      user_id: user.id,
+      titre: tacheInput.trim(),
+      echeance: echeance || null,
+      dossier_id: tacheDossierId || null,
+      done: false,
+    }).select('*, dossiers(ref, prospects(raison_sociale))').single()
+    if (!error && data) {
+      setTaches(prev => [...prev, data].sort((a, b) => {
+        if (!a.echeance && !b.echeance) return 0
+        if (!a.echeance) return 1
+        if (!b.echeance) return -1
+        return new Date(a.echeance) - new Date(b.echeance)
+      }))
+      setTacheInput(''); setTacheDate(''); setTacheTime(''); setTacheDossierId('')
+    }
+    setTacheSaving(false)
+  }
+
+  // Toggle done
+  const toggleTache = async (id, done) => {
+    await supabase.from('taches').update({ done: !done }).eq('id', id)
+    setTaches(prev => prev.map(t => t.id === id ? { ...t, done: !done } : t))
+  }
+
+  // Supprimer une tâche
+  const deleteTache = async (id) => {
+    await supabase.from('taches').delete().eq('id', id)
+    setTaches(prev => prev.filter(t => t.id !== id))
+  }
 
   const profileName = (id) => {
     const p = profiles.find(p => p.id === id)
@@ -427,6 +506,219 @@ export default function Dashboard() {
               {k.sub && <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>{k.sub}</div>}
             </div>
           ))}
+        </div>
+
+        {/* ── Agenda + Tâches ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: googleConnected ? '1fr 1fr' : '1fr', gap: 16, marginBottom: 24 }}>
+
+          {/* Panel Tâches */}
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+            {/* Header */}
+            <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 15 }}>✅</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Mes tâches</span>
+              {taches.filter(t => !t.done).length > 0 && (
+                <span style={{ background: '#EFF6FF', color: C.accent, border: `1px solid #BFDBFE`, borderRadius: 20, padding: '1px 8px', fontSize: 11, fontWeight: 700, marginLeft: 'auto' }}>
+                  {taches.filter(t => !t.done).length} à faire
+                </span>
+              )}
+            </div>
+
+            {/* Formulaire ajout */}
+            <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}`, background: '#FAFBFC' }}>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                <input
+                  value={tacheInput}
+                  onChange={e => setTacheInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addTache()}
+                  placeholder="Nouvelle tâche…"
+                  style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: '7px 10px', fontSize: 13, color: C.text, outline: 'none', fontFamily: 'inherit' }}
+                />
+                <button onClick={addTache} disabled={!tacheInput.trim() || tacheSaving}
+                  style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: 7, padding: '7px 14px', fontSize: 13, fontWeight: 700, cursor: tacheInput.trim() ? 'pointer' : 'default', opacity: tacheInput.trim() ? 1 : .4, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  + Ajouter
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <input type="date" value={tacheDate} onChange={e => setTacheDate(e.target.value)}
+                  style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 8px', fontSize: 12, color: C.textMid, fontFamily: 'inherit', outline: 'none' }} />
+                <input type="time" value={tacheTime} onChange={e => setTacheTime(e.target.value)} disabled={!tacheDate}
+                  style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 8px', fontSize: 12, color: C.textMid, fontFamily: 'inherit', outline: 'none', opacity: tacheDate ? 1 : .4 }} />
+                <select value={tacheDossierId} onChange={e => setTacheDossierId(e.target.value)}
+                  style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 8px', fontSize: 12, color: C.textMid, fontFamily: 'inherit', outline: 'none', flex: 1, minWidth: 120, cursor: 'pointer' }}>
+                  <option value="">Aucun dossier</option>
+                  {myDossiers.map(d => (
+                    <option key={d.id} value={d.id}>{d.ref} — {d.prospects?.raison_sociale}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Liste tâches */}
+            <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+              {taches.length === 0 ? (
+                <div style={{ padding: '28px 16px', textAlign: 'center', color: C.textSoft, fontSize: 13 }}>
+                  Aucune tâche — profitez-en ! 🎉
+                </div>
+              ) : (
+                <>
+                  {/* Tâches en retard ou du jour (non-done avec echeance passée ou auj) */}
+                  {(() => {
+                    const today = new Date(); today.setHours(23, 59, 59, 999)
+                    const urgent = taches.filter(t => !t.done && t.echeance && new Date(t.echeance) <= today)
+                    const upcoming = taches.filter(t => !t.done && (!t.echeance || new Date(t.echeance) > today))
+                    const done = taches.filter(t => t.done)
+                    const renderTache = (t) => {
+                      const isLate = !t.done && t.echeance && new Date(t.echeance) < new Date()
+                      const dateStr = t.echeance
+                        ? new Date(t.echeance).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', ...(t.echeance.includes('T') && t.echeance.split('T')[1] !== '00:00:00' ? { hour: '2-digit', minute: '2-digit' } : {}) })
+                        : null
+                      return (
+                        <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 14px', borderBottom: `1px solid ${C.border}`, transition: 'background .1s' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          <input type="checkbox" checked={t.done} onChange={() => toggleTache(t.id, t.done)}
+                            style={{ marginTop: 2, width: 15, height: 15, cursor: 'pointer', accentColor: C.accent, flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, color: t.done ? C.textSoft : C.text, textDecoration: t.done ? 'line-through' : 'none', wordBreak: 'break-word' }}>{t.titre}</div>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
+                              {dateStr && (
+                                <span style={{ fontSize: 11, color: isLate ? '#DC2626' : C.textMid, fontWeight: isLate ? 700 : 400 }}>
+                                  {isLate ? '⚠️ ' : '📅 '}{dateStr}
+                                </span>
+                              )}
+                              {t.dossiers && (
+                                <span onClick={(e) => { e.stopPropagation(); const d = myDossiers.find(x => x.id === t.dossier_id); if (d) openDossier(d) }}
+                                  style={{ fontSize: 11, color: C.accent, cursor: 'pointer', fontWeight: 600 }}>
+                                  📂 {t.dossiers.ref}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <button onClick={() => deleteTache(t.id)}
+                            style={{ background: 'none', border: 'none', color: C.textSoft, cursor: 'pointer', fontSize: 14, padding: '0 2px', flexShrink: 0 }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#DC2626'}
+                            onMouseLeave={e => e.currentTarget.style.color = C.textSoft}>
+                            ×
+                          </button>
+                        </div>
+                      )
+                    }
+                    return (
+                      <>
+                        {urgent.length > 0 && (
+                          <div style={{ padding: '5px 14px 2px', fontSize: 10, fontWeight: 700, color: '#DC2626', textTransform: 'uppercase', letterSpacing: .4, background: '#FFF5F5' }}>
+                            ⚠️ À traiter
+                          </div>
+                        )}
+                        {urgent.map(renderTache)}
+                        {upcoming.length > 0 && urgent.length > 0 && (
+                          <div style={{ padding: '5px 14px 2px', fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .4 }}>
+                            À venir
+                          </div>
+                        )}
+                        {upcoming.map(renderTache)}
+                        {done.length > 0 && (
+                          <>
+                            <div style={{ padding: '5px 14px 2px', fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .4 }}>
+                              Terminées
+                            </div>
+                            {done.map(renderTache)}
+                          </>
+                        )}
+                      </>
+                    )
+                  })()}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Panel Agenda — affiché seulement si Google connecté */}
+          {googleConnected && (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 15 }}>📅</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Agenda — aujourd'hui & demain</span>
+                <button onClick={() => navigate('/planning')}
+                  style={{ marginLeft: 'auto', background: 'none', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  Voir tout →
+                </button>
+              </div>
+              <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+                {agendaEvents.length === 0 ? (
+                  <div style={{ padding: '28px 16px', textAlign: 'center', color: C.textSoft, fontSize: 13 }}>
+                    Aucun événement ces 2 prochains jours 🎉
+                  </div>
+                ) : (() => {
+                  const todayStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+                  const tomorrowStr = new Date(Date.now() + 86400000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+                  const todayStart = new Date(); todayStart.setHours(0,0,0,0)
+                  const tomorrowStart = new Date(todayStart.getTime() + 86400000)
+                  const dayAfterStart = new Date(tomorrowStart.getTime() + 86400000)
+                  const todayEvs = agendaEvents.filter(ev => {
+                    const d = new Date(ev.start?.dateTime || ev.start?.date)
+                    return d >= todayStart && d < tomorrowStart
+                  })
+                  const tomorrowEvs = agendaEvents.filter(ev => {
+                    const d = new Date(ev.start?.dateTime || ev.start?.date)
+                    return d >= tomorrowStart && d < dayAfterStart
+                  })
+                  const renderEv = (ev) => {
+                    const start = ev.start?.dateTime ? new Date(ev.start.dateTime) : null
+                    const end   = ev.end?.dateTime   ? new Date(ev.end.dateTime)   : null
+                    const timeStr = start ? `${start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${end ? ' – ' + end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}` : 'Journée entière'
+                    return (
+                      <div key={ev.id} style={{ padding: '10px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                        <div style={{ flexShrink: 0, width: 52, textAlign: 'right' }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: C.accent }}>{timeStr.split(' – ')[0]}</div>
+                          {timeStr.includes('–') && <div style={{ fontSize: 10, color: C.textSoft }}>{timeStr.split(' – ')[1]}</div>}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.summary || '(Sans titre)'}</div>
+                          {ev.location && <div style={{ fontSize: 11, color: C.textMid, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📍 {ev.location}</div>}
+                          {ev.attendees && ev.attendees.length > 1 && (
+                            <div style={{ fontSize: 11, color: C.textMid, marginTop: 2 }}>👥 {ev.attendees.length} participant{ev.attendees.length > 1 ? 's' : ''}</div>
+                          )}
+                        </div>
+                        {ev.hangoutLink && (
+                          <a href={ev.hangoutLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                            style={{ flexShrink: 0, background: '#0D9488', color: '#fff', borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, textDecoration: 'none' }}>
+                            🎥 Meet
+                          </a>
+                        )}
+                      </div>
+                    )
+                  }
+                  return (
+                    <>
+                      {todayEvs.length > 0 && (
+                        <>
+                          <div style={{ padding: '7px 16px 4px', fontSize: 10, fontWeight: 700, color: C.accent, textTransform: 'uppercase', letterSpacing: .4, background: '#EFF6FF' }}>
+                            Aujourd'hui · {todayStr}
+                          </div>
+                          {todayEvs.map(renderEv)}
+                        </>
+                      )}
+                      {tomorrowEvs.length > 0 && (
+                        <>
+                          <div style={{ padding: '7px 16px 4px', fontSize: 10, fontWeight: 700, color: C.textMid, textTransform: 'uppercase', letterSpacing: .4, background: '#F8FAFC' }}>
+                            Demain · {tomorrowStr}
+                          </div>
+                          {tomorrowEvs.map(renderEv)}
+                        </>
+                      )}
+                      {todayEvs.length === 0 && tomorrowEvs.length === 0 && (
+                        <div style={{ padding: '28px 16px', textAlign: 'center', color: C.textSoft, fontSize: 13 }}>
+                          Aucun événement à venir 🎉
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Filtres + recherche ── */}
