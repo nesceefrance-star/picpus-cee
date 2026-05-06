@@ -201,7 +201,7 @@ export default function Dashboard() {
         const statusData = await statusRes.json()
         if (!statusData.connected) return
         setGoogleConnected(true)
-        const evRes = await fetch('/api/calendar?action=upcoming&days=2', { headers: { Authorization: `Bearer ${session.access_token}` } })
+        const evRes = await fetch('/api/calendar?action=upcoming&days=7', { headers: { Authorization: `Bearer ${session.access_token}` } })
         const evData = await evRes.json()
         setAgendaEvents(evData?.events || [])
       } catch (e) { /* silencieux */ }
@@ -639,7 +639,7 @@ export default function Dashboard() {
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
               <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 15 }}>📅</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Agenda — aujourd'hui & demain</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Agenda — 7 prochains jours</span>
                 <button onClick={() => navigate('/planning')}
                   style={{ marginLeft: 'auto', background: 'none', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
                   Voir tout →
@@ -648,22 +648,27 @@ export default function Dashboard() {
               <div style={{ maxHeight: 360, overflowY: 'auto' }}>
                 {agendaEvents.length === 0 ? (
                   <div style={{ padding: '28px 16px', textAlign: 'center', color: C.textSoft, fontSize: 13 }}>
-                    Aucun événement ces 2 prochains jours 🎉
+                    Aucun événement ces 7 prochains jours 🎉
                   </div>
                 ) : (() => {
-                  const todayStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
-                  const tomorrowStr = new Date(Date.now() + 86400000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+                  // Grouper les events par jour (J0 à J+6)
                   const todayStart = new Date(); todayStart.setHours(0,0,0,0)
-                  const tomorrowStart = new Date(todayStart.getTime() + 86400000)
-                  const dayAfterStart = new Date(tomorrowStart.getTime() + 86400000)
-                  const todayEvs = agendaEvents.filter(ev => {
-                    const d = new Date(ev.start?.dateTime || ev.start?.date)
-                    return d >= todayStart && d < tomorrowStart
-                  })
-                  const tomorrowEvs = agendaEvents.filter(ev => {
-                    const d = new Date(ev.start?.dateTime || ev.start?.date)
-                    return d >= tomorrowStart && d < dayAfterStart
-                  })
+                  const days = Array.from({ length: 7 }, (_, i) => {
+                    const start = new Date(todayStart.getTime() + i * 86400000)
+                    const end   = new Date(start.getTime() + 86400000)
+                    const isToday    = i === 0
+                    const isTomorrow = i === 1
+                    const label = isToday ? 'Aujourd\'hui'
+                      : isTomorrow ? 'Demain'
+                      : start.toLocaleDateString('fr-FR', { weekday: 'long' })
+                    const dateLabel = start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+                    const evs = agendaEvents.filter(ev => {
+                      const d = new Date(ev.start?.dateTime || ev.start?.date)
+                      return d >= start && d < end
+                    }).sort((a, b) => new Date(a.start?.dateTime || a.start?.date) - new Date(b.start?.dateTime || b.start?.date))
+                    return { label, dateLabel, isToday, evs }
+                  }).filter(d => d.evs.length > 0)
+
                   const renderEv = (ev) => {
                     const start = ev.start?.dateTime ? new Date(ev.start.dateTime) : null
                     const end   = ev.end?.dateTime   ? new Date(ev.end.dateTime)   : null
@@ -690,29 +695,21 @@ export default function Dashboard() {
                       </div>
                     )
                   }
-                  return (
+
+                  return days.length === 0 ? (
+                    <div style={{ padding: '28px 16px', textAlign: 'center', color: C.textSoft, fontSize: 13 }}>
+                      Aucun événement à venir 🎉
+                    </div>
+                  ) : (
                     <>
-                      {todayEvs.length > 0 && (
-                        <>
-                          <div style={{ padding: '7px 16px 4px', fontSize: 10, fontWeight: 700, color: C.accent, textTransform: 'uppercase', letterSpacing: .4, background: '#EFF6FF' }}>
-                            Aujourd'hui · {todayStr}
+                      {days.map(({ label, dateLabel, isToday, evs }) => (
+                        <div key={dateLabel}>
+                          <div style={{ padding: '7px 16px 4px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .4, background: isToday ? '#EFF6FF' : '#F8FAFC', color: isToday ? C.accent : C.textMid }}>
+                            {label} · {dateLabel}
                           </div>
-                          {todayEvs.map(renderEv)}
-                        </>
-                      )}
-                      {tomorrowEvs.length > 0 && (
-                        <>
-                          <div style={{ padding: '7px 16px 4px', fontSize: 10, fontWeight: 700, color: C.textMid, textTransform: 'uppercase', letterSpacing: .4, background: '#F8FAFC' }}>
-                            Demain · {tomorrowStr}
-                          </div>
-                          {tomorrowEvs.map(renderEv)}
-                        </>
-                      )}
-                      {todayEvs.length === 0 && tomorrowEvs.length === 0 && (
-                        <div style={{ padding: '28px 16px', textAlign: 'center', color: C.textSoft, fontSize: 13 }}>
-                          Aucun événement à venir 🎉
+                          {evs.map(renderEv)}
                         </div>
-                      )}
+                      ))}
                     </>
                   )
                 })()}
