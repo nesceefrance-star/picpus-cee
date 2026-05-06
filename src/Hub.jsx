@@ -555,58 +555,96 @@ function ListeDevis({ devis, onCreate, onOpen, onDelete, confirmDeleteId, onCanc
           <div style={{fontSize:13}}>Créez votre premier devis en cliquant sur le bouton ci-dessus</div>
         </div>
       ) : (
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:14}}>
           {devis.map(d => {
-            const totalHT = d.lignes.filter(l=>l.inclus).reduce((s,l)=>s+l.qte*l.puVente,0) + (d.batQte||0)*(d.batPuVente||0);
-            const coutAchat = d.lignes.filter(l=>l.inclus).reduce((s,l)=>s+l.qte*l.puAchat,0);
-            const marge = totalHT - coutAchat;
-            const margePct = totalHT > 0 ? (marge/totalHT*100) : 0;
+            const actives   = d.lignes.filter(l => l.inclus && !l.isSection);
+            const totalHT   = actives.reduce((s,l) => s + l.qte * l.puVente, 0) + (d.batQte||0) * (d.batPuVente||0);
+            const coutAchat = actives.reduce((s,l) => s + l.qte * l.puAchat, 0);
+            const marge     = totalHT - coutAchat;
+            const margePct  = totalHT > 0 ? (marge / totalHT * 100) : 0;
+            const totalTTC  = totalHT * 1.20;
+            // Prime faciale : manuelle si définie, sinon = TTC
+            const primeFaciale = d.primeFaciale !== null && d.primeFaciale !== undefined
+              ? d.primeFaciale : totalTTC;
+            const primeCEE  = d.prime || 0;
+            const fiche     = d.ficheDevis || "BAT-TH-142";
+            const presta    = d.sousTraitant || null;
+            const modifDate = d.updatedAt
+              ? new Date(d.updatedAt).toLocaleDateString("fr-FR", { day:"numeric", month:"short", year:"numeric" })
+              : "—";
+            const modifTime = d.updatedAt
+              ? new Date(d.updatedAt).toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" })
+              : null;
+            const nbLignes  = actives.length + (d.batQte > 0 ? 1 : 0);
             return (
               <div key={d.id}
-                style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"18px",transition:"all .15s",position:"relative"}}
+                style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden",transition:"border-color .15s, box-shadow .15s, transform .15s",position:"relative"}}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 4px 16px rgba(37,99,235,.1)"}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=""}}>
-                {/* Bouton supprimer / confirmer */}
+
+                {/* Bouton supprimer */}
                 {confirmDeleteId === d.id ? (
-                  <div style={{position:"absolute",top:8,right:8,display:"flex",gap:4,zIndex:10}} onClick={e=>e.stopPropagation()}>
-                    <button onClick={()=>onDelete(d.id)}
-                      style={{background:"#DC2626",color:"#fff",border:"none",borderRadius:5,padding:"3px 8px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                      Supprimer
-                    </button>
-                    <button onClick={onCancelDelete}
-                      style={{background:"#475569",color:"#fff",border:"none",borderRadius:5,padding:"3px 8px",fontSize:11,cursor:"pointer"}}>
-                      Annuler
-                    </button>
+                  <div style={{position:"absolute",top:10,right:10,display:"flex",gap:4,zIndex:10}} onClick={e=>e.stopPropagation()}>
+                    <button onClick={()=>onDelete(d.id)} style={{background:"#DC2626",color:"#fff",border:"none",borderRadius:5,padding:"3px 8px",fontSize:11,fontWeight:700,cursor:"pointer"}}>Supprimer</button>
+                    <button onClick={onCancelDelete} style={{background:"#475569",color:"#fff",border:"none",borderRadius:5,padding:"3px 8px",fontSize:11,cursor:"pointer"}}>Annuler</button>
                   </div>
                 ) : (
                   <button onClick={e=>{e.stopPropagation();onDelete(d.id);}}
                     style={{position:"absolute",top:10,right:10,background:"transparent",border:"none",color:C.textSoft,cursor:"pointer",fontSize:15,padding:"2px 6px",borderRadius:5,lineHeight:1}}
                     title="Supprimer ce devis">✕</button>
                 )}
-                <div onClick={() => onOpen(d.id)} style={{cursor:"pointer"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                    <div>
-                      <div style={{fontSize:15,fontWeight:800,color:C.text,marginBottom:3}}>{d.nomClient || "Sans nom"}</div>
-                      <div style={{fontSize:11,color:C.textSoft}}>Devis {d.refDevis || "—"} du {d.dateDevis || "—"}</div>
+
+                <div onClick={() => onOpen(d.id)} style={{cursor:"pointer",padding:"16px 18px"}}>
+                  {/* ── En-tête ── */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,paddingRight:20}}>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:15,fontWeight:800,color:C.text,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.nomClient || "Sans nom"}</div>
+                      <div style={{fontSize:11,color:C.textSoft}}>Devis {d.refDevis || "—"} · {d.dateDevis || "—"}</div>
                     </div>
-                    <span style={{background:MC2(margePct)+"22",color:MC2(margePct),border:`1px solid ${MC2(margePct)}44`,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,marginRight:20}}>
-                      {margePct.toFixed(1)}% marge
+                    <span style={{flexShrink:0,background:MC2(margePct)+"22",color:MC2(margePct),border:`1px solid ${MC2(margePct)}44`,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700,marginLeft:8}}>
+                      {margePct.toFixed(1)}%
                     </span>
                   </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+
+                  {/* ── Tags : Fiche + Prestataire ── */}
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                    <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,background:"#EFF6FF",color:"#1E40AF",border:"1px solid #BFDBFE"}}>
+                      {fiche}
+                    </span>
+                    {presta && (
+                      <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:4,background:C.bg,color:C.textMid,border:`1px solid ${C.border}`,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:160}}>
+                        🔧 {presta}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* ── KPIs ── */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:10}}>
                     {[
-                      {l:"Total HT",v:fmtE(totalHT),c:C.accent},
-                      {l:"Marge brute",v:fmtE(marge),c:MC2(margePct)},
-                      {l:"Prime CEE",v:"−"+fmtE(d.prime||0),c:"#16A34A"},
-                    ].map(k=>(
-                      <div key={k.l} style={{background:C.bg,borderRadius:7,padding:"8px 10px"}}>
-                        <div style={{fontSize:10,color:C.textSoft,marginBottom:2,textTransform:"uppercase",letterSpacing:.4}}>{k.l}</div>
-                        <div style={{fontSize:13,fontWeight:700,color:k.c}}>{k.v}</div>
+                      {l:"Total HT",    v:fmtE(totalHT),      c:C.accent},
+                      {l:"Marge brute", v:fmtE(marge),        c:MC2(margePct)},
+                      {l:"Prime faciale",v:fmtE(primeFaciale), c:"#16A34A"},
+                    ].map(k => (
+                      <div key={k.l} style={{background:C.bg,borderRadius:7,padding:"7px 8px"}}>
+                        <div style={{fontSize:9,color:C.textSoft,marginBottom:2,textTransform:"uppercase",letterSpacing:.4}}>{k.l}</div>
+                        <div style={{fontSize:12,fontWeight:700,color:k.c}}>{k.v}</div>
                       </div>
                     ))}
                   </div>
-                  <div style={{marginTop:10,fontSize:11,color:C.textSoft}}>
-                    {d.lignes.filter(l=>l.inclus).length} ligne{d.lignes.filter(l=>l.inclus).length>1?"s":""} · modifié {d.updatedAt ? new Date(d.updatedAt).toLocaleDateString("fr-FR") : "—"}
+                  {primeCEE > 0 && (
+                    <div style={{fontSize:11,color:"#16A34A",marginBottom:8,fontWeight:600}}>
+                      Prime CEE estimée : {fmtE(primeCEE)}
+                    </div>
+                  )}
+
+                  {/* ── Pied ── */}
+                  <div style={{borderTop:`1px solid ${C.border}`,paddingTop:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:11,color:C.textSoft}}>
+                      {nbLignes} ligne{nbLignes !== 1 ? "s" : ""}
+                    </span>
+                    <span style={{fontSize:11,color:C.textSoft}}>
+                      🕐 {modifDate}{modifTime ? ` ${modifTime}` : ""}
+                    </span>
                   </div>
                 </div>
               </div>
