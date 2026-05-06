@@ -653,31 +653,41 @@ export default function Dashboard() {
                 ) : (() => {
                   // Grouper les events par jour (J0 à J+6)
                   const todayStart = new Date(); todayStart.setHours(0,0,0,0)
+                  // L'API renvoie des events normalisés : ev.start/end = ISO string,
+                  // ev.startLabel/endLabel = heure Paris formatée, ev.isAllDay, ev.dayKey = "YYYY-MM-DD"
                   const days = Array.from({ length: 7 }, (_, i) => {
-                    const start = new Date(todayStart.getTime() + i * 86400000)
-                    const end   = new Date(start.getTime() + 86400000)
+                    const dayStart = new Date(todayStart.getTime() + i * 86400000)
+                    const dayEnd   = new Date(dayStart.getTime() + 86400000)
                     const isToday    = i === 0
                     const isTomorrow = i === 1
                     const label = isToday ? 'Aujourd\'hui'
                       : isTomorrow ? 'Demain'
-                      : start.toLocaleDateString('fr-FR', { weekday: 'long' })
-                    const dateLabel = start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+                      : dayStart.toLocaleDateString('fr-FR', { weekday: 'long' })
+                    const dateLabel = dayStart.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
                     const evs = agendaEvents.filter(ev => {
-                      const d = new Date(ev.start?.dateTime || ev.start?.date)
-                      return d >= start && d < end
-                    }).sort((a, b) => new Date(a.start?.dateTime || a.start?.date) - new Date(b.start?.dateTime || b.start?.date))
+                      const d = new Date(ev.start)
+                      return d >= dayStart && d < dayEnd
+                    })
                     return { label, dateLabel, isToday, evs }
                   }).filter(d => d.evs.length > 0)
 
                   const renderEv = (ev) => {
-                    const start = ev.start?.dateTime ? new Date(ev.start.dateTime) : null
-                    const end   = ev.end?.dateTime   ? new Date(ev.end.dateTime)   : null
-                    const timeStr = start ? `${start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${end ? ' – ' + end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}` : 'Journée entière'
+                    const timeStr = ev.isAllDay
+                      ? 'Journée entière'
+                      : ev.startLabel
+                        ? `${ev.startLabel}${ev.endLabel ? ' – ' + ev.endLabel : ''}`
+                        : '—'
                     return (
                       <div key={ev.id} style={{ padding: '10px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                         <div style={{ flexShrink: 0, width: 52, textAlign: 'right' }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: C.accent }}>{timeStr.split(' – ')[0]}</div>
-                          {timeStr.includes('–') && <div style={{ fontSize: 10, color: C.textSoft }}>{timeStr.split(' – ')[1]}</div>}
+                          {ev.isAllDay ? (
+                            <div style={{ fontSize: 10, color: C.textSoft, fontStyle: 'italic' }}>J. entière</div>
+                          ) : (
+                            <>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: C.accent }}>{ev.startLabel}</div>
+                              {ev.endLabel && <div style={{ fontSize: 10, color: C.textSoft }}>{ev.endLabel}</div>}
+                            </>
+                          )}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.summary || '(Sans titre)'}</div>
