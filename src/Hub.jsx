@@ -1221,8 +1221,12 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
 function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = [] }) {
   const [devis, setDevis] = useState(devisInit);
   const [tab, setTab]     = useState("marges");
-  const [editConfig, setEditConfig] = useState(null); // null | "client"|"prestataire"|"devis"|"societe"
-  const printRef = useRef();
+  const [editConfig, setEditConfig] = useState(null);
+  const [autoSaveState, setAutoSaveState] = useState("idle"); // "idle" | "saving" | "saved"
+  const printRef  = useRef();
+  const devisRef  = useRef(devis);           // toujours à jour — évite closures stales
+  const primeRef  = useRef(devisInit.primeFaciale ?? null);
+  const autoSaveTimer = useRef(null);
 
   const lignes   = devis.lignes;
   const setLignes = fn => setDevis(d => ({...d, lignes: fn(d.lignes), updatedAt: Date.now()}));
@@ -1232,7 +1236,6 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
   const actives     = lignes.filter(l => l.inclus);
   const hasSections = lignes.some(l => l.isSection);
   const cats        = [...new Set(actives.filter(l => !l.isSection).map(l => l.cat))];
-  // Prime CEE simulateur — référence interne, lecture seule
   const primeCEESimu = devis.prime || 0;
   const batPuVente = devis.batPuVente || 0;
   const batQte  = devis.batQte || 0;
@@ -1240,10 +1243,22 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
   // Prime faciale : null = auto (= TTC), sinon valeur manuelle
   const [primeFaciale, setPrimeFaciale] = useState(devisInit.primeFaciale ?? null);
 
-  // Sync primeFaciale dans l'objet devis pour que onSave() l'inclue
+  // Maintenir les refs toujours à jour
+  useEffect(() => { devisRef.current = devis; }, [devis]);
+  useEffect(() => { primeRef.current = primeFaciale; }, [primeFaciale]);
+
+  // Auto-save debounced : 3s après toute modification de devis ou primeFaciale
   useEffect(() => {
-    setDevis(d => ({...d, primeFaciale, updatedAt: Date.now()}));
-  }, [primeFaciale]);
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(async () => {
+      const toSave = {...devisRef.current, primeFaciale: primeRef.current};
+      setAutoSaveState("saving");
+      await onSave(toSave);
+      setAutoSaveState("saved");
+      setTimeout(() => setAutoSaveState("idle"), 2000);
+    }, 3000);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+  }, [devis, primeFaciale]);
 
   const stats = useMemo(() => {
     const sl       = actives.filter(l => !l.isSection);
@@ -1366,12 +1381,14 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
     <div style={{display:"flex",flexDirection:"column",height:"100%",background:C.bg}}>
       {/* Barre du haut */}
       <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"8px 16px",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-        <button onClick={() => { onSave({...devis, primeFaciale}); onBack(); }}
+        <button onClick={() => { onSave({...devisRef.current, primeFaciale: primeRef.current}); onBack(); }}
           style={{background:"transparent",border:"none",color:C.textMid,fontSize:13,cursor:"pointer",padding:"4px 8px",marginRight:4,fontFamily:"inherit"}}>
           ← Mes devis
         </button>
         <div style={{fontWeight:700,color:C.text,fontSize:14}}>{devis.nomClient}</div>
         <div style={{fontSize:11,color:C.textSoft,marginLeft:4}}>{devis.refDevis}</div>
+        {autoSaveState === "saving" && <div style={{fontSize:11,color:C.textSoft,marginLeft:8}}>⏳ Sauvegarde…</div>}
+        {autoSaveState === "saved"  && <div style={{fontSize:11,color:"#16A34A",marginLeft:8}}>✓ Sauvegardé</div>}
         {onReupload && (
           <button onClick={onReupload}
             style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:C.textMid,marginLeft:4}}>
