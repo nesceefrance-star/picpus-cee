@@ -114,6 +114,7 @@ export default function Dashboard() {
   const [tacheTime, setTacheTime]               = useState('')
   const [tacheDossierId, setTacheDossierId]     = useState('')
   const [tacheSaving, setTacheSaving]           = useState(false)
+  const [tacheError, setTacheError]             = useState('')
   // Agenda Google Calendar
   const [agendaEvents, setAgendaEvents]         = useState([])
   const [googleConnected, setGoogleConnected]   = useState(false)
@@ -213,6 +214,7 @@ export default function Dashboard() {
   const addTache = async () => {
     if (!tacheInput.trim() || tacheSaving) return
     setTacheSaving(true)
+    setTacheError('')
     let echeance = null
     if (tacheDate) {
       echeance = tacheTime ? `${tacheDate}T${tacheTime}:00` : `${tacheDate}T00:00:00`
@@ -224,7 +226,9 @@ export default function Dashboard() {
       dossier_id: tacheDossierId || null,
       done: false,
     }).select('*, dossiers(ref, prospects(raison_sociale))').single()
-    if (!error && data) {
+    if (error) {
+      setTacheError(error.message)
+    } else if (data) {
       setTaches(prev => [...prev, data].sort((a, b) => {
         if (!a.echeance && !b.echeance) return 0
         if (!a.echeance) return 1
@@ -539,6 +543,11 @@ export default function Dashboard() {
                   + Ajouter
                 </button>
               </div>
+              {tacheError && (
+                <div style={{ fontSize: 11, color: '#DC2626', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 6, padding: '5px 10px', marginBottom: 6 }}>
+                  ⚠️ {tacheError}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <input type="date" value={tacheDate} onChange={e => setTacheDate(e.target.value)}
                   style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: '5px 8px', fontSize: 12, color: C.textMid, fontFamily: 'inherit', outline: 'none' }} />
