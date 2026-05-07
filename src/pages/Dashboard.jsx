@@ -18,6 +18,7 @@ const STATUTS = [
   { id: 'ah',               label: 'AH signé',           color: '#16A34A', bg: '#DCFCE7' },
   { id: 'conforme',         label: 'Conforme',           color: '#15803D', bg: '#D1FAE5' },
   { id: 'facture',          label: 'Facturé',            color: '#64748B', bg: '#F1F5F9' },
+  { id: 'perdu',            label: 'Marché perdu',       color: '#DC2626', bg: '#FEF2F2' },
 ]
 
 const TACHES = [
@@ -300,8 +301,11 @@ export default function Dashboard() {
   }
   const sortIcon = (col) => sortBy === col ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''
 
-  // Financier global (KPIs)
-  const finGlobal = myDossiers.reduce((acc, d) => {
+  // Dossiers actifs (hors perdu)
+  const activeDossiers = myDossiers.filter(d => d.statut !== 'perdu')
+
+  // Financier global (KPIs) — dossiers perdus exclus
+  const finGlobal = activeDossiers.reduce((acc, d) => {
     const prime = d.prime_estimee || 0
     const cout  = d.montant_devis || 0
     const marge = prime > 0 ? Math.round((prime * 0.9 - cout) * 100) / 100 : 0
@@ -315,10 +319,10 @@ export default function Dashboard() {
     }
   }, { primePrev: 0, primeEnc: 0, marge: 0, totalMwh: 0 })
 
-  // Tâches du jour
+  // Tâches du jour — dossiers perdus exclus
   const tachesByKey = TACHES.map(t => ({
     ...t,
-    dossiers: myDossiers.filter(d => t.statuts.includes(d.statut)),
+    dossiers: activeDossiers.filter(d => t.statuts.includes(d.statut)),
   }))
   const totalTaches = tachesByKey.reduce((s, t) => s + t.dossiers.length, 0)
 
@@ -386,7 +390,7 @@ export default function Dashboard() {
             </h1>
             <p style={{ fontSize: 13, color: C.textMid, margin: 0 }}>
               {totalTaches > 0 ? `${totalTaches} action${totalTaches > 1 ? 's' : ''} à traiter aujourd'hui` : 'Aucune action en attente — belle journée !'}
-              {' · '}{myDossiers.filter(d => !['facture','archive'].includes(d.statut)).length} dossiers actifs
+              {' · '}{activeDossiers.filter(d => !['facture','archive'].includes(d.statut)).length} dossiers actifs
             </p>
           </div>
           <button onClick={() => setShowModal(true)} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 9, padding: '11px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
@@ -497,11 +501,11 @@ export default function Dashboard() {
         {/* ── KPIs financiers ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10, marginBottom: 24 }}>
           {[
-            { label: 'Dossiers en cours',  value: myDossiers.filter(d => STATUTS_EN_COURS.includes(d.statut)).length, color: C.accent,    sub: 'visio planifiée → facturé' },
+            { label: 'Dossiers en cours',  value: activeDossiers.filter(d => STATUTS_EN_COURS.includes(d.statut)).length, color: C.accent,    sub: 'visio planifiée → facturé' },
             { label: 'CA prévisionnel',    value: fmtK(finGlobal.primePrev), color: '#7C3AED',  sub: 'Primes brutes hors facturé' },
             { label: 'CA encaissé',        value: fmtK(finGlobal.primeEnc),  color: '#16A34A',  sub: 'Primes brutes facturées' },
             { label: 'Marges nettes',      value: fmtK(finGlobal.marge),     color: finGlobal.marge >= 0 ? '#059669' : '#DC2626', sub: 'Prime nette − coût install.' },
-            { label: 'Travaux en cours',   value: myDossiers.filter(d => STATUTS_TRAVAUX.includes(d.statut)).length, color: '#C2410C',  sub: 'Travaux → conforme' },
+            { label: 'Travaux en cours',   value: activeDossiers.filter(d => STATUTS_TRAVAUX.includes(d.statut)).length, color: '#C2410C',  sub: 'Travaux → conforme' },
             { label: 'Total cumac',        value: fmtGwh(finGlobal.totalMwh), color: '#0891B2', sub: 'Volume CEE tous dossiers' },
           ].map(k => (
             <div key={k.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
@@ -804,6 +808,7 @@ export default function Dashboard() {
               const isSelected = selected.has(d.id)
               const isDeleting = deletingIds.has(d.id)
               const isConfirm  = confirmDeleteId === d.id
+              const isPerdu    = d.statut === 'perdu'
               const prime      = d.prime_estimee || 0
               const cout       = d.montant_devis || 0
               const margeNette = prime > 0 ? Math.round((prime * 0.9 - cout) * 100) / 100 : null
@@ -812,7 +817,7 @@ export default function Dashboard() {
               return (
                 <div key={d.id}
                   onClick={() => !isDeleting && openDossier(d)}
-                  style={{ display: 'grid', gridTemplateColumns: '28px 72px 1fr 90px 110px 72px 105px 105px 70px 62px 34px', gap: 8, padding: '12px 16px', alignItems: 'center', background: isSelected ? '#EFF6FF' : idx % 2 === 0 ? C.surface : '#FAFBFC', borderBottom: `1px solid ${C.border}`, cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? .5 : 1, transition: 'background .1s' }}
+                  style={{ display: 'grid', gridTemplateColumns: '28px 72px 1fr 90px 110px 72px 105px 105px 70px 62px 34px', gap: 8, padding: '12px 16px', alignItems: 'center', background: isSelected ? '#EFF6FF' : isPerdu ? '#FFF5F5' : idx % 2 === 0 ? C.surface : '#FAFBFC', borderBottom: `1px solid ${C.border}`, cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? .5 : isPerdu ? 0.7 : 1, transition: 'background .1s' }}
                   onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#F0F7FF' }}
                   onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = idx % 2 === 0 ? C.surface : '#FAFBFC' }}>
 

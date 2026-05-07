@@ -16,6 +16,7 @@ const STATUTS = [
   { id: 'ah',               label: 'AH signé',           color: '#16A34A', bg: '#DCFCE7' },
   { id: 'conforme',         label: 'Conforme',           color: '#15803D', bg: '#D1FAE5' },
   { id: 'facture',          label: 'Facturé',            color: '#64748B', bg: '#F1F5F9' },
+  { id: 'perdu',            label: 'Marché perdu',       color: '#DC2626', bg: '#FEF2F2' },
 ]
 
 const C = {
@@ -260,6 +261,7 @@ export default function Dossiers() {
             {filtered.map((d, idx) => {
               const isSelected = selected.has(d.id)
               const isDeleting = deletingIds.has(d.id)
+              const isPerdu    = d.statut === 'perdu'
               const isConfirm  = confirmDeleteId === d.id
               const prime      = d.prime_estimee || 0
               const cout       = d.montant_devis || 0
@@ -269,9 +271,9 @@ export default function Dossiers() {
               return (
                 <div key={d.id}
                   onClick={() => !isDeleting && openDossier(d)}
-                  style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '12px 16px', alignItems: 'center', background: isSelected ? '#EFF6FF' : idx % 2 === 0 ? C.surface : '#FAFBFC', borderBottom: `1px solid ${C.border}`, cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? .5 : 1, transition: 'background .1s' }}
-                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#F0F7FF' }}
-                  onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = idx % 2 === 0 ? C.surface : '#FAFBFC' }}>
+                  style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '12px 16px', alignItems: 'center', background: isSelected ? '#EFF6FF' : isPerdu ? '#FFF5F5' : idx % 2 === 0 ? C.surface : '#FAFBFC', borderBottom: `1px solid ${C.border}`, cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? .5 : isPerdu ? 0.7 : 1, transition: 'background .1s' }}
+                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = isPerdu ? '#FEE2E2' : '#F0F7FF' }}
+                  onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = isPerdu ? '#FFF5F5' : idx % 2 === 0 ? C.surface : '#FAFBFC' }}>
 
                   <input type="checkbox" checked={isSelected} onClick={e => toggleSelect(d.id, e)} onChange={() => {}} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: C.accent }}/>
 

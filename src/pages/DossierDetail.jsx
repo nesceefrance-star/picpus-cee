@@ -32,6 +32,8 @@ const STATUTS = [
   { id: 'conforme',          label: 'Conforme',            color: '#16A34A', bg: '#DCFCE7' },
   { id: 'facture',           label: 'Facturé',             color: '#64748B', bg: '#F1F5F9' },
 ]
+// Statut hors pipeline (n'apparaît pas dans les étapes linéaires)
+const STATUT_PERDU = { id: 'perdu', label: 'Marché perdu', color: '#DC2626', bg: '#FEF2F2' }
 
 export default function DossierDetail() {
   const { id } = useParams()
@@ -221,8 +223,26 @@ export default function DossierDetail() {
         </div>
 
         {/* Pipeline statuts */}
-        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 20px', marginBottom: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, overflowX: 'auto', paddingBottom: 4 }}>
+        <div style={{ background: C.surface, border: `1px solid ${dossier.statut === 'perdu' ? '#FCA5A5' : C.border}`, borderRadius: 12, padding: '16px 20px', marginBottom: 20 }}>
+
+          {/* Bannière marché perdu */}
+          {dossier.statut === 'perdu' && (
+            <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 9, padding: '10px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 18 }}>🚫</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#DC2626' }}>Marché perdu</div>
+                <div style={{ fontSize: 11, color: '#B91C1C' }}>Ce dossier est exclu des statistiques (CA, marges, primes). Il reste accessible et modifiable.</div>
+              </div>
+              <button
+                onClick={() => { setPendingStatut('prospect'); setStatutForm({ statut: 'prospect', date: new Date().toISOString().split('T')[0] }) }}
+                style={{ background: '#fff', border: '1px solid #FCA5A5', color: '#DC2626', borderRadius: 7, padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                ♻️ Réactiver
+              </button>
+            </div>
+          )}
+
+          {/* Pipeline linéaire — grisé si perdu */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, overflowX: 'auto', paddingBottom: 4, opacity: dossier.statut === 'perdu' ? 0.4 : 1, pointerEvents: dossier.statut === 'perdu' ? 'none' : 'auto' }}>
             {STATUTS.map((s, i) => {
               const currentIdx = STATUTS.findIndex(x => x.id === dossier.statut)
               const isDone    = i < currentIdx
@@ -250,8 +270,20 @@ export default function DossierDetail() {
               )
             })}
           </div>
+
+          {/* Bouton "Marquer comme perdu" — visible si pas déjà perdu et pas de pending */}
+          {dossier.statut !== 'perdu' && !pendingStatut && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setPendingStatut('perdu'); setStatutForm({ statut: 'perdu', date: new Date().toISOString().split('T')[0] }) }}
+                style={{ background: 'transparent', border: '1px solid #FCA5A5', color: '#DC2626', borderRadius: 7, padding: '5px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                🚫 Marquer comme perdu
+              </button>
+            </div>
+          )}
+
           {pendingStatut && (() => {
-            const s = STATUTS.find(x => x.id === pendingStatut)
+            const s = pendingStatut === 'perdu' ? STATUT_PERDU : STATUTS.find(x => x.id === pendingStatut)
             return (
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Passer à <span style={{ color: s.color }}>{s.label}</span></span>
