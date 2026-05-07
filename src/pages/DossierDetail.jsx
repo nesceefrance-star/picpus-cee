@@ -48,6 +48,7 @@ export default function DossierDetail() {
   const [savingStatut,  setSavingStatut]  = useState(false)
   const [statutForm,    setStatutForm]    = useState({ statut: '', date: new Date().toISOString().split('T')[0] })
   const [statutSaved,   setStatutSaved]   = useState(false)
+  const [statutError,   setStatutError]   = useState('')
   const [pendingStatut, setPendingStatut] = useState(null)
   const [activeTab,     setActiveTab]     = useState('dossier')
   const [savingAssigne, setSavingAssigne] = useState(false)
@@ -114,7 +115,7 @@ export default function DossierDetail() {
 
   const changeStatut = async () => {
     if (!session) return
-    setSavingStatut(true); setStatutSaved(false)
+    setSavingStatut(true); setStatutSaved(false); setStatutError('')
     try {
       const r = await fetch('/api/dossier-status-update', {
         method: 'POST',
@@ -122,13 +123,21 @@ export default function DossierDetail() {
         body: JSON.stringify({ dossierId: id, statut: statutForm.statut, statut_date: statutForm.date }),
       })
       const d = await r.json()
-      if (d.dossier) {
+      if (d.error) {
+        setStatutError(d.error)
+      } else if (d.dossier) {
         setDossier(prev => ({ ...prev, statut: d.dossier.statut, statut_date: d.dossier.statut_date }))
+        // Sync store Zustand pour que la liste reflète le changement
+        updateDossier(id, { statut: d.dossier.statut, statut_date: d.dossier.statut_date })
         await logActivite(id, 'statut', `Statut → ${d.dossier.statut}${statutForm.date ? ` (${new Date(statutForm.date).toLocaleDateString('fr-FR')})` : ''}`)
+        setStatutSaved(true); setPendingStatut(null)
+        setTimeout(() => setStatutSaved(false), 3000)
+      } else {
+        setStatutError('Réponse inattendue du serveur')
       }
-      setStatutSaved(true); setPendingStatut(null)
-      setTimeout(() => setStatutSaved(false), 3000)
-    } catch { /* ignore */ }
+    } catch (e) {
+      setStatutError(e.message || 'Erreur réseau')
+    }
     setSavingStatut(false)
   }
 
@@ -293,11 +302,12 @@ export default function DossierDetail() {
                   style={{ padding: '6px 16px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: savingStatut ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: 'none', background: s.color, color: '#fff', opacity: savingStatut ? .6 : 1 }}>
                   {savingStatut ? '…' : 'Confirmer'}
                 </button>
-                <button onClick={() => setPendingStatut(null)}
+                <button onClick={() => { setPendingStatut(null); setStatutError('') }}
                   style={{ padding: '6px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${C.border}`, background: 'transparent', color: C.textMid }}>
                   Annuler
                 </button>
                 {statutSaved && <span style={{ fontSize: 12, color: '#16A34A', fontWeight: 600 }}>✓ Mis à jour</span>}
+                {statutError && <span style={{ fontSize: 12, color: '#DC2626', fontWeight: 600 }}>⚠️ {statutError}</span>}
               </div>
             )
           })()}
