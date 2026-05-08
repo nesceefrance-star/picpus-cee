@@ -11,11 +11,13 @@ export default async function handler(req, res) {
   if (req.body?.action === 'lusha') {
     const LUSHA_API_KEY = process.env.LUSHA_API_KEY
     if (!LUSHA_API_KEY) return res.status(500).json({ error: 'LUSHA_API_KEY non configurée' })
-    const { linkedin_url, first_name, last_name, company } = req.body
-    const endpoint = linkedin_url ? 'https://api.lusha.com/v2/person/linkedin' : 'https://api.lusha.com/v2/person'
-    const body = linkedin_url
-      ? { linkedin_url }
-      : { firstName: first_name, lastName: last_name, company }
+    const { linkedin_url, firstName, lastName, first_name, last_name, company } = req.body
+    const endpoint = 'https://api.lusha.com/v2/person'
+    const body = {}
+    if (linkedin_url) body.linkedInUrl = linkedin_url
+    if (firstName  || first_name)  body.firstName = firstName  ?? first_name
+    if (lastName   || last_name)   body.lastName  = lastName   ?? last_name
+    if (company) body.company = company
     try {
       const r = await fetch(endpoint, {
         method: 'POST',
