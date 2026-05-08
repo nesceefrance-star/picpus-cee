@@ -34,7 +34,7 @@ const POSTE_SCORES = [
   { patterns: ['commercial', 'vente'],                             score: 3   },
 ];
 
-function scorePoste(fonction) {
+export function scorePoste(fonction) {
   if (!fonction) return 0;
   const f = fonction.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   for (const { patterns, score } of POSTE_SCORES) {
@@ -317,7 +317,7 @@ async function fetchBatimentsProches({ lat, lon, rayon = 30 }) {
 
 // ─── LUSHA ───────────────────────────────────────────────────────
 
-async function fetchLusha({ prenom, nom, societe, linkedinUrl }) {
+export async function fetchLusha({ prenom, nom, societe, linkedinUrl }) {
   const body = linkedinUrl
     ? { action: 'lusha', linkedin_url: linkedinUrl }
     : { action: 'lusha', firstName: prenom, lastName: nom, company: societe };
@@ -325,6 +325,18 @@ async function fetchLusha({ prenom, nom, societe, linkedinUrl }) {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? data.message ?? `Lusha HTTP ${res.status} — ${JSON.stringify(data)}`);
   return data;
+}
+
+// ─── RECHERCHE SIRENE PAR CRITÈRES ───────────────────────────────
+
+export async function rechercherEntreprises({ q = '', secteur = '', departement = '', page = 1 }) {
+  const params = new URLSearchParams({ per_page: '25', page: String(page), limite_matching_etablissements: '1' });
+  if (q.trim()) params.set('q', q.trim());
+  if (secteur) params.set('section_activite_principale', secteur);
+  if (departement.trim()) params.set('departement', departement.trim());
+  const res = await fetch(`https://recherche-entreprises.api.gouv.fr/search?${params}`);
+  if (!res.ok) throw new Error(`SIRENE HTTP ${res.status}`);
+  return res.json();
 }
 
 // ─── HOOK PRINCIPAL ──────────────────────────────────────────────
@@ -606,6 +618,144 @@ export function useLeads() {
     setSocietes(prev => prev.map(s => s.id === importId ? { ...s, statut_qualification: 'Converti en dossier' } : s));
   }, []);
 
+  // ── Créer batch depuis résultats SIRENE ────────────────────────
+  const creerBatchDepuisSIRENE = useCallback(async (sireneResults, { nom, leadType, assigneA: assigneAOpt }) => {
+    setImporting(true); setError(null);
+    try {
+      const targetUser = assigneAOpt || profile?.id;
+      const societesParsed = sireneResults.map(r => {
+        const contacts = (r.dirigeants ?? [])
+          .filter(d => d.type !== 'personne morale' && (d.nom || d.prenoms))
+          .map(d => ({
+            nom: d.nom ?? '', prenom: d.prenoms ?? '',
+            fonction: d.qualite ?? '',
+            score_poste: scorePoste(d.qualite ?? ''),
+          }))
+          .sort((a, b) => b.score_poste - a.score_poste)
+          .map((c, i) => ({ ...c, rang_poste: i + 1 }));
+        return {
+          raison_sociale: r.nom_complet,
+          adresse: r.siege?.adresse ?? '',
+          cp: r.siege?.code_postal ?? '',
+          ville: r.siege?.libelle_commune ?? '',
+          siret: r.siege?.siret ?? '',
+          activite: r.siege?.libelle_activite_principale ?? r.activite_principale ?? '',
+          lat: r.siege?.latitude ? parseFloat(r.siege.latitude) : null,
+          lon: r.siege?.longitude ? parseFloat(r.siege.longitude) : null,
+          contacts,
+        };
+      });
+
+      const { data: batch, error: eBatch } = await supabase
+        .from('leads_batches')
+        .insert({
+          nom, lead_type: leadType,
+          assigne_a: targetUser, created_by: profile?.id,
+          nb_societes: societesParsed.length,
+          nb_contacts: societesParsed.reduce((a, s) => a + s.contacts.length, 0),
+        })
+        .select().single();
+      if (eBatch) throw eBatch;
+
+      for (const soc of societesParsed) {
+        const socData = {
+          raison_sociale: soc.raison_sociale, adresse: soc.adresse,
+          cp: soc.cp, ville: soc.ville, siret: soc.siret || null,
+          activite: soc.activite, batch_id: batch.id,
+          assigne_a: targetUser, import_batch_id: batch.id,
+        };
+        if (soc.lat && soc.lon) {
+          socData.lat = soc.lat; socData.lon = soc.lon;
+          socData.geocode_source = 'sirene';
+          socData.lien_geoportail = `https://www.geoportail.gouv.fr/carte?c=${soc.lon},${soc.lat}&z=19&l0=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&l1=ORTHOIMAGERY.ORTHOPHOTOS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes`;
+          socData.lien_googlemaps = `https://www.google.com/maps/@${soc.lat},${soc.lon},19z/data=!3m1!1e3`;
+        }
+        const { data: imp, error: eImp } = await supabase.from('leads_import').insert(socData).select().single();
+        if (eImp) throw eImp;
+
+        if (soc.contacts.length) {
+          const { error: eCont } = await supabase.from('leads_contacts').insert(
+            soc.contacts.map(c => ({
+              import_id: imp.id, nom: c.nom, prenom: c.prenom,
+              fonction: c.fonction, score_poste: c.score_poste, rang_poste: c.rang_poste,
+            }))
+          );
+          if (eCont) throw eCont;
+        }
+      }
+
+      await loadBatches();
+      setSelectedBatchId(batch.id);
+      return { imported: societesParsed.length, batch };
+    } catch (e) { setError(e.message); throw e; }
+    finally { setImporting(false); }
+  }, [profile, loadBatches]);
+
+  // ── Ajouter une société manuellement (depuis EnrichirModal) ─────
+  const ajouterSocieteManuelle = useCallback(async ({ type, data, url }) => {
+    if (!selectedBatchId) { setError('Sélectionnez d\'abord un batch dans le panneau gauche'); return; }
+    setImporting(true); setError(null);
+    try {
+      let socData = { batch_id: selectedBatchId, assigne_a: profile?.id, import_batch_id: selectedBatchId };
+      let contacts = [];
+
+      if (type === 'sirene') {
+        socData = {
+          ...socData,
+          raison_sociale: data.nom_complet,
+          adresse: data.siege?.adresse ?? '',
+          cp: data.siege?.code_postal ?? '',
+          ville: data.siege?.libelle_commune ?? '',
+          siret: data.siege?.siret ?? null,
+          activite: data.siege?.libelle_activite_principale ?? '',
+        };
+        if (data.siege?.latitude && data.siege?.longitude) {
+          const lat = parseFloat(data.siege.latitude);
+          const lon = parseFloat(data.siege.longitude);
+          socData.lat = lat; socData.lon = lon; socData.geocode_source = 'sirene';
+          socData.lien_geoportail = `https://www.geoportail.gouv.fr/carte?c=${lon},${lat}&z=19&l0=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&l1=ORTHOIMAGERY.ORTHOPHOTOS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes`;
+          socData.lien_googlemaps = `https://www.google.com/maps/@${lat},${lon},19z/data=!3m1!1e3`;
+        }
+        contacts = (data.dirigeants ?? [])
+          .filter(d => d.type !== 'personne morale' && (d.nom || d.prenoms))
+          .map((d, i) => ({
+            nom: d.nom ?? '', prenom: d.prenoms ?? '',
+            fonction: d.qualite ?? '',
+            score_poste: scorePoste(d.qualite ?? ''),
+            rang_poste: i + 1,
+          }));
+      } else if (type === 'lusha') {
+        socData = { ...socData, raison_sociale: data.company ?? 'Entreprise (Lusha)' };
+        contacts = [{
+          nom: data.lastName ?? '', prenom: data.firstName ?? '',
+          fonction: data.position ?? '',
+          score_poste: scorePoste(data.position ?? ''),
+          rang_poste: 1, lusha_fetched: true,
+          lusha_email: data.emails?.[0] ?? null,
+          lusha_phone: data.phones?.[0] ?? null,
+          lusha_mobile: data.phones?.[1] ?? null,
+          lusha_raw: data, linkedin_url: url ?? null,
+        }];
+      }
+
+      const { data: imp, error: eImp } = await supabase.from('leads_import').insert(socData).select().single();
+      if (eImp) throw eImp;
+
+      if (contacts.length) {
+        await supabase.from('leads_contacts').insert(contacts.map(c => ({ ...c, import_id: imp.id })));
+      }
+
+      const curBatch = batches.find(b => b.id === selectedBatchId);
+      if (curBatch) {
+        await supabase.from('leads_batches').update({ nb_societes: (curBatch.nb_societes ?? 0) + 1 }).eq('id', selectedBatchId);
+      }
+      await loadBatches();
+      await loadSocietes(selectedBatchId);
+      return { success: true };
+    } catch (e) { setError(e.message); throw e; }
+    finally { setImporting(false); }
+  }, [selectedBatchId, profile, loadSocietes, loadBatches, batches]);
+
   // ── Filtrage + tri ──────────────────────────────────────────────
   const societesFiltrees = societes
     .filter(s => {
@@ -644,6 +794,8 @@ export function useLeads() {
     enrichirCadastre, enrichirLusha, enrichirGMB, gmbLoading,
     setLinkedinUrl, setStatutSociete, convertirEnDossier,
     refresh: () => { loadBatches(); loadSocietes(selectedBatchId); },
+    // SIRENE / manuel
+    creerBatchDepuisSIRENE, ajouterSocieteManuelle,
     // Utilisateurs (pour admin)
     profiles, isAdmin,
   };
