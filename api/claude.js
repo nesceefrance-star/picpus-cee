@@ -26,7 +26,7 @@ export default async function handler(req, res) {
       const r = await fetch('https://api.lusha.com/v2/person', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'api_key': LUSHA_API_KEY },
-        body: JSON.stringify({ contacts: [contact] }),
+        body: JSON.stringify({ contacts: [contact], reveal: true }),
       })
       const data = await r.json()
       if (!r.ok) {
