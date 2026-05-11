@@ -736,7 +736,19 @@ function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId }) {
               {result.data.emails?.[0] && <div style={{ fontSize: 13, color: C.accent, marginBottom: 4 }}>✉ {result.data.emails[0]}</div>}
               {result.data.phones?.[0] && <div style={{ fontSize: 13, color: C.green, marginBottom: 4 }}>☎ {result.data.phones[0]}</div>}
               {result.data.phones?.[1] && <div style={{ fontSize: 13, color: C.yellow, marginBottom: 4 }}>📱 {result.data.phones[1]}</div>}
-              {!result.data.emails?.[0] && !result.data.phones?.[0] && <div style={{ fontSize: 12, color: C.textSub }}>Aucune donnée de contact trouvée.</div>}
+              {!result.data.emails?.[0] && !result.data.phones?.[0] && (
+                <div>
+                  <div style={{ fontSize: 12, color: C.textSub, marginBottom: 6 }}>
+                    Aucune donnée retournée par Lusha.{result.data.status ? ` Statut : ${result.data.status}` : ''}
+                  </div>
+                  <details style={{ fontSize: 10, color: C.textDim }}>
+                    <summary style={{ cursor: 'pointer', marginBottom: 4 }}>Réponse brute Lusha (debug)</summary>
+                    <pre style={{ background: C.bgInput, padding: 8, borderRadius: 6, overflowX: 'auto', maxHeight: 160, fontSize: 10 }}>
+                      {JSON.stringify(result.data._raw, null, 2)}
+                    </pre>
+                  </details>
+                </div>
+              )}
               {selectedBatchId && (
                 <button onClick={() => handleAjouter({ type: 'lusha', data: result.data, url: result.url })}
                   style={{ marginTop: 12, padding: '7px 16px', borderRadius: 8, border: `1px solid ${C.green}40`, background: C.greenSoft, color: C.green, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>

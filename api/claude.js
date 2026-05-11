@@ -26,7 +26,7 @@ export default async function handler(req, res) {
       const r = await fetch('https://api.lusha.com/v2/person', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'api_key': LUSHA_API_KEY },
-        body: JSON.stringify({ contacts: [contact], reveal: true }),
+        body: JSON.stringify({ contacts: [contact] }),
       })
       const data = await r.json()
       if (!r.ok) {
@@ -35,18 +35,21 @@ export default async function handler(req, res) {
           ?? `Lusha HTTP ${r.status}`
         return res.status(r.status).json({ error: msg, details: data })
       }
-      // Lusha v2 renvoie { contacts: [{ contactId, emails, phones, ... }] }
-      const c = (data.contacts ?? [])[0] ?? data
+      // Lusha v2 — on remonte toujours la réponse brute pour débogage
+      const c = (data.contacts ?? [])[0] ?? {}
+      const emails = (c.emails ?? []).map(e => e.email ?? e).filter(Boolean)
+      const phones = (c.phones ?? []).map(p => p.normalizedNumber ?? p.internationalNumber ?? p.phoneNumber ?? p.number ?? '').filter(Boolean)
       return res.status(200).json({
-        emails:      (c.emails ?? []).map(e => e.email ?? e).filter(Boolean),
-        phones:      (c.phones ?? []).map(p => p.normalizedNumber ?? p.internationalNumber ?? p.number ?? '').filter(Boolean),
-        linkedInUrl: c.linkedinUrl ?? linkedin_url ?? null,
-        jobTitle:    c.jobTitle    ?? null,
-        firstName:   c.firstName   ?? fn  ?? null,
-        lastName:    c.lastName    ?? ln  ?? null,
-        company:     c.currentEmployer?.name ?? c.company ?? company ?? null,
+        emails,
+        phones,
+        linkedInUrl:  c.linkedinUrl ?? linkedin_url ?? null,
+        jobTitle:     c.jobTitle    ?? null,
+        firstName:    c.firstName   ?? fn  ?? null,
+        lastName:     c.lastName    ?? ln  ?? null,
+        company:      c.currentEmployer?.name ?? c.company ?? company ?? null,
         credits_used: data.credits_used ?? 1,
-        _raw:        data,
+        status:       c.status ?? null,
+        _raw:         data,   // structure complète Lusha pour débogage
       })
     } catch (e) { return res.status(500).json({ error: e.message }) }
   }
