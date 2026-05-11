@@ -1,9 +1,10 @@
 // src/modules/leads/LeadsModule.jsx
-import { useState, useRef, useCallback, lazy, Suspense } from 'react';
+import { useState, useRef, useCallback, lazy, Suspense, createContext, useContext } from 'react';
 import { useLeads, CHAMPS_MAPPING, scorePoste, rechercherEntreprises, fetchLusha } from './useLeads';
+import useStore from '../../store/useStore';
 const CadastreMap = lazy(() => import('../../components/CadastreMap'));
 
-const C = {
+const C_DARK = {
   bg: '#0F1923', bgCard: '#16212E', bgCardHover: '#1C2B3A', bgInput: '#111C27',
   border: '#1E2F40', borderLight: '#263A4E',
   accent: '#00C6FF', accentSoft: 'rgba(0,198,255,0.10)', accentDim: 'rgba(0,198,255,0.06)',
@@ -14,7 +15,25 @@ const C = {
   purple: '#A78BFA', purpleSoft: 'rgba(167,139,250,0.10)',
   text: '#E8F0F7', textSub: '#7A99B0', textDim: '#3D5570',
   linkedin: '#0A66C2', lusha: '#6E3FF3',
+  header: 'linear-gradient(135deg, #0A1420 0%, #0F1923 100%)',
 };
+
+const C_LIGHT = {
+  bg: '#F1F5F9', bgCard: '#FFFFFF', bgCardHover: '#F8FAFC', bgInput: '#F8FAFC',
+  border: '#E2E8F0', borderLight: '#CBD5E1',
+  accent: '#0284C7', accentSoft: 'rgba(2,132,199,0.10)', accentDim: 'rgba(2,132,199,0.06)',
+  green: '#059669', greenSoft: 'rgba(5,150,105,0.10)',
+  orange: '#EA580C', orangeSoft: 'rgba(234,88,12,0.10)',
+  red: '#DC2626', redSoft: 'rgba(220,38,38,0.08)',
+  yellow: '#D97706', yellowSoft: 'rgba(217,119,6,0.10)',
+  purple: '#7C3AED', purpleSoft: 'rgba(124,58,237,0.10)',
+  text: '#0F172A', textSub: '#475569', textDim: '#94A3B8',
+  linkedin: '#0A66C2', lusha: '#6E3FF3',
+  header: 'linear-gradient(135deg, #1E293B 0%, #334155 100%)',
+};
+
+const LeadsTheme = createContext(C_DARK);
+const useC = () => useContext(LeadsTheme);
 
 const LEAD_TYPES = ['Industrie', 'Tertiaire', 'Commerce', 'Logistique', 'Santé', 'Hôtellerie', 'Enseignement', 'Autre'];
 
@@ -95,20 +114,22 @@ function ScoreDot({ score }) {
   );
 }
 
-function Btn({ onClick, disabled, loading: isLoading, icon, label, color = C.accent, small = false }) {
+function Btn({ onClick, disabled, loading: isLoading, icon, label, color, small = false }) {
+  const C = useC();
+  const col = color ?? C.accent;
   return (
     <button onClick={onClick} disabled={disabled || isLoading} style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
       padding: small ? '4px 10px' : '6px 13px', borderRadius: 7,
-      border: `1px solid ${color}30`, background: `${color}12`, color,
+      border: `1px solid ${col}30`, background: `${col}12`, color: col,
       fontSize: small ? 11 : 12, fontWeight: 700,
       cursor: disabled || isLoading ? 'not-allowed' : 'pointer',
       opacity: disabled ? 0.5 : 1, transition: 'all .15s', whiteSpace: 'nowrap', fontFamily: 'inherit',
     }}
-      onMouseEnter={e => { if (!disabled && !isLoading) e.currentTarget.style.background = `${color}22`; }}
-      onMouseLeave={e => { e.currentTarget.style.background = `${color}12`; }}>
+      onMouseEnter={e => { if (!disabled && !isLoading) e.currentTarget.style.background = `${col}22`; }}
+      onMouseLeave={e => { e.currentTarget.style.background = `${col}12`; }}>
       {isLoading
-        ? <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: '50%', border: `2px solid ${color}40`, borderTopColor: color, animation: 'spin .7s linear infinite' }} />
+        ? <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: '50%', border: `2px solid ${col}40`, borderTopColor: col, animation: 'spin .7s linear infinite' }} />
         : icon}
       {label}
     </button>
@@ -117,6 +138,7 @@ function Btn({ onClick, disabled, loading: isLoading, icon, label, color = C.acc
 
 // ─── MODAL ÉTAPE 1 : infos batch + sélection fichier ─────────────
 function ImportModal({ onClose, onAnalyser, analyseEnCours, profiles, isAdmin }) {
+  const C = useC();
   const [nom,      setNom]      = useState('');
   const [leadType, setLeadType] = useState('Industrie');
   const [assigneA, setAssigneA] = useState('');
@@ -186,6 +208,7 @@ function ImportModal({ onClose, onAnalyser, analyseEnCours, profiles, isAdmin })
 
 // ─── MODAL ÉTAPE 2 : validation du mapping ────────────────────────
 function MappingModal({ analyseData, onImport, onCancel, importing }) {
+  const C = useC();
   const { headers, mapping: detected, sampleRows, totalRows } = analyseData;
   const [mapping, setMapping] = useState({ ...detected });
 
@@ -254,7 +277,9 @@ function MappingModal({ analyseData, onImport, onCancel, importing }) {
 
 // ─── MODAL CHOIX POINT D'ENTRÉE ──────────────────────────────────
 function EntreeModal({ onClose, onChoix }) {
+  const C = useC();
   const entries = [
+    { id: 'manuel',   icon: '✏️', title: 'Créer un lead manuellement', desc: 'Ajoutez un contact directement dans "Mes leads" avec toutes ses infos et la prochaine étape' },
     { id: 'criteres', icon: '🎯', title: 'Générer par critères SIRENE', desc: 'Recherchez des entreprises par secteur, département et postes ciblés — données officielles gratuites' },
     { id: 'enrichir', icon: '🔍', title: 'Enrichir une cible', desc: 'LinkedIn, SIREN, SIRET ou nom d\'entreprise — enrichissement intelligent avec scoring des contacts' },
     { id: 'import',   icon: '📥', title: 'Importer un fichier Excel', desc: 'Importez vos listes de prospects depuis un fichier .xlsx avec mapping automatique des colonnes' },
@@ -289,6 +314,7 @@ function EntreeModal({ onClose, onChoix }) {
 
 // ─── MODAL CRITÈRES SIRENE ────────────────────────────────────────
 function CriteresModal({ onClose, onImporter, importing, profiles, isAdmin }) {
+  const C = useC();
   const [step,           setStep]           = useState(1);
   const [secteurId,      setSecteurId]      = useState(null);
   const [postesChecked,  setPostesChecked]  = useState([]);
@@ -578,6 +604,7 @@ const INPUT_TYPE_CFG = {
 
 // ─── MODAL ENRICHISSEMENT INTELLIGENT ────────────────────────────
 function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId, lushaCredits, sauvegarderReveal, verifierCacheLusha }) {
+  const C = useC();
   const [inputVal,     setInputVal]     = useState('');
   const [type,         setType]         = useState(null);
   const [loading,      setLoading]      = useState(false);
@@ -966,6 +993,7 @@ function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId, lushaCredits,
 
 // ─── PANEL HISTORIQUE BATCHES ─────────────────────────────────────
 function BatchPanel({ batches, selectedBatchId, onSelect, onDelete, onReassign, isAdmin, profiles, loadingBatches }) {
+  const C = useC();
   const [reassigning, setReassigning] = useState(null);
 
   const typeColor = (t) => {
@@ -1060,6 +1088,7 @@ function BatchPanel({ batches, selectedBatchId, onSelect, onDelete, onReassign, 
 
 // ─── LIGNE CONTACT ────────────────────────────────────────────────
 function ContactRow({ contact, societeNom, onLusha, lushaLoading, onSetLinkedin }) {
+  const C = useC();
   const [editingLi, setEditingLi] = useState(false);
   const [liInput,   setLiInput]   = useState(contact.linkedin_url ?? '');
 
@@ -1116,14 +1145,247 @@ function ContactRow({ contact, societeNom, onLusha, lushaLoading, onSetLinkedin 
   );
 }
 
+// ─── CONFIG SUIVI ────────────────────────────────────────────────
+const NEXT_ACTION_CFG = {
+  rappeler:  { label: 'À rappeler',        icon: '📞', colorKey: 'accent',  showDate: true  },
+  nrp:       { label: 'NRP',               icon: '📵', colorKey: 'orange',  showDate: false },
+  mail:      { label: 'Mail à faire',      icon: '✉️',  colorKey: 'yellow',  showDate: false },
+  visio:     { label: 'Visio à proposer',  icon: '🎥', colorKey: 'purple',  showDate: false },
+  pas_bon:   { label: 'Pas bon contact',   icon: '👎', colorKey: 'red',     showDate: false },
+  annule:    { label: 'Annulé',            icon: '❌', colorKey: 'textDim', showDate: false },
+};
+
+const TYPES_PERSO = ['Foncière', 'Gestionnaire', 'Santé', 'Centre commercial', 'Entrepôt', 'Industrie', 'Bureaux', 'BE', 'Apporteur d\'affaires', 'Promoteur', 'Collectivité', 'Autre'];
+
+// ─── BARRE DE SUIVI ──────────────────────────────────────────────
+function SuiviBar({ soc, onNextAction }) {
+  const C = useC();
+  const [pickingDate, setPickingDate] = useState(false);
+  const [dateVal,     setDateVal]     = useState('');
+  const cur = soc.next_action;
+
+  const handleAction = (key) => {
+    if (key === 'rappeler') { setPickingDate(true); return; }
+    onNextAction(soc.id, key, null);
+  };
+
+  const confirmDate = () => {
+    if (!dateVal) return;
+    onNextAction(soc.id, 'rappeler', dateVal);
+    setPickingDate(false); setDateVal('');
+  };
+
+  return (
+    <div style={{ padding: '10px 18px', borderBottom: `1px solid ${C.border}`, background: C.bgInput }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 7 }}>
+        Prochaine étape
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        {Object.entries(NEXT_ACTION_CFG).map(([key, cfg]) => {
+          const color = C[cfg.colorKey] ?? C.textSub;
+          const isActive = cur === key;
+          return (
+            <button key={key} onClick={() => handleAction(key)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px',
+                borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                border: `1px solid ${isActive ? color : color + '40'}`,
+                background: isActive ? `${color}25` : `${color}0D`,
+                color, transition: 'all .12s',
+                boxShadow: isActive ? `0 0 0 2px ${color}30` : 'none',
+              }}>
+              {cfg.icon} {cfg.label}
+              {key === 'nrp' && (soc.nrp_count ?? 0) > 0 && (
+                <span style={{ background: color, color: '#fff', borderRadius: 10, padding: '0 5px', fontSize: 9, fontWeight: 900 }}>
+                  {soc.nrp_count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {pickingDate && (
+        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: `${C.accent}10`, border: `1px solid ${C.accent}30` }}>
+          <span style={{ fontSize: 11, color: C.accent, fontWeight: 600 }}>📞 Rappeler le :</span>
+          <input type="date" value={dateVal} onChange={e => setDateVal(e.target.value)} autoFocus
+            style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${C.borderLight}`, background: C.bgCard, color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit', cursor: 'pointer' }} />
+          <button onClick={confirmDate} disabled={!dateVal}
+            style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: C.accent, color: '#fff', fontSize: 11, fontWeight: 700, cursor: dateVal ? 'pointer' : 'not-allowed', opacity: dateVal ? 1 : .5, fontFamily: 'inherit' }}>
+            OK
+          </button>
+          <button onClick={() => { setPickingDate(false); setDateVal(''); }}
+            style={{ padding: '4px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.textSub, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+            ✕
+          </button>
+        </div>
+      )}
+      {cur === 'rappeler' && soc.next_action_date && !pickingDate && (
+        <div style={{ marginTop: 6, fontSize: 11, color: C.accent }}>
+          📅 Rappel prévu le <b>{new Date(soc.next_action_date).toLocaleDateString('fr-FR')}</b>
+          <button onClick={() => setPickingDate(true)} style={{ marginLeft: 8, fontSize: 10, color: C.textSub, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit' }}>modifier</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ZONE COMMENTAIRE ────────────────────────────────────────────
+function CommentZone({ soc, onSave }) {
+  const C = useC();
+  const [val, setVal]       = useState(soc.commentaire ?? '');
+  const [saved, setSaved]   = useState(false);
+  const timerRef            = useRef();
+
+  const handleChange = (v) => {
+    setVal(v);
+    setSaved(false);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => { onSave(soc.id, v); setSaved(true); }, 900);
+  };
+
+  return (
+    <div style={{ padding: '10px 18px', borderBottom: `1px solid ${C.border}`, background: C.bgCard }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: C.textDim, textTransform: 'uppercase', letterSpacing: '.06em' }}>Commentaire / Notes</span>
+        {saved && <span style={{ fontSize: 10, color: C.green }}>✓ Enregistré</span>}
+      </div>
+      <textarea value={val} onChange={e => handleChange(e.target.value)}
+        placeholder="Notes de suivi, contexte, historique…"
+        rows={2}
+        style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 7, border: `1px solid ${C.borderLight}`, background: C.bgInput, color: C.text, fontSize: 12, resize: 'vertical', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5 }} />
+    </div>
+  );
+}
+
+// ─── MODAL CRÉATION LEAD MANUEL ──────────────────────────────────
+function ManuelModal({ onClose, onCreer, saving }) {
+  const C = useC();
+  const [societe,    setSociete]    = useState('');
+  const [prenom,     setPrenom]     = useState('');
+  const [nom,        setNom]        = useState('');
+  const [email,      setEmail]      = useState('');
+  const [tel,        setTel]        = useState('');
+  const [type,       setType]       = useState('');
+  const [commentaire,setCommentaire]= useState('');
+  const [dernEch,    setDernEch]    = useState('');
+  const [nextAction, setNextAction] = useState('');
+  const [nextDate,   setNextDate]   = useState('');
+  const [error,      setError]      = useState('');
+
+  const inpStyle = { width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.borderLight}`, background: C.bgInput, color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' };
+
+  const handleSubmit = async () => {
+    if (!prenom.trim() && !nom.trim() && !societe.trim()) { setError('Renseignez au moins un nom ou une société'); return; }
+    setError('');
+    try {
+      await onCreer({ societe, prenom, nom, email, tel, type, commentaire, dernier_echange: dernEch || null, next_action: nextAction || null, next_action_date: nextDate || null });
+      onClose();
+    } catch (e) { setError(e.message); }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.70)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: C.bgCard, border: `1px solid ${C.borderLight}`, borderRadius: 16, width: 540, maxWidth: '98vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '18px 22px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>✏️ Nouveau lead manuel</div>
+          <div style={{ fontSize: 11, color: C.textSub, marginTop: 2 }}>Ajouté directement dans <b style={{ color: C.accent }}>Mes leads</b></div>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Société */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Société / Entreprise</div>
+            <input value={societe} onChange={e => setSociete(e.target.value)} placeholder="ex : SCI Les Chênes" style={inpStyle} autoFocus />
+          </div>
+          {/* Prénom + Nom */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Prénom</div>
+              <input value={prenom} onChange={e => setPrenom(e.target.value)} placeholder="Jean" style={inpStyle} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Nom</div>
+              <input value={nom} onChange={e => setNom(e.target.value)} placeholder="Dupont" style={inpStyle} />
+            </div>
+          </div>
+          {/* Email + Tel */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Email</div>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jean@exemple.fr" style={inpStyle} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Téléphone</div>
+              <input type="tel" value={tel} onChange={e => setTel(e.target.value)} placeholder="06 12 34 56 78" style={inpStyle} />
+            </div>
+          </div>
+          {/* Type */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Type de cible</div>
+            <select value={type} onChange={e => setType(e.target.value)} style={{ ...inpStyle, cursor: 'pointer' }}>
+              <option value="">— Sélectionner —</option>
+              {TYPES_PERSO.map(t => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+          {/* Date dernier échange */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Date dernier échange</div>
+            <input type="date" value={dernEch} onChange={e => setDernEch(e.target.value)} style={inpStyle} />
+          </div>
+          {/* Next step */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 6 }}>Prochaine étape</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {Object.entries(NEXT_ACTION_CFG).map(([key, cfg]) => {
+                const color = C[cfg.colorKey] ?? C.textSub;
+                const active = nextAction === key;
+                return (
+                  <button key={key} onClick={() => setNextAction(active ? '' : key)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${active ? color : color + '40'}`, background: active ? `${color}25` : `${color}0D`, color }}>
+                    {cfg.icon} {cfg.label}
+                  </button>
+                );
+              })}
+            </div>
+            {nextAction === 'rappeler' && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Rappeler le</div>
+                <input type="date" value={nextDate} onChange={e => setNextDate(e.target.value)} style={{ ...inpStyle, width: 'auto' }} />
+              </div>
+            )}
+          </div>
+          {/* Commentaire */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Commentaire / Notes</div>
+            <textarea value={commentaire} onChange={e => setCommentaire(e.target.value)} placeholder="Contexte, notes, observations…" rows={3}
+              style={{ ...inpStyle, resize: 'vertical', lineHeight: 1.5 }} />
+          </div>
+          {error && <div style={{ padding: '8px 12px', borderRadius: 7, background: C.redSoft, color: C.red, fontSize: 12 }}>{error}</div>}
+        </div>
+        <div style={{ padding: '12px 22px', borderTop: `1px solid ${C.border}`, flexShrink: 0, display: 'flex', gap: 8 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: '9px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.textSub, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+            Annuler
+          </button>
+          <button onClick={handleSubmit} disabled={saving}
+            style={{ flex: 2, padding: '9px', borderRadius: 8, border: 'none', background: saving ? C.borderLight : C.accent, color: saving ? C.textDim : '#fff', fontWeight: 800, fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+            {saving ? '⏳ Création…' : '✅ Créer le lead'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── CARTE SOCIÉTÉ ────────────────────────────────────────────────
-function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastre, onLusha, onGmb, onSetLinkedin, onStatut, onConvertir, onSupprimer }) {
+function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastre, onLusha, onGmb, onSetLinkedin, onConvertir, onSupprimer, onNextAction, onSaveCommentaire }) {
+  const C = useC();
   const [open,           setOpen]          = useState(false);
   const [showMap,        setShowMap]       = useState(false);
   const [confirmDelete,  setConfirmDelete] = useState(false);
   const [deleting,       setDeleting]      = useState(false);
-  const statCfg = STATUT_CFG[soc.statut_qualification] ?? STATUT_CFG['À qualifier'];
   const contactsCibles = soc.contacts?.filter(c => (c.score_poste ?? 0) >= 70) ?? [];
+  const naCfg = soc.next_action ? NEXT_ACTION_CFG[soc.next_action] : null;
+  const naColor = naCfg ? (C[naCfg.colorKey] ?? C.textSub) : null;
 
   return (
     <div style={{ background: C.bgCard, border: `1px solid ${open ? C.borderLight : C.border}`, borderRadius: 12, overflow: 'hidden', transition: 'border-color .2s' }}>
@@ -1132,13 +1394,19 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 800, fontSize: 14, color: C.text }}>{soc.raison_sociale}</span>
-            <Badge label={soc.statut_qualification} color={statCfg.color} bg={statCfg.bg} />
+            {naCfg && (
+              <Badge
+                label={`${naCfg.icon} ${naCfg.label}${soc.next_action === 'rappeler' && soc.next_action_date ? ' · ' + new Date(soc.next_action_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : ''}${soc.next_action === 'nrp' && soc.nrp_count > 0 ? ' (' + soc.nrp_count + ')' : ''}`}
+                color={naColor} bg={`${naColor}20`} />
+            )}
+            {soc.lead_type_perso && <Badge label={soc.lead_type_perso} color={C.purple} bg={C.purpleSoft} />}
             {soc.cadastre_fetched && soc.surface_bati_m2 > 0 && <Badge label={`🏗 ${soc.surface_bati_m2.toLocaleString()} m²`} color={C.yellow} bg={C.yellowSoft} />}
           </div>
           <div style={{ fontSize: 11, color: C.textSub, marginTop: 3, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
-            <span>📍 {soc.ville} {soc.cp} · {soc.activite}</span>
+            {(soc.ville || soc.cp || soc.activite) && <span>📍 {[soc.ville, soc.cp, soc.activite].filter(Boolean).join(' · ')}</span>}
             {soc.tel_societe && <a href={`tel:${soc.tel_societe}`} style={{ color: C.green, textDecoration: 'none', fontWeight: 600 }} onClick={e => e.stopPropagation()}>📞 {soc.tel_societe}</a>}
             {soc.web && <a href={soc.web} target="_blank" rel="noopener noreferrer" style={{ color: C.accent, textDecoration: 'none' }} onClick={e => e.stopPropagation()}>🌐 Site</a>}
+            {soc.commentaire && <span style={{ color: C.textDim, fontStyle: 'italic', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>💬 {soc.commentaire}</span>}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
@@ -1150,11 +1418,12 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
 
       {open && (
         <div style={{ borderTop: `1px solid ${C.border}` }}>
+          {/* Barre de suivi */}
+          <SuiviBar soc={soc} onNextAction={onNextAction} />
+          {/* Commentaire */}
+          <CommentZone soc={soc} onSave={onSaveCommentaire} />
+          {/* Outils */}
           <div style={{ display: 'flex', gap: 8, padding: '10px 18px', flexWrap: 'wrap', alignItems: 'center', background: C.bgInput, borderBottom: `1px solid ${C.border}` }}>
-            <select value={soc.statut_qualification} onChange={e => { e.stopPropagation(); onStatut(soc.id, e.target.value); }}
-              style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${C.borderLight}`, background: C.bgCard, color: C.text, fontSize: 12, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
-              {Object.keys(STATUT_CFG).map(s => <option key={s}>{s}</option>)}
-            </select>
             <Btn onClick={() => onCadastre(soc.id)} loading={cadastreLoading[soc.id]} icon="📐" label={soc.cadastre_fetched ? 'Recalculer' : 'Cadastre'} color={C.yellow} />
             <Btn onClick={() => onGmb(soc.id)} loading={gmbLoading[soc.id]} icon="📍" label="Google Maps" color={C.orange} />
             <Btn onClick={() => { setShowMap(m => !m); if (!open) setOpen(true); }} icon="🗺" label={showMap ? 'Masquer carte' : 'Carte parcelles'} color={C.purple} />
@@ -1237,6 +1506,9 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
 
 // ─── MODULE PRINCIPAL ─────────────────────────────────────────────
 export default function LeadsModule() {
+  const theme = useStore(s => s.theme);
+  const C = theme === 'dark' ? C_DARK : C_LIGHT;
+
   const {
     batches, loadingBatches, selectedBatchId, selectBatch, reassignerBatch, supprimerBatch,
     societes, societesBrutes, loading, importing, error,
@@ -1245,6 +1517,7 @@ export default function LeadsModule() {
     importerExcel, analyserImport, clearAnalyse, analyseData, analyseEnCours,
     enrichirCadastre, enrichirLusha, enrichirGMB, gmbLoading,
     setLinkedinUrl, setStatutSociete, convertirEnDossier, supprimerSociete,
+    setNextAction, setCommentaireSociete, creerLeadManuel,
     creerBatchDepuisSIRENE, ajouterSocieteManuelle,
     lushaCredits, sauvegarderReveal, verifierCacheLusha,
     profiles, isAdmin,
@@ -1254,6 +1527,7 @@ export default function LeadsModule() {
   const [showImportModal,  setShowImportModal]  = useState(false);
   const [showCriteresModal,setShowCriteresModal]= useState(false);
   const [showEnrichirModal,setShowEnrichirModal]= useState(false);
+  const [showManuelModal,  setShowManuelModal]  = useState(false);
   const [importMsg,        setImportMsg]        = useState(null);
 
   const handleChoixEntree = useCallback((choix) => {
@@ -1261,6 +1535,7 @@ export default function LeadsModule() {
     if (choix === 'import')   setShowImportModal(true);
     if (choix === 'criteres') setShowCriteresModal(true);
     if (choix === 'enrichir') setShowEnrichirModal(true);
+    if (choix === 'manuel')   setShowManuelModal(true);
   }, []);
 
   const handleImporterSIRENE = useCallback(async (sireneResults, opts) => {
@@ -1304,13 +1579,14 @@ export default function LeadsModule() {
   const STATUTS_FILTRE = ['Tous', ...Object.keys(STATUT_CFG)];
 
   return (
+    <LeadsTheme.Provider value={C}>
     <div style={{ background: C.bg, minHeight: '100vh', color: C.text, fontFamily: "'DM Sans', system-ui, sans-serif", display: 'flex', flexDirection: 'column' }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* ── Header ── */}
-      <div style={{ background: 'linear-gradient(135deg, #0A1420 0%, #0F1923 100%)', borderBottom: `1px solid ${C.border}`, padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', flexShrink: 0 }}>
+      <div style={{ background: C.header, borderBottom: `1px solid ${C.border}`, padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', flexShrink: 0 }}>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 900, color: C.text, letterSpacing: '-0.03em' }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: theme === 'dark' ? C_DARK.text : '#fff', letterSpacing: '-0.03em' }}>
             Qualification <span style={{ color: C.accent }}>Leads</span>
             {selectedBatch && <span style={{ fontSize: 13, fontWeight: 500, color: C.textSub, marginLeft: 10 }}>· {selectedBatch.nom}</span>}
           </div>
@@ -1433,8 +1709,9 @@ export default function LeadsModule() {
                 <SocieteCard key={soc.id} soc={soc}
                   cadastreLoading={cadastreLoading} lushaLoading={lushaLoading} gmbLoading={gmbLoading}
                   onCadastre={enrichirCadastre} onLusha={enrichirLusha} onGmb={enrichirGMB}
-                  onSetLinkedin={setLinkedinUrl} onStatut={setStatutSociete} onConvertir={convertirEnDossier}
-                  onSupprimer={supprimerSociete} />
+                  onSetLinkedin={setLinkedinUrl} onConvertir={convertirEnDossier}
+                  onSupprimer={supprimerSociete}
+                  onNextAction={setNextAction} onSaveCommentaire={setCommentaireSociete} />
               ))}
             </div>
           )}
@@ -1489,6 +1766,16 @@ export default function LeadsModule() {
           importing={importing}
         />
       )}
+
+      {/* Modal lead manuel */}
+      {showManuelModal && (
+        <ManuelModal
+          onClose={() => setShowManuelModal(false)}
+          onCreer={creerLeadManuel}
+          saving={importing}
+        />
+      )}
     </div>
+    </LeadsTheme.Provider>
   );
 }

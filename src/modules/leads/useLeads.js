@@ -388,6 +388,19 @@ export function useLeads() {
 
   useEffect(() => { loadLushaCredits(); }, [loadLushaCredits]);
 
+  // ── Assurer l'existence du batch "Mes leads" pour cet user ────
+  const assurerMesLeads = useCallback(async (batchesData) => {
+    if (!profile) return null;
+    const existing = batchesData.find(b => b.nom === 'Mes leads' && b.assigne_a === profile.id);
+    if (existing) return existing;
+    const { data: nb } = await supabase.from('leads_batches').insert({
+      nom: 'Mes leads', lead_type: 'Autre',
+      assigne_a: profile.id, created_by: profile.id,
+      nb_societes: 0, nb_contacts: 0,
+    }).select().single();
+    return nb;
+  }, [profile]);
+
   // ── Chargement batches ──────────────────────────────────────────
   const loadBatches = useCallback(async () => {
     if (!profile) return;
@@ -402,10 +415,16 @@ export function useLeads() {
       if (!isAdmin) q = q.eq('assigne_a', profile.id);
       const { data, error: e } = await q;
       if (e) throw e;
-      setBatches(data || []);
+      const batchesData = data || [];
+      // Auto-créer "Mes leads" si absent
+      const mesLeads = await assurerMesLeads(batchesData);
+      if (mesLeads && !batchesData.find(b => b.id === mesLeads.id)) {
+        batchesData.unshift(mesLeads);
+      }
+      setBatches(batchesData);
     } catch (e) { setError(e.message); }
     setLoadingBatches(false);
-  }, [profile, isAdmin]);
+  }, [profile, isAdmin, assurerMesLeads]);
 
   // ── Chargement sociétés ─────────────────────────────────────────
   const loadSocietes = useCallback(async (batchId = selectedBatchId) => {
@@ -649,6 +668,94 @@ export function useLeads() {
     } catch { /* silencieux */ }
     setGmbLoading(prev => ({ ...prev, [importId]: false }));
   }, [societes]);
+
+  // ── Next action (remplace statut dropdown) ─────────────────────
+  const ACTION_STATUT_MAP = {
+    rappeler: 'Contacté', nrp: 'Contacté', mail: 'Contacté',
+    visio: 'RDV planifié', pas_bon: 'Non qualifié', annule: 'Non pertinent',
+  };
+
+  const setNextAction = useCallback(async (importId, action, date = null) => {
+    const statut = ACTION_STATUT_MAP[action] ?? 'Contacté';
+    const isNrp  = action === 'nrp';
+    const soc    = societes.find(s => s.id === importId);
+    const patch  = {
+      next_action:       action,
+      next_action_date:  date ?? null,
+      statut_qualification: statut,
+      dernier_contact_at:   isNrp ? new Date().toISOString() : undefined,
+      nrp_count:            isNrp ? ((soc?.nrp_count ?? 0) + 1) : undefined,
+    };
+    // Nettoyer les undefined
+    Object.keys(patch).forEach(k => patch[k] === undefined && delete patch[k]);
+    const { error: e } = await supabase.from('leads_import').update(patch).eq('id', importId);
+    if (e) { setError(e.message); return; }
+    setSocietes(prev => prev.map(s => s.id === importId ? { ...s, ...patch } : s));
+  }, [societes]);
+
+  // ── Commentaire société ─────────────────────────────────────────
+  const setCommentaireSociete = useCallback(async (importId, commentaire) => {
+    const { error: e } = await supabase.from('leads_import').update({ commentaire }).eq('id', importId);
+    if (e) { setError(e.message); return; }
+    setSocietes(prev => prev.map(s => s.id === importId ? { ...s, commentaire } : s));
+  }, []);
+
+  // ── Créer un lead manuel → batch "Mes leads" ───────────────────
+  const creerLeadManuel = useCallback(async ({ societe, prenom, nom, email, tel, type, commentaire, dernier_echange, next_action, next_action_date }) => {
+    setImporting(true); setError(null);
+    try {
+      // Trouver ou créer "Mes leads"
+      let mesLeads = batches.find(b => b.nom === 'Mes leads' && b.assigne_a === profile?.id);
+      if (!mesLeads) {
+        const { data: nb } = await supabase.from('leads_batches').insert({
+          nom: 'Mes leads', lead_type: 'Autre',
+          assigne_a: profile?.id, created_by: profile?.id,
+          nb_societes: 0, nb_contacts: 0,
+        }).select().single();
+        mesLeads = nb;
+      }
+
+      const statut = ACTION_STATUT_MAP[next_action] ?? 'À qualifier';
+      const { data: imp, error: eImp } = await supabase.from('leads_import').insert({
+        raison_sociale:    societe?.trim() || `${prenom} ${nom}`.trim(),
+        batch_id:          mesLeads.id,
+        assigne_a:         profile?.id,
+        import_batch_id:   mesLeads.id,
+        commentaire:       commentaire || null,
+        statut_qualification: statut,
+        next_action:       next_action || null,
+        next_action_date:  next_action_date || null,
+        dernier_contact_at: dernier_echange ? new Date(dernier_echange).toISOString() : null,
+        lead_type_perso:   type || null,
+        source:            'manuel',
+      }).select().single();
+      if (eImp) throw eImp;
+
+      if (prenom || nom || email || tel) {
+        await supabase.from('leads_contacts').insert({
+          import_id:   imp.id,
+          prenom:      prenom  || '',
+          nom:         nom     || '',
+          fonction:    type    || '',
+          email:       email   || null,
+          tel_societe: tel     || null,
+          score_poste: scorePoste(type ?? ''),
+          rang_poste:  1,
+        });
+      }
+
+      await supabase.from('leads_batches').update({
+        nb_societes: (mesLeads.nb_societes ?? 0) + 1,
+        nb_contacts: (mesLeads.nb_contacts ?? 0) + (prenom || nom ? 1 : 0),
+      }).eq('id', mesLeads.id);
+
+      await loadBatches();
+      setSelectedBatchId(mesLeads.id);
+      await loadSocietes(mesLeads.id);
+      return { success: true };
+    } catch (e) { setError(e.message); throw e; }
+    finally { setImporting(false); }
+  }, [profile, batches, loadBatches, loadSocietes]);
 
   // ── LinkedIn & Statut ───────────────────────────────────────────
   const setLinkedinUrl = useCallback(async (contactId, url) => {
@@ -947,6 +1054,7 @@ export function useLeads() {
     importerExcel, analyserImport, clearAnalyse, analyseData, analyseEnCours,
     enrichirCadastre, enrichirLusha, enrichirGMB, gmbLoading,
     setLinkedinUrl, setStatutSociete, convertirEnDossier, supprimerSociete,
+    setNextAction, setCommentaireSociete, creerLeadManuel,
     refresh: () => { loadBatches(); loadSocietes(selectedBatchId); },
     // SIRENE / manuel
     creerBatchDepuisSIRENE, ajouterSocieteManuelle,
