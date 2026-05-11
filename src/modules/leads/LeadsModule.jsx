@@ -577,32 +577,43 @@ const INPUT_TYPE_CFG = {
 };
 
 // ─── MODAL ENRICHISSEMENT INTELLIGENT ────────────────────────────
-function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId }) {
-  const [inputVal,    setInputVal]    = useState('');
-  const [type,        setType]        = useState(null);
-  const [loading,     setLoading]     = useState(false);
-  const [result,      setResult]      = useState(null);
-  const [error,       setError]       = useState(null);
-  const [secteurId,   setSecteurId]   = useState(null);
-  const [addMsg,      setAddMsg]      = useState(null);
+function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId, lushaCredits, sauvegarderReveal }) {
+  const [inputVal,     setInputVal]     = useState('');
+  const [type,         setType]         = useState(null);
+  const [loading,      setLoading]      = useState(false);
+  const [result,       setResult]       = useState(null);
+  const [error,        setError]        = useState(null);
+  const [secteurId,    setSecteurId]    = useState(null);
+  const [addMsg,       setAddMsg]       = useState(null);
+  const [showConfirm,  setShowConfirm]  = useState(false);
+  const [saving,       setSaving]       = useState(false);
+
+  const reste = lushaCredits.limit > 0 ? lushaCredits.limit - lushaCredits.used : Infinity;
+  const quotaAtteint = lushaCredits.limit > 0 && reste <= 0;
 
   const handleInput = (val) => {
     setInputVal(val);
     setType(detectInputType(val));
-    setResult(null); setError(null); setAddMsg(null);
+    setResult(null); setError(null); setAddMsg(null); setShowConfirm(false);
   };
 
-  const handleEnrichir = async () => {
-    if (!type) return;
+  const doReveal = async () => {
+    setShowConfirm(false);
     setLoading(true); setError(null); setResult(null);
     try {
       if (type === 'linkedin_person') {
         const data = await fetchLusha({ linkedinUrl: inputVal.trim() });
         setResult({ type: 'lusha', data, url: inputVal.trim() });
+        // Auto-save immédiat
+        setSaving(true);
+        try {
+          const { creditsUsed } = await sauvegarderReveal(data);
+          setAddMsg({ ok: true, text: `✅ Sauvegardé dans "Leads Lusha" · ${creditsUsed} crédit${creditsUsed > 1 ? 's' : ''} consommé${creditsUsed > 1 ? 's' : ''}` });
+        } catch (e) { setAddMsg({ ok: false, text: `⚠ Erreur sauvegarde : ${e.message}` }); }
+        setSaving(false);
 
       } else if (type === 'linkedin_company') {
         setResult({ type: 'linkedin_company', url: inputVal.trim() });
-
       } else if (type === 'siret' || type === 'siren') {
         const q = inputVal.replace(/[\s.]/g, '');
         const resp = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${q}&per_page=1&limite_matching_etablissements=1`);
@@ -620,6 +631,12 @@ function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId }) {
     setLoading(false);
   };
 
+  // Pour les profils LinkedIn : bouton → confirmation d'abord
+  const handleEnrichir = () => {
+    if (type === 'linkedin_person') { setShowConfirm(true); return; }
+    doReveal();
+  };
+
   const handleAjouter = async (payload) => {
     setAddMsg(null);
     try {
@@ -634,6 +651,40 @@ function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.72)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: C.bgCard, border: `1px solid ${C.borderLight}`, borderRadius: 16, width: 600, maxWidth: '98vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+        {/* Overlay confirmation Lusha */}
+        {showConfirm && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.75)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 16, padding: 24 }}>
+            <div style={{ background: C.bgCard, border: `1px solid ${C.lusha}50`, borderRadius: 14, padding: '24px 28px', maxWidth: 380, width: '100%' }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 6 }}>💜 Confirmer l'enrichissement Lusha</div>
+              <div style={{ fontSize: 12, color: C.textSub, lineHeight: 1.6, marginBottom: 14 }}>
+                Cet appel va consommer des crédits Lusha :<br />
+                <span style={{ color: C.lusha, fontWeight: 700 }}>• 1 crédit</span> de connexion API<br />
+                <span style={{ color: C.lusha, fontWeight: 700 }}>• 1 crédit par email</span> révélé<br />
+                <span style={{ color: C.lusha, fontWeight: 700 }}>• 1 crédit par téléphone</span> révélé<br />
+                <span style={{ color: C.textSub }}>Estimation totale : </span><span style={{ fontWeight: 700, color: C.yellow }}>2 à 6 crédits</span> selon les données disponibles.
+              </div>
+              {lushaCredits.limit > 0 && (
+                <div style={{ padding: '8px 12px', borderRadius: 8, background: `${C.lusha}15`, border: `1px solid ${C.lusha}30`, marginBottom: 14, fontSize: 12 }}>
+                  Votre solde : <b style={{ color: C.lusha }}>{lushaCredits.limit - lushaCredits.used}</b> crédit{lushaCredits.limit - lushaCredits.used > 1 ? 's' : ''} restant{lushaCredits.limit - lushaCredits.used > 1 ? 's' : ''} sur {lushaCredits.limit} ce mois
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: C.textDim, marginBottom: 16 }}>
+                Le contact sera automatiquement sauvegardé dans le batch <b style={{ color: C.lusha }}>"Leads Lusha"</b>.
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setShowConfirm(false)}
+                  style={{ flex: 1, padding: '9px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.textSub, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  Annuler
+                </button>
+                <button onClick={doReveal}
+                  style={{ flex: 2, padding: '9px', borderRadius: 8, border: 'none', background: C.lusha, color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  Confirmer · Utiliser les crédits
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Header */}
         <div style={{ padding: '20px 24px 14px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
@@ -660,13 +711,24 @@ function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId }) {
 
           {/* Action ou UI LinkedIn company */}
           {type && type !== 'linkedin_company' && (
-            <div style={{ marginTop: 12 }}>
-              <button onClick={handleEnrichir} disabled={loading}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 20px', borderRadius: 8, border: 'none', background: loading ? C.borderLight : typeCfg.color, color: loading ? C.textDim : (type === 'text' ? C.bg : C.bg), fontWeight: 800, fontSize: 13, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
-                {loading
-                  ? <><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: '50%', border: `2px solid ${C.bg}40`, borderTopColor: C.bg, animation: 'spin .7s linear infinite' }} /> Recherche…</>
-                  : `${typeCfg.icon} Enrichir`}
-              </button>
+            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {type === 'linkedin_person' && quotaAtteint ? (
+                <div style={{ padding: '8px 14px', borderRadius: 8, background: C.redSoft, border: `1px solid ${C.red}30`, fontSize: 12, color: C.red }}>
+                  🚫 Quota mensuel Lusha atteint ({lushaCredits.used}/{lushaCredits.limit} crédits). Contactez votre admin pour augmenter votre quota.
+                </div>
+              ) : (
+                <button onClick={handleEnrichir} disabled={loading || saving}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 20px', borderRadius: 8, border: 'none', background: loading || saving ? C.borderLight : typeCfg.color, color: loading || saving ? C.textDim : C.bg, fontWeight: 800, fontSize: 13, cursor: loading || saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                  {loading || saving
+                    ? <><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: '50%', border: `2px solid ${C.bg}40`, borderTopColor: C.bg, animation: 'spin .7s linear infinite' }} /> {loading ? 'Enrichissement…' : 'Sauvegarde…'}</>
+                    : `${typeCfg.icon} Enrichir`}
+                </button>
+              )}
+              {type === 'linkedin_person' && lushaCredits.limit > 0 && !quotaAtteint && (
+                <span style={{ fontSize: 11, color: C.textDim }}>
+                  💜 ~2–6 crédits · Reste <b style={{ color: C.lusha }}>{lushaCredits.limit - lushaCredits.used}</b>/{lushaCredits.limit}
+                </span>
+              )}
             </div>
           )}
 
@@ -1112,6 +1174,7 @@ export default function LeadsModule() {
     enrichirCadastre, enrichirLusha, enrichirGMB, gmbLoading,
     setLinkedinUrl, setStatutSociete, convertirEnDossier,
     creerBatchDepuisSIRENE, ajouterSocieteManuelle,
+    lushaCredits, sauvegarderReveal,
     profiles, isAdmin,
   } = useLeads();
 
@@ -1181,6 +1244,27 @@ export default function LeadsModule() {
           </div>
         </div>
         <div style={{ flex: 1 }} />
+        {/* Badge crédits Lusha */}
+        {lushaCredits.limit > 0 && (() => {
+          const reste = lushaCredits.limit - lushaCredits.used;
+          const pct = Math.min(100, Math.round((lushaCredits.used / lushaCredits.limit) * 100));
+          const couleur = reste <= 0 ? C.red : reste < lushaCredits.limit * 0.2 ? C.orange : C.lusha;
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 8, background: `${couleur}15`, border: `1px solid ${couleur}40` }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: couleur, textTransform: 'uppercase', letterSpacing: '.05em' }}>Crédits Lusha</div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: C.text }}>
+                  <span style={{ color: couleur }}>{lushaCredits.used}</span>
+                  <span style={{ color: C.textSub }}> / {lushaCredits.limit}</span>
+                  {reste <= 0 && <span style={{ color: C.red, fontSize: 10, marginLeft: 4 }}>Quota atteint</span>}
+                </div>
+              </div>
+              <div style={{ width: 40, height: 4, borderRadius: 4, background: C.border, overflow: 'hidden' }}>
+                <div style={{ width: `${pct}%`, height: '100%', background: couleur, borderRadius: 4, transition: 'width .3s' }} />
+              </div>
+            </div>
+          );
+        })()}
         <button onClick={() => setShowEntreeModal(true)}
           style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 18px', borderRadius: 8, background: C.accent, color: C.bg, border: 'none', fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
           ➕ Nouveau
@@ -1306,6 +1390,8 @@ export default function LeadsModule() {
           onClose={() => setShowEnrichirModal(false)}
           onAjouterAuLot={handleAjouterAuLot}
           selectedBatchId={selectedBatchId}
+          lushaCredits={lushaCredits}
+          sauvegarderReveal={sauvegarderReveal}
         />
       )}
 

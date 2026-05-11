@@ -41,11 +41,12 @@ function AvatarCircle({ profile, size = 34 }) {
 }
 
 function EditProfileModal({ profile, currentUserId, onClose, onSave, onDelete, onUpdateEmail, onResetPassword }) {
-  const [nom, setNom]         = useState(profile.nom || '')
-  const [prenom, setPrenom]   = useState(profile.prenom || '')
-  const [role, setRole]       = useState(profile.role || 'commercial')
-  const [avatar, setAvatar]   = useState(profile.avatar_emoji || '')
-  const [email, setEmail]     = useState(profile.email || '')
+  const [nom, setNom]               = useState(profile.nom || '')
+  const [prenom, setPrenom]         = useState(profile.prenom || '')
+  const [role, setRole]             = useState(profile.role || 'commercial')
+  const [avatar, setAvatar]         = useState(profile.avatar_emoji || '')
+  const [email, setEmail]           = useState(profile.email || '')
+  const [lushaLimit, setLushaLimit] = useState(String(profile.lusha_monthly_limit ?? 0))
   const [saving, setSaving]           = useState(false)
   const [savingEmail, setSavingEmail] = useState(false)
   const [resetting, setResetting]     = useState(false)
@@ -63,7 +64,7 @@ function EditProfileModal({ profile, currentUserId, onClose, onSave, onDelete, o
     setSaving(true)
     setMsg(null)
     try {
-      await onSave(profile.id, { nom, prenom, role, avatar_emoji: avatar })
+      await onSave(profile.id, { nom, prenom, role, avatar_emoji: avatar, lusha_monthly_limit: parseInt(lushaLimit) || 0 })
       onClose()
     } catch (e) {
       setMsg({ type: 'err', text: e.message })
@@ -184,6 +185,27 @@ function EditProfileModal({ profile, currentUserId, onClose, onSave, onDelete, o
                 </div>
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* ── Quota Lusha ── */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={labelStyle}>💜 Crédits Lusha / mois</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input
+              type="number" min="0" max="9999" value={lushaLimit}
+              onChange={e => setLushaLimit(e.target.value)}
+              style={{ ...inputStyle, width: 100 }}
+            />
+            <span style={{ fontSize: 12, color: C.textMid }}>crédits par mois</span>
+            {parseInt(lushaLimit) === 0 && (
+              <span style={{ fontSize: 11, color: '#F59E0B', background: '#F59E0B22', border: '1px solid #F59E0B44', borderRadius: 6, padding: '2px 8px' }}>
+                Accès Lusha désactivé
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: C.textSoft, marginTop: 5 }}>
+            0 = pas d'accès Lusha · Le compteur se remet à zéro le 1er de chaque mois
           </div>
         </div>
 

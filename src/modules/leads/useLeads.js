@@ -360,9 +360,33 @@ export function useLeads() {
   const [gmbLoading,     setGmbLoading]     = useState({});
   const [analyseData,    setAnalyseData]    = useState(null);
   const [analyseEnCours, setAnalyseEnCours] = useState(false);
+  const [lushaCredits,   setLushaCredits]   = useState({ used: 0, limit: 0, reveals: [] });
 
   // Charger la liste des utilisateurs (pour l'assignation admin)
   useEffect(() => { if (isAdmin && !profiles.length) fetchProfiles(); }, [isAdmin]);
+
+  // ── Crédits Lusha du mois courant ──────────────────────────────
+  const loadLushaCredits = useCallback(async () => {
+    if (!profile) return;
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    function doLoad() {
+      Promise.all([
+        supabase.from('lusha_reveals')
+          .select('id, credits_used, created_at, first_name, last_name, linkedin_url, emails, phones')
+          .eq('user_id', profile.id)
+          .gte('created_at', firstDay)
+          .order('created_at', { ascending: false }),
+        supabase.from('profiles').select('lusha_monthly_limit').eq('id', profile.id).single(),
+      ]).then(([{ data: reveals }, { data: prof }]) => {
+        const used = (reveals ?? []).reduce((s, r) => s + (r.credits_used ?? 1), 0);
+        setLushaCredits({ used, limit: prof?.lusha_monthly_limit ?? 0, reveals: reveals ?? [] });
+      });
+    }
+    doLoad();
+  }, [profile]);
+
+  useEffect(() => { loadLushaCredits(); }, [loadLushaCredits]);
 
   // ── Chargement batches ──────────────────────────────────────────
   const loadBatches = useCallback(async () => {
@@ -691,6 +715,73 @@ export function useLeads() {
     finally { setImporting(false); }
   }, [profile, loadBatches]);
 
+  // ── Sauvegarder un reveal Lusha + batch "Leads Lusha" ──────────
+  const sauvegarderReveal = useCallback(async (revealData) => {
+    if (!profile) return;
+    const creditsUsed = 1 + (revealData.emails?.length ?? 0) + (revealData.phones?.length ?? 0);
+
+    // 1. Log dans lusha_reveals
+    await supabase.from('lusha_reveals').insert({
+      user_id:      profile.id,
+      linkedin_url: revealData.linkedInUrl ?? null,
+      first_name:   revealData.firstName   ?? null,
+      last_name:    revealData.lastName    ?? null,
+      company:      revealData.company     ?? null,
+      job_title:    revealData.jobTitle    ?? null,
+      emails:       revealData.emails      ?? [],
+      phones:       revealData.phones      ?? [],
+      credits_used: creditsUsed,
+      raw_data:     revealData._raw        ?? null,
+    });
+
+    // 2. Trouver ou créer le batch "Leads Lusha"
+    let lushaBatch = batches.find(b => b.nom === 'Leads Lusha' && b.assigne_a === profile.id);
+    if (!lushaBatch) {
+      const { data: nb } = await supabase.from('leads_batches').insert({
+        nom: 'Leads Lusha', lead_type: 'Tertiaire',
+        assigne_a: profile.id, created_by: profile.id,
+        nb_societes: 0, nb_contacts: 0,
+      }).select().single();
+      lushaBatch = nb;
+    }
+
+    if (lushaBatch) {
+      const { data: imp } = await supabase.from('leads_import').insert({
+        raison_sociale: revealData.company ?? 'Entreprise (Lusha)',
+        batch_id: lushaBatch.id, assigne_a: profile.id, import_batch_id: lushaBatch.id,
+      }).select().single();
+      if (imp) {
+        await supabase.from('leads_contacts').insert({
+          import_id:    imp.id,
+          nom:          revealData.lastName  ?? '',
+          prenom:       revealData.firstName ?? '',
+          fonction:     revealData.jobTitle  ?? '',
+          score_poste:  scorePoste(revealData.jobTitle ?? ''),
+          rang_poste:   1,
+          lusha_fetched: true,
+          lusha_email:  revealData.emails?.[0] ?? null,
+          lusha_phone:  revealData.phones?.[0] ?? null,
+          lusha_mobile: revealData.phones?.[1] ?? null,
+          lusha_raw:    revealData._raw ?? null,
+          linkedin_url: revealData.linkedInUrl ?? null,
+        });
+        await supabase.from('leads_batches').update({
+          nb_societes: (lushaBatch.nb_societes ?? 0) + 1,
+          nb_contacts: (lushaBatch.nb_contacts ?? 0) + 1,
+        }).eq('id', lushaBatch.id);
+      }
+    }
+
+    // 3. Mettre à jour le compteur local immédiatement
+    setLushaCredits(prev => ({
+      ...prev,
+      used: prev.used + creditsUsed,
+      reveals: [{ credits_used: creditsUsed, created_at: new Date().toISOString(), first_name: revealData.firstName, last_name: revealData.lastName, linkedin_url: revealData.linkedInUrl }, ...prev.reveals],
+    }));
+    await loadBatches();
+    return { creditsUsed };
+  }, [profile, batches, loadBatches]);
+
   // ── Ajouter une société manuellement (depuis EnrichirModal) ─────
   const ajouterSocieteManuelle = useCallback(async ({ type, data, url }) => {
     if (!selectedBatchId) { setError('Sélectionnez d\'abord un batch dans le panneau gauche'); return; }
@@ -796,6 +887,8 @@ export function useLeads() {
     refresh: () => { loadBatches(); loadSocietes(selectedBatchId); },
     // SIRENE / manuel
     creerBatchDepuisSIRENE, ajouterSocieteManuelle,
+    // Lusha crédits
+    lushaCredits, sauvegarderReveal, loadLushaCredits,
     // Utilisateurs (pour admin)
     profiles, isAdmin,
   };
