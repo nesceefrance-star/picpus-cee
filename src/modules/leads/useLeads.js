@@ -675,23 +675,58 @@ export function useLeads() {
     visio: 'RDV planifié', pas_bon: 'Non qualifié', annule: 'Non pertinent',
   };
 
+  const ACTION_TACHE = {
+    rappeler: { icon: '📞', label: 'Rappeler' },
+    mail:     { icon: '✉️', label: 'Mail à faire —' },
+    visio:    { icon: '🎥', label: 'Visio à proposer —' },
+  };
+
   const setNextAction = useCallback(async (importId, action, date = null) => {
     const statut = ACTION_STATUT_MAP[action] ?? 'Contacté';
     const isNrp  = action === 'nrp';
     const soc    = societes.find(s => s.id === importId);
     const patch  = {
-      next_action:       action,
-      next_action_date:  date ?? null,
+      next_action:          action,
+      next_action_date:     date ?? null,
       statut_qualification: statut,
       dernier_contact_at:   isNrp ? new Date().toISOString() : undefined,
       nrp_count:            isNrp ? ((soc?.nrp_count ?? 0) + 1) : undefined,
     };
-    // Nettoyer les undefined
     Object.keys(patch).forEach(k => patch[k] === undefined && delete patch[k]);
     const { error: e } = await supabase.from('leads_import').update(patch).eq('id', importId);
     if (e) { setError(e.message); return; }
     setSocietes(prev => prev.map(s => s.id === importId ? { ...s, ...patch } : s));
-  }, [societes]);
+
+    // ── Synchronisation tâches ──────────────────────────────────
+    if (!profile) return;
+
+    if (['annule', 'pas_bon', 'nrp'].includes(action)) {
+      // Supprimer la tâche lead si elle existe
+      await supabase.from('taches').delete()
+        .eq('user_id', profile.id)
+        .eq('lead_import_id', importId);
+      return;
+    }
+
+    const tacheCfg = ACTION_TACHE[action];
+    if (!tacheCfg) return;
+
+    const contact = soc?.contacts?.[0];
+    const contactName = [contact?.prenom, contact?.nom].filter(Boolean).join(' ');
+    const societeNom  = soc?.raison_sociale ?? '';
+    const titre = `${tacheCfg.icon} ${tacheCfg.label} ${[contactName, societeNom].filter(Boolean).join(' — ')}`;
+    const echeance = action === 'rappeler' && date ? `${date}T09:00:00` : null;
+
+    // Upsert : 1 seule tâche active par lead par user
+    await supabase.from('taches').upsert({
+      user_id:        profile.id,
+      titre,
+      echeance,
+      lead_import_id: importId,
+      source:         'lead',
+      done:           false,
+    }, { onConflict: 'user_id,lead_import_id' });
+  }, [societes, profile]);
 
   // ── Commentaire société ─────────────────────────────────────────
   const setCommentaireSociete = useCallback(async (importId, commentaire) => {
