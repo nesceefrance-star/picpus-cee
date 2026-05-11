@@ -116,6 +116,13 @@ export default function Dashboard() {
   const [tacheDossierId, setTacheDossierId]     = useState('')
   const [tacheSaving, setTacheSaving]           = useState(false)
   const [tacheError, setTacheError]             = useState('')
+  // Édition inline
+  const [editingTacheId, setEditingTacheId]     = useState(null)
+  const [editTitre, setEditTitre]               = useState('')
+  const [editDate, setEditDate]                 = useState('')
+  const [editTime, setEditTime]                 = useState('')
+  // Partage
+  const [sharingTacheId, setSharingTacheId]     = useState(null)
   // Agenda Google Calendar
   const [agendaEvents, setAgendaEvents]         = useState([])
   const [googleConnected, setGoogleConnected]   = useState(false)
@@ -181,18 +188,23 @@ export default function Dashboard() {
     loadRappels()
   }, [user?.id])
 
-  // Charge les tâches todo
-  useEffect(() => {
+  // Charge les tâches todo (les miennes + celles partagées avec moi)
+  const loadTaches = useCallback(async () => {
     if (!user?.id) return
-    const loadTaches = async () => {
-      const { data } = await supabase.from('taches')
-        .select('*, dossiers(ref, prospects(raison_sociale))')
-        .eq('user_id', user.id)
-        .order('echeance', { ascending: true, nullsFirst: false })
-      if (data) setTaches(data)
-    }
-    loadTaches()
+    const { data } = await supabase.from('taches')
+      .select('*, dossiers(ref, prospects(raison_sociale))')
+      .or(`user_id.eq.${user.id},shared_with.cs.{${user.id}}`)
+      .order('echeance', { ascending: true, nullsFirst: false })
+    if (!data) return
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000
+    const visible = data.filter(t => !(t.done && t.done_at && new Date(t.done_at).getTime() < cutoff))
+    setTaches(visible)
+    // Nettoyage silencieux des tâches expirées dont je suis créateur
+    const expired = data.filter(t => t.done && t.done_at && new Date(t.done_at).getTime() < cutoff && t.user_id === user.id)
+    if (expired.length > 0) supabase.from('taches').delete().in('id', expired.map(t => t.id))
   }, [user?.id])
+
+  useEffect(() => { loadTaches() }, [loadTaches])
 
   // Charge le statut Google + events agenda
   useEffect(() => {
@@ -216,16 +228,15 @@ export default function Dashboard() {
     if (!tacheInput.trim() || tacheSaving) return
     setTacheSaving(true)
     setTacheError('')
-    let echeance = null
-    if (tacheDate) {
-      echeance = tacheTime ? `${tacheDate}T${tacheTime}:00` : `${tacheDate}T00:00:00`
-    }
+    const echeance = tacheDate ? (tacheTime ? `${tacheDate}T${tacheTime}:00` : `${tacheDate}T00:00:00`) : null
     const { data, error } = await supabase.from('taches').insert({
       user_id: user.id,
       titre: tacheInput.trim(),
       echeance: echeance || null,
       dossier_id: tacheDossierId || null,
       done: false,
+      shared_with: [],
+      checks: {},
     }).select('*, dossiers(ref, prospects(raison_sociale))').single()
     if (error) {
       setTacheError(error.message)
@@ -241,16 +252,73 @@ export default function Dashboard() {
     setTacheSaving(false)
   }
 
-  // Toggle done
-  const toggleTache = async (id, done) => {
-    await supabase.from('taches').update({ done: !done }).eq('id', id)
-    setTaches(prev => prev.map(t => t.id === id ? { ...t, done: !done } : t))
+  // Toggle done — propriétaire : done + done_at. Invité : checks JSONB
+  const toggleTache = async (id, currentDone, isShared = false) => {
+    if (isShared) {
+      const tache = taches.find(t => t.id === id)
+      const alreadyChecked = !!(tache?.checks?.[user.id]?.checked)
+      const newChecks = {
+        ...(tache?.checks || {}),
+        [user.id]: { checked: !alreadyChecked, checked_at: new Date().toISOString(), name: profile?.prenom || user?.email?.split('@')[0] || 'Moi' },
+      }
+      await supabase.from('taches').update({ checks: newChecks }).eq('id', id)
+      setTaches(prev => prev.map(t => t.id === id ? { ...t, checks: newChecks } : t))
+      return
+    }
+    const nowIso = new Date().toISOString()
+    const newDone = !currentDone
+    await supabase.from('taches').update({ done: newDone, done_at: newDone ? nowIso : null }).eq('id', id)
+    setTaches(prev => {
+      const updated = prev.map(t => t.id === id ? { ...t, done: newDone, done_at: newDone ? nowIso : null } : t)
+      // Si on coche : garder 24h visible puis filtrage au prochain load (pas de retrait immédiat)
+      return updated
+    })
   }
 
-  // Supprimer une tâche
+  // Soft-delete : marque done + done_at (reste barré 24h, disparaît seul)
   const deleteTache = async (id) => {
-    await supabase.from('taches').delete().eq('id', id)
-    setTaches(prev => prev.filter(t => t.id !== id))
+    const nowIso = new Date().toISOString()
+    await supabase.from('taches').update({ done: true, done_at: nowIso }).eq('id', id)
+    setTaches(prev => prev.map(t => t.id === id ? { ...t, done: true, done_at: nowIso } : t))
+  }
+
+  // Édition inline
+  const startEditTache = (t) => {
+    setEditingTacheId(t.id)
+    setEditTitre(t.titre)
+    if (t.echeance) {
+      const dt = new Date(t.echeance)
+      setEditDate(dt.toISOString().slice(0, 10))
+      const h = dt.getHours().toString().padStart(2, '0')
+      const m = dt.getMinutes().toString().padStart(2, '0')
+      setEditTime(h === '00' && m === '00' ? '' : `${h}:${m}`)
+    } else { setEditDate(''); setEditTime('') }
+  }
+
+  const saveEditTache = async (id) => {
+    if (!editTitre.trim()) return
+    const echeance = editDate ? (editTime ? `${editDate}T${editTime}:00` : `${editDate}T00:00:00`) : null
+    await supabase.from('taches').update({ titre: editTitre.trim(), echeance }).eq('id', id)
+    setTaches(prev => prev.map(t => t.id === id ? { ...t, titre: editTitre.trim(), echeance } : t))
+    setEditingTacheId(null)
+  }
+
+  // Partage avec d'autres users
+  const shareTache = async (tacheId, userId) => {
+    const tache = taches.find(t => t.id === tacheId)
+    if ((tache?.shared_with || []).includes(userId)) return
+    const sw = [...(tache?.shared_with || []), userId]
+    await supabase.from('taches').update({ shared_with: sw }).eq('id', tacheId)
+    setTaches(prev => prev.map(t => t.id === tacheId ? { ...t, shared_with: sw } : t))
+  }
+
+  const unshareTache = async (tacheId, userId) => {
+    const tache = taches.find(t => t.id === tacheId)
+    const sw = (tache?.shared_with || []).filter(id => id !== userId)
+    const newChecks = { ...(tache?.checks || {}) }
+    delete newChecks[userId]
+    await supabase.from('taches').update({ shared_with: sw, checks: newChecks }).eq('id', tacheId)
+    setTaches(prev => prev.map(t => t.id === tacheId ? { ...t, shared_with: sw, checks: newChecks } : t))
   }
 
   const profileName = (id) => {
@@ -582,38 +650,161 @@ export default function Dashboard() {
                     const upcoming = taches.filter(t => !t.done && (!t.echeance || new Date(t.echeance) > today))
                     const done = taches.filter(t => t.done)
                     const renderTache = (t) => {
-                      const isLate = !t.done && t.echeance && new Date(t.echeance) < new Date()
+                      const isLate    = !t.done && t.echeance && new Date(t.echeance) < new Date()
+                      const isShared  = t.user_id !== user?.id   // tâche partagée vers moi
+                      const isMine    = t.user_id === user?.id
+                      const sharedWith = t.shared_with || []
+                      const checks     = t.checks || {}
+                      // Pour les tâches partagées vers moi : ma case est dans checks
+                      const myCheck   = isShared ? !!(checks[user?.id]?.checked) : t.done
                       const dateStr = t.echeance
-                        ? new Date(t.echeance).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', ...(t.echeance.includes('T') && t.echeance.split('T')[1] !== '00:00:00' ? { hour: '2-digit', minute: '2-digit' } : {}) })
+                        ? new Date(t.echeance).toLocaleDateString('fr-FR', {
+                            weekday: 'short', day: 'numeric', month: 'short',
+                            ...(t.echeance.split('T')[1] && t.echeance.split('T')[1] !== '00:00:00' ? { hour: '2-digit', minute: '2-digit' } : {}),
+                          })
                         : null
+                      const isEditing  = editingTacheId === t.id
+                      const isSharing  = sharingTacheId === t.id
+
                       return (
-                        <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 14px', borderBottom: `1px solid ${C.border}`, transition: 'background .1s' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.bg}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          <input type="checkbox" checked={t.done} onChange={() => toggleTache(t.id, t.done)}
-                            style={{ marginTop: 2, width: 15, height: 15, cursor: 'pointer', accentColor: C.accent, flexShrink: 0 }} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, color: t.done ? C.textSoft : C.text, textDecoration: t.done ? 'line-through' : 'none', wordBreak: 'break-word' }}>{t.titre}</div>
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
-                              {dateStr && (
-                                <span style={{ fontSize: 11, color: isLate ? '#DC2626' : C.textMid, fontWeight: isLate ? 700 : 400 }}>
-                                  {isLate ? '⚠️ ' : '📅 '}{dateStr}
-                                </span>
-                              )}
-                              {t.dossiers && (
-                                <span onClick={(e) => { e.stopPropagation(); const d = myDossiers.find(x => x.id === t.dossier_id); if (d) openDossier(d) }}
-                                  style={{ fontSize: 11, color: C.accent, cursor: 'pointer', fontWeight: 600 }}>
-                                  📂 {t.dossiers.ref}
-                                </span>
+                        <div key={t.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                          {/* Ligne principale */}
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '9px 14px', transition: 'background .1s' }}
+                            onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                            {/* Checkbox */}
+                            <input type="checkbox" checked={myCheck}
+                              onChange={() => toggleTache(t.id, isShared ? myCheck : t.done, isShared)}
+                              style={{ marginTop: 3, width: 15, height: 15, cursor: 'pointer', accentColor: C.accent, flexShrink: 0 }} />
+
+                            {/* Contenu */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              {isEditing ? (
+                                /* ── Mode édition ── */
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                  <input value={editTitre} onChange={e => setEditTitre(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') saveEditTache(t.id); if (e.key === 'Escape') setEditingTacheId(null) }}
+                                    autoFocus
+                                    style={{ border: `1px solid ${C.accent}`, borderRadius: 5, padding: '4px 8px', fontSize: 13, color: C.text, background: C.surface, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }} />
+                                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                                    <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
+                                      style={{ border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 6px', fontSize: 11, color: C.textMid, background: C.surface, fontFamily: 'inherit', outline: 'none' }} />
+                                    <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)} disabled={!editDate}
+                                      style={{ border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 6px', fontSize: 11, color: C.textMid, background: C.surface, fontFamily: 'inherit', outline: 'none', opacity: editDate ? 1 : .4 }} />
+                                    <button onClick={() => saveEditTache(t.id)}
+                                      style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: 5, padding: '3px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                      ✓ Enregistrer
+                                    </button>
+                                    <button onClick={() => setEditingTacheId(null)}
+                                      style={{ background: 'none', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 5, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                                      Annuler
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                /* ── Affichage normal ── */
+                                <>
+                                  {isShared && (
+                                    <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 1 }}>
+                                      👤 {profileName(t.user_id)}
+                                    </div>
+                                  )}
+                                  <div style={{ fontSize: 13, color: (t.done || (isShared && myCheck)) ? C.textSoft : C.text, textDecoration: (t.done || (isShared && myCheck)) ? 'line-through' : 'none', wordBreak: 'break-word' }}>
+                                    {t.titre}
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2, alignItems: 'center' }}>
+                                    {dateStr && (
+                                      <span style={{ fontSize: 11, color: isLate ? '#DC2626' : C.textMid, fontWeight: isLate ? 700 : 400 }}>
+                                        {isLate ? '⚠️ ' : '📅 '}{dateStr}
+                                      </span>
+                                    )}
+                                    {t.dossiers && (
+                                      <span onClick={e => { e.stopPropagation(); const d = myDossiers.find(x => x.id === t.dossier_id); if (d) openDossier(d) }}
+                                        style={{ fontSize: 11, color: C.accent, cursor: 'pointer', fontWeight: 600 }}>
+                                        📂 {t.dossiers.ref}
+                                      </span>
+                                    )}
+                                    {/* Qui a coché parmi les partagés */}
+                                    {isMine && sharedWith.length > 0 && (
+                                      <span style={{ fontSize: 10, color: C.textSoft, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                        {sharedWith.map(uid => {
+                                          const chk = checks[uid]
+                                          const nm  = profileName(uid)
+                                          return (
+                                            <span key={uid} title={chk?.checked ? `Coché par ${nm} le ${new Date(chk.checked_at).toLocaleDateString('fr-FR')}` : `${nm} — pas encore coché`}
+                                              style={{ background: chk?.checked ? '#D1FAE5' : '#F1F5F9', color: chk?.checked ? '#059669' : C.textSoft, borderRadius: 20, padding: '1px 6px', border: `1px solid ${chk?.checked ? '#6EE7B7' : C.border}`, cursor: 'default' }}>
+                                              {chk?.checked ? '✓' : '○'} {nm}
+                                            </span>
+                                          )
+                                        })}
+                                      </span>
+                                    )}
+                                  </div>
+                                </>
                               )}
                             </div>
+
+                            {/* Actions — uniquement si pas en mode édition */}
+                            {!isEditing && (
+                              <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                                {/* Éditer — seulement si je suis propriétaire */}
+                                {isMine && (
+                                  <button onClick={() => startEditTache(t)} title="Modifier"
+                                    style={{ background: 'none', border: 'none', color: C.textSoft, cursor: 'pointer', fontSize: 13, padding: '0 3px' }}
+                                    onMouseEnter={e => e.currentTarget.style.color = C.accent}
+                                    onMouseLeave={e => e.currentTarget.style.color = C.textSoft}>
+                                    ✏️
+                                  </button>
+                                )}
+                                {/* Partager — seulement si je suis propriétaire */}
+                                {isMine && (
+                                  <button onClick={() => setSharingTacheId(isSharing ? null : t.id)} title="Partager"
+                                    style={{ background: 'none', border: 'none', color: isSharing ? C.accent : C.textSoft, cursor: 'pointer', fontSize: 13, padding: '0 3px' }}
+                                    onMouseEnter={e => e.currentTarget.style.color = C.accent}
+                                    onMouseLeave={e => e.currentTarget.style.color = isSharing ? C.accent : C.textSoft}>
+                                    👥
+                                  </button>
+                                )}
+                                {/* Supprimer (soft delete 24h) — seulement si je suis propriétaire */}
+                                {isMine && (
+                                  <button onClick={() => deleteTache(t.id)} title="Supprimer (reste visible 24h)"
+                                    style={{ background: 'none', border: 'none', color: C.textSoft, cursor: 'pointer', fontSize: 14, padding: '0 2px' }}
+                                    onMouseEnter={e => e.currentTarget.style.color = '#DC2626'}
+                                    onMouseLeave={e => e.currentTarget.style.color = C.textSoft}>
+                                    ×
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          <button onClick={() => deleteTache(t.id)}
-                            style={{ background: 'none', border: 'none', color: C.textSoft, cursor: 'pointer', fontSize: 14, padding: '0 2px', flexShrink: 0 }}
-                            onMouseEnter={e => e.currentTarget.style.color = '#DC2626'}
-                            onMouseLeave={e => e.currentTarget.style.color = C.textSoft}>
-                            ×
-                          </button>
+
+                          {/* Panneau partage */}
+                          {isSharing && isMine && (
+                            <div style={{ padding: '8px 14px 10px 37px', background: '#F8FAFF', borderTop: `1px solid ${C.border}` }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: C.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .4 }}>
+                                Partager avec…
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {profiles.filter(p => p.id !== user?.id).map(p => {
+                                  const isAdded = sharedWith.includes(p.id)
+                                  const nm = [p.prenom, p.nom].filter(Boolean).join(' ') || p.email
+                                  return (
+                                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <input type="checkbox" checked={isAdded}
+                                        onChange={() => isAdded ? unshareTache(t.id, p.id) : shareTache(t.id, p.id)}
+                                        style={{ accentColor: C.accent, cursor: 'pointer' }} />
+                                      <span style={{ fontSize: 12, color: C.text }}>{nm}</span>
+                                      {isAdded && checks[p.id]?.checked && (
+                                        <span style={{ fontSize: 11, color: '#059669', background: '#D1FAE5', borderRadius: 20, padding: '1px 7px' }}>
+                                          ✓ coché le {new Date(checks[p.id].checked_at).toLocaleDateString('fr-FR')}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )
                     }
