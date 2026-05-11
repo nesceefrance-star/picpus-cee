@@ -577,7 +577,7 @@ const INPUT_TYPE_CFG = {
 };
 
 // ─── MODAL ENRICHISSEMENT INTELLIGENT ────────────────────────────
-function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId, lushaCredits, sauvegarderReveal }) {
+function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId, lushaCredits, sauvegarderReveal, verifierCacheLusha }) {
   const [inputVal,     setInputVal]     = useState('');
   const [type,         setType]         = useState(null);
   const [loading,      setLoading]      = useState(false);
@@ -587,9 +587,21 @@ function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId, lushaCredits,
   const [addMsg,       setAddMsg]       = useState(null);
   const [showConfirm,  setShowConfirm]  = useState(false);
   const [saving,       setSaving]       = useState(false);
+  const [checkingCache,setCheckingCache]= useState(false);
 
   const reste = lushaCredits.limit > 0 ? lushaCredits.limit - lushaCredits.used : Infinity;
   const quotaAtteint = lushaCredits.limit > 0 && reste <= 0;
+
+  // Calcul du détail exact des crédits depuis les données de réponse
+  const calcCredits = (data) => {
+    const nEmails = data.emails?.length ?? 0;
+    const nPhones = data.phones?.length ?? 0;
+    return {
+      total: 1 + nEmails * 1 + nPhones * 5,
+      nEmails, nPhones,
+      detail: `1 (appel API)${nEmails ? ` + ${nEmails} (email)` : ''}${nPhones ? ` + ${nPhones}×5 (tél) = ${1 + nEmails + nPhones * 5}` : ''}`,
+    };
+  };
 
   const handleInput = (val) => {
     setInputVal(val);
@@ -602,13 +614,24 @@ function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId, lushaCredits,
     setLoading(true); setError(null); setResult(null);
     try {
       if (type === 'linkedin_person') {
-        const data = await fetchLusha({ linkedinUrl: inputVal.trim() });
-        setResult({ type: 'lusha', data, url: inputVal.trim() });
-        // Auto-save immédiat
+        const url = inputVal.trim();
+        // 1. Vérifier le cache local — 0 crédit si déjà révélé
+        const cached = await verifierCacheLusha(url);
+        if (cached) {
+          setResult({ type: 'lusha', data: cached, url, fromCache: true });
+          setAddMsg({ ok: true, cache: true, text: `📦 Données récupérées depuis votre cache local · 0 crédit consommé` });
+          setLoading(false);
+          return;
+        }
+        // 2. Appel Lusha API
+        const data = await fetchLusha({ linkedinUrl: url });
+        const { total, detail } = calcCredits(data);
+        setResult({ type: 'lusha', data, url, fromCache: false, creditsDetail: detail });
+        // Auto-save
         setSaving(true);
         try {
-          const { creditsUsed } = await sauvegarderReveal(data);
-          setAddMsg({ ok: true, text: `✅ Sauvegardé dans "Leads Lusha" · ${creditsUsed} crédit${creditsUsed > 1 ? 's' : ''} consommé${creditsUsed > 1 ? 's' : ''}` });
+          await sauvegarderReveal(data);
+          setAddMsg({ ok: true, cache: false, text: `✅ Sauvegardé dans "Leads Lusha" · ${detail}` });
         } catch (e) { setAddMsg({ ok: false, text: `⚠ Erreur sauvegarde : ${e.message}` }); }
         setSaving(false);
 
@@ -631,9 +654,21 @@ function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId, lushaCredits,
     setLoading(false);
   };
 
-  // Pour les profils LinkedIn : bouton → confirmation d'abord
-  const handleEnrichir = () => {
-    if (type === 'linkedin_person') { setShowConfirm(true); return; }
+  // Pour les profils LinkedIn : check cache → si hit direct reveal, sinon confirmation
+  const handleEnrichir = async () => {
+    if (type === 'linkedin_person') {
+      setCheckingCache(true);
+      const cached = await verifierCacheLusha(inputVal.trim());
+      setCheckingCache(false);
+      if (cached) {
+        // Hit cache : pas de confirmation nécessaire, reveal gratuit direct
+        setResult({ type: 'lusha', data: cached, url: inputVal.trim(), fromCache: true });
+        setAddMsg({ ok: true, cache: true, text: `📦 Données récupérées depuis votre cache local · 0 crédit consommé` });
+        return;
+      }
+      setShowConfirm(true);
+      return;
+    }
     doReveal();
   };
 
@@ -659,10 +694,14 @@ function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId, lushaCredits,
               <div style={{ fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 6 }}>💜 Confirmer l'enrichissement Lusha</div>
               <div style={{ fontSize: 12, color: C.textSub, lineHeight: 1.6, marginBottom: 14 }}>
                 Cet appel va consommer des crédits Lusha :<br />
-                <span style={{ color: C.lusha, fontWeight: 700 }}>• 1 crédit</span> de connexion API<br />
-                <span style={{ color: C.lusha, fontWeight: 700 }}>• 1 crédit par email</span> révélé<br />
-                <span style={{ color: C.lusha, fontWeight: 700 }}>• 1 crédit par téléphone</span> révélé<br />
-                <span style={{ color: C.textSub }}>Estimation totale : </span><span style={{ fontWeight: 700, color: C.yellow }}>2 à 6 crédits</span> selon les données disponibles.
+                <span style={{ color: C.lusha, fontWeight: 700 }}>• 1 crédit</span> — connexion API (toujours facturé)<br />
+                <span style={{ color: C.lusha, fontWeight: 700 }}>• 1 crédit</span> par email révélé<br />
+                <span style={{ color: C.lusha, fontWeight: 700 }}>• 5 crédits</span> par numéro de téléphone révélé<br />
+                <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 7, background: `${C.yellow}12`, border: `1px solid ${C.yellow}30` }}>
+                  <span style={{ color: C.textSub }}>Maximum possible : </span>
+                  <span style={{ fontWeight: 700, color: C.yellow }}>12 crédits</span>
+                  <span style={{ color: C.textDim }}> (1 + 1 email + 2 tél.×5)</span>
+                </div>
               </div>
               {lushaCredits.limit > 0 && (
                 <div style={{ padding: '8px 12px', borderRadius: 8, background: `${C.lusha}15`, border: `1px solid ${C.lusha}30`, marginBottom: 14, fontSize: 12 }}>
@@ -717,16 +756,16 @@ function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId, lushaCredits,
                   🚫 Quota mensuel Lusha atteint ({lushaCredits.used}/{lushaCredits.limit} crédits). Contactez votre admin pour augmenter votre quota.
                 </div>
               ) : (
-                <button onClick={handleEnrichir} disabled={loading || saving}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 20px', borderRadius: 8, border: 'none', background: loading || saving ? C.borderLight : typeCfg.color, color: loading || saving ? C.textDim : C.bg, fontWeight: 800, fontSize: 13, cursor: loading || saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
-                  {loading || saving
-                    ? <><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: '50%', border: `2px solid ${C.bg}40`, borderTopColor: C.bg, animation: 'spin .7s linear infinite' }} /> {loading ? 'Enrichissement…' : 'Sauvegarde…'}</>
+                <button onClick={handleEnrichir} disabled={loading || saving || checkingCache}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 20px', borderRadius: 8, border: 'none', background: loading || saving || checkingCache ? C.borderLight : typeCfg.color, color: loading || saving || checkingCache ? C.textDim : C.bg, fontWeight: 800, fontSize: 13, cursor: loading || saving || checkingCache ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                  {loading || saving || checkingCache
+                    ? <><span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: '50%', border: `2px solid ${C.bg}40`, borderTopColor: C.bg, animation: 'spin .7s linear infinite' }} /> {checkingCache ? 'Vérification cache…' : loading ? 'Enrichissement…' : 'Sauvegarde…'}</>
                     : `${typeCfg.icon} Enrichir`}
                 </button>
               )}
               {type === 'linkedin_person' && lushaCredits.limit > 0 && !quotaAtteint && (
                 <span style={{ fontSize: 11, color: C.textDim }}>
-                  💜 ~2–6 crédits · Reste <b style={{ color: C.lusha }}>{lushaCredits.limit - lushaCredits.used}</b>/{lushaCredits.limit}
+                  💜 max 12 crédits · Reste <b style={{ color: C.lusha }}>{lushaCredits.limit - lushaCredits.used}</b>/{lushaCredits.limit}
                 </span>
               )}
             </div>
@@ -784,15 +823,23 @@ function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId, lushaCredits,
 
           {/* Message ajout */}
           {addMsg && (
-            <div style={{ marginTop: 10, padding: '8px 14px', borderRadius: 8, fontSize: 12, background: addMsg.ok ? C.greenSoft : C.redSoft, color: addMsg.ok ? C.green : C.red, border: `1px solid ${addMsg.ok ? C.green : C.red}30` }}>
+            <div style={{ marginTop: 10, padding: '8px 14px', borderRadius: 8, fontSize: 12,
+              background: addMsg.cache ? C.accentSoft : (addMsg.ok ? C.greenSoft : C.redSoft),
+              color: addMsg.cache ? C.accent : (addMsg.ok ? C.green : C.red),
+              border: `1px solid ${addMsg.cache ? C.accent : (addMsg.ok ? C.green : C.red)}30` }}>
               {addMsg.text}
             </div>
           )}
 
           {/* Résultat Lusha */}
           {result?.type === 'lusha' && (
-            <div style={{ marginTop: 16, background: C.bg, border: `1px solid ${C.lusha}40`, borderRadius: 12, padding: '16px 18px' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.lusha, marginBottom: 10 }}>📞 Résultat Lusha</div>
+            <div style={{ marginTop: 16, background: C.bg, border: `1px solid ${result.fromCache ? C.accent : C.lusha}40`, borderRadius: 12, padding: '16px 18px' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: result.fromCache ? C.accent : C.lusha, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {result.fromCache ? '📦 Résultat depuis le cache (0 crédit)' : '📞 Résultat Lusha'}
+                {!result.fromCache && result.creditsDetail && (
+                  <span style={{ fontWeight: 400, fontSize: 11, color: C.textSub }}>{result.creditsDetail}</span>
+                )}
+              </div>
               {(result.data.firstName || result.data.lastName) && (
                 <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>
                   {result.data.firstName} {result.data.lastName}
@@ -1174,7 +1221,7 @@ export default function LeadsModule() {
     enrichirCadastre, enrichirLusha, enrichirGMB, gmbLoading,
     setLinkedinUrl, setStatutSociete, convertirEnDossier,
     creerBatchDepuisSIRENE, ajouterSocieteManuelle,
-    lushaCredits, sauvegarderReveal,
+    lushaCredits, sauvegarderReveal, verifierCacheLusha,
     profiles, isAdmin,
   } = useLeads();
 
@@ -1392,6 +1439,7 @@ export default function LeadsModule() {
           selectedBatchId={selectedBatchId}
           lushaCredits={lushaCredits}
           sauvegarderReveal={sauvegarderReveal}
+          verifierCacheLusha={verifierCacheLusha}
         />
       )}
 

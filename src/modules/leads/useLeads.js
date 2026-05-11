@@ -715,10 +715,45 @@ export function useLeads() {
     finally { setImporting(false); }
   }, [profile, loadBatches]);
 
+  // ── Vérifier cache Lusha (évite un appel API si déjà révélé) ──
+  const verifierCacheLusha = useCallback(async (linkedinUrl) => {
+    if (!profile || !linkedinUrl) return null;
+    const url = linkedinUrl.trim().replace(/\/$/, '');
+    function doCheck(resolve) {
+      supabase.from('lusha_reveals')
+        .select('*')
+        .eq('user_id', profile.id)
+        .eq('linkedin_url', url)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .then(({ data }) => {
+          if (data && data.length > 0) {
+            const r = data[0];
+            resolve({
+              emails:      r.emails      ?? [],
+              phones:      r.phones      ?? [],
+              firstName:   r.first_name  ?? null,
+              lastName:    r.last_name   ?? null,
+              company:     r.company     ?? null,
+              jobTitle:    r.job_title   ?? null,
+              linkedInUrl: r.linkedin_url ?? url,
+              _raw:        r.raw_data    ?? null,
+              _fromCache:  true,
+              _cachedAt:   r.created_at,
+            });
+          } else { resolve(null); }
+        });
+    }
+    return new Promise(doCheck);
+  }, [profile]);
+
   // ── Sauvegarder un reveal Lusha + batch "Leads Lusha" ──────────
   const sauvegarderReveal = useCallback(async (revealData) => {
     if (!profile) return;
-    const creditsUsed = 1 + (revealData.emails?.length ?? 0) + (revealData.phones?.length ?? 0);
+    // Formule exacte : 1 appel API + 1 crédit/email + 5 crédits/téléphone
+    const creditsUsed = 1
+      + (revealData.emails?.length ?? 0) * 1
+      + (revealData.phones?.length ?? 0) * 5;
 
     // 1. Log dans lusha_reveals
     await supabase.from('lusha_reveals').insert({
@@ -888,7 +923,7 @@ export function useLeads() {
     // SIRENE / manuel
     creerBatchDepuisSIRENE, ajouterSocieteManuelle,
     // Lusha crédits
-    lushaCredits, sauvegarderReveal, loadLushaCredits,
+    lushaCredits, sauvegarderReveal, loadLushaCredits, verifierCacheLusha,
     // Utilisateurs (pour admin)
     profiles, isAdmin,
   };
