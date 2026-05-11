@@ -12,32 +12,41 @@ export default async function handler(req, res) {
     const LUSHA_API_KEY = process.env.LUSHA_API_KEY
     if (!LUSHA_API_KEY) return res.status(500).json({ error: 'LUSHA_API_KEY non configurée' })
     const { linkedin_url, firstName, lastName, first_name, last_name, company } = req.body
-    const endpoint = 'https://api.lusha.com/v2/person'
-    const contact = {}
-    if (linkedin_url) contact.linkedInUrl = linkedin_url
-    if (firstName  || first_name)  contact.firstName = firstName  ?? first_name
-    if (lastName   || last_name)   contact.lastName  = lastName   ?? last_name
-    if (company) contact.company = company
+    const fn = firstName ?? first_name ?? ''
+    const ln = lastName  ?? last_name  ?? ''
+
+    // Lusha v2 bulk — contactId obligatoire, champ linkedin = linkedinUrl (minuscule)
+    const contact = { contactId: `c_${Date.now()}` }
+    if (linkedin_url)   contact.linkedinUrl = linkedin_url.trim()
+    if (fn)             contact.firstName   = fn
+    if (ln)             contact.lastName    = ln
+    if (company)        contact.company     = company
+
     try {
-      const r = await fetch(endpoint, {
+      const r = await fetch('https://api.lusha.com/v2/person', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'api_key': LUSHA_API_KEY },
         body: JSON.stringify({ contacts: [contact] }),
       })
       const data = await r.json()
-      if (!r.ok) return res.status(r.status).json({ error: data.message ?? data.error ?? 'Erreur Lusha', details: data })
-      // Lusha v2 renvoie { contacts: [{ emails, phones, ... }] }
-      const c = data.contacts?.[0] ?? data
+      if (!r.ok) {
+        const msg = data.message ?? data.error
+          ?? (Array.isArray(data.errors) ? data.errors.join(', ') : null)
+          ?? `Lusha HTTP ${r.status}`
+        return res.status(r.status).json({ error: msg, details: data })
+      }
+      // Lusha v2 renvoie { contacts: [{ contactId, emails, phones, ... }] }
+      const c = (data.contacts ?? [])[0] ?? data
       return res.status(200).json({
-        emails:       (c.emails  ?? []).map(e => e.email ?? e).filter(Boolean),
-        phones:       (c.phones  ?? []).map(p => p.normalizedNumber ?? p.internationalNumber ?? p.number ?? '').filter(Boolean),
-        linkedInUrl:  c.linkedInUrl ?? linkedin_url ?? null,
-        jobTitle:     c.jobTitle    ?? null,
-        firstName:    c.firstName   ?? firstName ?? first_name ?? null,
-        lastName:     c.lastName    ?? lastName  ?? last_name  ?? null,
-        company:      c.currentEmployer?.name ?? c.company ?? company ?? null,
+        emails:      (c.emails ?? []).map(e => e.email ?? e).filter(Boolean),
+        phones:      (c.phones ?? []).map(p => p.normalizedNumber ?? p.internationalNumber ?? p.number ?? '').filter(Boolean),
+        linkedInUrl: c.linkedinUrl ?? linkedin_url ?? null,
+        jobTitle:    c.jobTitle    ?? null,
+        firstName:   c.firstName   ?? fn  ?? null,
+        lastName:    c.lastName    ?? ln  ?? null,
+        company:     c.currentEmployer?.name ?? c.company ?? company ?? null,
         credits_used: data.credits_used ?? 1,
-        _raw:         data,
+        _raw:        data,
       })
     } catch (e) { return res.status(500).json({ error: e.message }) }
   }
