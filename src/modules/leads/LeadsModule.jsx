@@ -618,8 +618,10 @@ function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId, lushaCredits,
         // 1. Vérifier le cache local — 0 crédit si déjà révélé
         const cached = await verifierCacheLusha(url);
         if (cached) {
+          const who = cached._cachedByMe ? 'vous' : (cached._cachedByName || 'un collègue');
+          const when = cached._cachedAt ? new Date(cached._cachedAt).toLocaleDateString('fr-FR') : '';
           setResult({ type: 'lusha', data: cached, url, fromCache: true });
-          setAddMsg({ ok: true, cache: true, text: `📦 Données récupérées depuis votre cache local · 0 crédit consommé` });
+          setAddMsg({ ok: true, cache: true, text: `📦 Cache équipe · révélé par ${who}${when ? ` le ${when}` : ''} · 0 crédit consommé` });
           setLoading(false);
           return;
         }
@@ -661,9 +663,10 @@ function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId, lushaCredits,
       const cached = await verifierCacheLusha(inputVal.trim());
       setCheckingCache(false);
       if (cached) {
-        // Hit cache : pas de confirmation nécessaire, reveal gratuit direct
+        const who = cached._cachedByMe ? 'vous' : (cached._cachedByName || 'un collègue');
+        const when = cached._cachedAt ? new Date(cached._cachedAt).toLocaleDateString('fr-FR') : '';
         setResult({ type: 'lusha', data: cached, url: inputVal.trim(), fromCache: true });
-        setAddMsg({ ok: true, cache: true, text: `📦 Données récupérées depuis votre cache local · 0 crédit consommé` });
+        setAddMsg({ ok: true, cache: true, text: `📦 Cache équipe · révélé par ${who}${when ? ` le ${when}` : ''} · 0 crédit consommé` });
         return;
       }
       setShowConfirm(true);

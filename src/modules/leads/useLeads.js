@@ -715,31 +715,35 @@ export function useLeads() {
     finally { setImporting(false); }
   }, [profile, loadBatches]);
 
-  // ── Vérifier cache Lusha (évite un appel API si déjà révélé) ──
+  // ── Vérifier cache Lusha équipe (0 crédit si déjà révélé par n'importe qui) ──
   const verifierCacheLusha = useCallback(async (linkedinUrl) => {
     if (!profile || !linkedinUrl) return null;
     const url = linkedinUrl.trim().replace(/\/$/, '');
     function doCheck(resolve) {
       supabase.from('lusha_reveals')
-        .select('*')
-        .eq('user_id', profile.id)
-        .eq('linkedin_url', url)
+        .select('*, revealer:profiles!lusha_reveals_user_id_fkey(id, nom, prenom)')
+        .eq('linkedin_url', url)           // pas de filtre user_id → cache équipe
         .order('created_at', { ascending: false })
         .limit(1)
         .then(({ data }) => {
           if (data && data.length > 0) {
             const r = data[0];
+            const revealerName = r.revealer
+              ? `${r.revealer.prenom ?? ''} ${r.revealer.nom ?? ''}`.trim()
+              : null;
             resolve({
-              emails:      r.emails      ?? [],
-              phones:      r.phones      ?? [],
-              firstName:   r.first_name  ?? null,
-              lastName:    r.last_name   ?? null,
-              company:     r.company     ?? null,
-              jobTitle:    r.job_title   ?? null,
-              linkedInUrl: r.linkedin_url ?? url,
-              _raw:        r.raw_data    ?? null,
-              _fromCache:  true,
-              _cachedAt:   r.created_at,
+              emails:           r.emails       ?? [],
+              phones:           r.phones       ?? [],
+              firstName:        r.first_name   ?? null,
+              lastName:         r.last_name    ?? null,
+              company:          r.company      ?? null,
+              jobTitle:         r.job_title    ?? null,
+              linkedInUrl:      r.linkedin_url ?? url,
+              _raw:             r.raw_data     ?? null,
+              _fromCache:       true,
+              _cachedAt:        r.created_at,
+              _cachedByMe:      r.user_id === profile.id,
+              _cachedByName:    revealerName,
             });
           } else { resolve(null); }
         });
