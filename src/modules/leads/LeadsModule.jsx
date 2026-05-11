@@ -599,17 +599,21 @@ function detectInputType(val) {
   if (val.trim().length >= 2) return 'text';
   return null;
 }
-const INPUT_TYPE_CFG = {
-  linkedin_person:  { label: 'Profil LinkedIn', color: C.linkedin, icon: '💼' },
-  linkedin_company: { label: 'Page entreprise LinkedIn', color: C.linkedin, icon: '🏢' },
-  siret:            { label: 'SIRET (14 chiffres)', color: C.yellow, icon: '🏛' },
-  siren:            { label: 'SIREN (9 chiffres)', color: C.yellow, icon: '🏛' },
-  text:             { label: 'Recherche textuelle', color: C.accent, icon: '🔍' },
-};
+function useInputTypeCfg() {
+  const C = useC();
+  return {
+    linkedin_person:  { label: 'Profil LinkedIn',          color: C.linkedin, icon: '💼' },
+    linkedin_company: { label: 'Page entreprise LinkedIn', color: C.linkedin, icon: '🏢' },
+    siret:            { label: 'SIRET (14 chiffres)',       color: C.yellow,   icon: '🏛' },
+    siren:            { label: 'SIREN (9 chiffres)',        color: C.yellow,   icon: '🏛' },
+    text:             { label: 'Recherche textuelle',       color: C.accent,   icon: '🔍' },
+  };
+}
 
 // ─── MODAL ENRICHISSEMENT INTELLIGENT ────────────────────────────
 function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId, lushaCredits, sauvegarderReveal, verifierCacheLusha }) {
   const C = useC();
+  const INPUT_TYPE_CFG = useInputTypeCfg();
   const [inputVal,     setInputVal]     = useState('');
   const [type,         setType]         = useState(null);
   const [loading,      setLoading]      = useState(false);
