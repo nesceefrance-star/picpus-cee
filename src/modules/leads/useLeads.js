@@ -534,6 +534,30 @@ export function useLeads() {
     if (selectedBatchId === batchId) { setSelectedBatchId(null); setSocietes([]); }
   }, [selectedBatchId]);
 
+  // ── Supprimer une société (+ ses contacts en cascade) ───────────
+  const supprimerSociete = useCallback(async (importId) => {
+    // Les leads_contacts ont un FK ON DELETE CASCADE sur import_id
+    const { error: e } = await supabase.from('leads_import').delete().eq('id', importId);
+    if (e) { setError(e.message); return false; }
+    setSocietes(prev => prev.filter(s => s.id !== importId));
+    // Mettre à jour le compteur du batch
+    const soc = societes.find(s => s.id === importId);
+    if (soc?.batch_id) {
+      const batch = batches.find(b => b.id === soc.batch_id);
+      if (batch) {
+        await supabase.from('leads_batches').update({
+          nb_societes: Math.max(0, (batch.nb_societes ?? 1) - 1),
+          nb_contacts: Math.max(0, (batch.nb_contacts ?? 0) - (soc.contacts?.length ?? 0)),
+        }).eq('id', batch.id);
+        setBatches(prev => prev.map(b => b.id === batch.id
+          ? { ...b, nb_societes: Math.max(0, (b.nb_societes ?? 1) - 1), nb_contacts: Math.max(0, (b.nb_contacts ?? 0) - (soc.contacts?.length ?? 0)) }
+          : b
+        ));
+      }
+    }
+    return true;
+  }, [societes, batches]);
+
   // ── Enrichissement cadastral ────────────────────────────────────
   const enrichirCadastre = useCallback(async (importId) => {
     setCadastreLoading(prev => ({ ...prev, [importId]: true }));
@@ -922,7 +946,7 @@ export function useLeads() {
     // Actions
     importerExcel, analyserImport, clearAnalyse, analyseData, analyseEnCours,
     enrichirCadastre, enrichirLusha, enrichirGMB, gmbLoading,
-    setLinkedinUrl, setStatutSociete, convertirEnDossier,
+    setLinkedinUrl, setStatutSociete, convertirEnDossier, supprimerSociete,
     refresh: () => { loadBatches(); loadSocietes(selectedBatchId); },
     // SIRENE / manuel
     creerBatchDepuisSIRENE, ajouterSocieteManuelle,

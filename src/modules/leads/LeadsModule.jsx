@@ -1117,9 +1117,11 @@ function ContactRow({ contact, societeNom, onLusha, lushaLoading, onSetLinkedin 
 }
 
 // ─── CARTE SOCIÉTÉ ────────────────────────────────────────────────
-function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastre, onLusha, onGmb, onSetLinkedin, onStatut, onConvertir }) {
-  const [open,    setOpen]    = useState(false);
-  const [showMap, setShowMap] = useState(false);
+function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastre, onLusha, onGmb, onSetLinkedin, onStatut, onConvertir, onSupprimer }) {
+  const [open,           setOpen]          = useState(false);
+  const [showMap,        setShowMap]       = useState(false);
+  const [confirmDelete,  setConfirmDelete] = useState(false);
+  const [deleting,       setDeleting]      = useState(false);
   const statCfg = STATUT_CFG[soc.statut_qualification] ?? STATUT_CFG['À qualifier'];
   const contactsCibles = soc.contacts?.filter(c => (c.score_poste ?? 0) >= 70) ?? [];
 
@@ -1158,8 +1160,28 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
             <Btn onClick={() => { setShowMap(m => !m); if (!open) setOpen(true); }} icon="🗺" label={showMap ? 'Masquer carte' : 'Carte parcelles'} color={C.purple} />
             {soc.lien_geoportail && <Btn onClick={() => window.open(soc.lien_geoportail, '_blank')} icon="🌍" label="Géoportail" color={C.orange} />}
             {soc.lien_googlemaps && <Btn onClick={() => window.open(soc.lien_googlemaps, '_blank')} icon="🛰" label="Satellite" color={C.accent} />}
-            <div style={{ marginLeft: 'auto' }}>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
               <Btn onClick={() => onConvertir(soc.id)} icon="📁" label="Convertir en dossier" color={C.green} disabled={soc.statut_qualification === 'Converti en dossier'} />
+              {confirmDelete ? (
+                <>
+                  <span style={{ fontSize: 11, color: C.red, fontWeight: 600 }}>Supprimer ?</span>
+                  <button onClick={async (e) => { e.stopPropagation(); setDeleting(true); await onSupprimer(soc.id); setDeleting(false); }}
+                    disabled={deleting}
+                    style={{ padding: '4px 10px', borderRadius: 6, border: 'none', background: C.red, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {deleting ? '…' : 'Oui'}
+                  </button>
+                  <button onClick={e => { e.stopPropagation(); setConfirmDelete(false); }}
+                    style={{ padding: '4px 10px', borderRadius: 6, border: `1px solid ${C.borderLight}`, background: 'transparent', color: C.textSub, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Non
+                  </button>
+                </>
+              ) : (
+                <button onClick={e => { e.stopPropagation(); setConfirmDelete(true); }}
+                  title="Supprimer ce lead"
+                  style={{ padding: '5px 9px', borderRadius: 6, border: `1px solid ${C.red}30`, background: C.redSoft, color: C.red, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', lineHeight: 1 }}>
+                  🗑
+                </button>
+              )}
             </div>
           </div>
 
@@ -1222,7 +1244,7 @@ export default function LeadsModule() {
     searchQuery, setSearchQuery, filterStatut, setFilterStatut, sortBy, setSortBy,
     importerExcel, analyserImport, clearAnalyse, analyseData, analyseEnCours,
     enrichirCadastre, enrichirLusha, enrichirGMB, gmbLoading,
-    setLinkedinUrl, setStatutSociete, convertirEnDossier,
+    setLinkedinUrl, setStatutSociete, convertirEnDossier, supprimerSociete,
     creerBatchDepuisSIRENE, ajouterSocieteManuelle,
     lushaCredits, sauvegarderReveal, verifierCacheLusha,
     profiles, isAdmin,
@@ -1411,7 +1433,8 @@ export default function LeadsModule() {
                 <SocieteCard key={soc.id} soc={soc}
                   cadastreLoading={cadastreLoading} lushaLoading={lushaLoading} gmbLoading={gmbLoading}
                   onCadastre={enrichirCadastre} onLusha={enrichirLusha} onGmb={enrichirGMB}
-                  onSetLinkedin={setLinkedinUrl} onStatut={setStatutSociete} onConvertir={convertirEnDossier} />
+                  onSetLinkedin={setLinkedinUrl} onStatut={setStatutSociete} onConvertir={convertirEnDossier}
+                  onSupprimer={supprimerSociete} />
               ))}
             </div>
           )}
