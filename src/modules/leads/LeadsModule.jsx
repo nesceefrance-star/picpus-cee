@@ -731,23 +731,23 @@ function EnrichirModal({ onClose, onAjouterAuLot, selectedBatchId }) {
           {result?.type === 'lusha' && (
             <div style={{ marginTop: 16, background: C.bg, border: `1px solid ${C.lusha}40`, borderRadius: 12, padding: '16px 18px' }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.lusha, marginBottom: 10 }}>📞 Résultat Lusha</div>
-              {result.data.firstName && <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>{result.data.firstName} {result.data.lastName} {result.data.position ? `· ${result.data.position}` : ''}</div>}
-              {result.data.company && <div style={{ fontSize: 12, color: C.textSub, marginBottom: 8 }}>🏢 {result.data.company}</div>}
-              {result.data.emails?.[0] && <div style={{ fontSize: 13, color: C.accent, marginBottom: 4 }}>✉ {result.data.emails[0]}</div>}
-              {result.data.phones?.[0] && <div style={{ fontSize: 13, color: C.green, marginBottom: 4 }}>☎ {result.data.phones[0]}</div>}
-              {result.data.phones?.[1] && <div style={{ fontSize: 13, color: C.yellow, marginBottom: 4 }}>📱 {result.data.phones[1]}</div>}
-              {!result.data.emails?.[0] && !result.data.phones?.[0] && (
-                <div>
-                  <div style={{ fontSize: 12, color: C.textSub, marginBottom: 6 }}>
-                    Aucune donnée retournée par Lusha.{result.data.status ? ` Statut : ${result.data.status}` : ''}
-                  </div>
-                  <details style={{ fontSize: 10, color: C.textDim }}>
-                    <summary style={{ cursor: 'pointer', marginBottom: 4 }}>Réponse brute Lusha (debug)</summary>
-                    <pre style={{ background: C.bgInput, padding: 8, borderRadius: 6, overflowX: 'auto', maxHeight: 160, fontSize: 10 }}>
-                      {JSON.stringify(result.data._raw, null, 2)}
-                    </pre>
-                  </details>
+              {(result.data.firstName || result.data.lastName) && (
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>
+                  {result.data.firstName} {result.data.lastName}
                 </div>
+              )}
+              {result.data.jobTitle && <div style={{ fontSize: 12, color: C.accent, marginBottom: 2 }}>💼 {result.data.jobTitle}</div>}
+              {result.data.company && <div style={{ fontSize: 12, color: C.textSub, marginBottom: 8 }}>🏢 {result.data.company}</div>}
+              {result.data.emails?.map((email, i) => (
+                <div key={i} style={{ fontSize: 13, color: C.accent, marginBottom: 4 }}>✉ {email}</div>
+              ))}
+              {result.data.phones?.map((phone, i) => (
+                <div key={i} style={{ fontSize: 13, color: i === 0 ? C.green : C.yellow, marginBottom: 4 }}>
+                  {i === 0 ? '☎' : '📱'} {phone}
+                </div>
+              ))}
+              {!result.data.emails?.[0] && !result.data.phones?.[0] && (
+                <div style={{ fontSize: 12, color: C.textSub }}>Aucune donnée de contact trouvée.</div>
               )}
               {selectedBatchId && (
                 <button onClick={() => handleAjouter({ type: 'lusha', data: result.data, url: result.url })}

@@ -35,21 +35,29 @@ export default async function handler(req, res) {
           ?? `Lusha HTTP ${r.status}`
         return res.status(r.status).json({ error: msg, details: data })
       }
-      // Lusha v2 — on remonte toujours la réponse brute pour débogage
-      const c = (data.contacts ?? [])[0] ?? {}
-      const emails = (c.emails ?? []).map(e => e.email ?? e).filter(Boolean)
-      const phones = (c.phones ?? []).map(p => p.normalizedNumber ?? p.internationalNumber ?? p.phoneNumber ?? p.number ?? '').filter(Boolean)
+      // Lusha v2 : contacts est un objet { contactId: { error, isCreditCharged, data: {...} } }
+      const contactsObj = data.contacts ?? {}
+      const firstKey    = Object.keys(contactsObj)[0]
+      const entry       = firstKey ? contactsObj[firstKey] : {}
+      const c           = entry.data ?? {}
+      const companyId   = c.companyId
+      const companyData = companyId ? (data.companies ?? {})[String(companyId)] : null
+
+      // emails / phones : déjà des tableaux de strings dans Lusha v2
+      const emails = Array.isArray(c.emails) ? c.emails.filter(Boolean) : []
+      const phones = Array.isArray(c.phones) ? c.phones.filter(Boolean)
+        : (c.phoneNumbers ?? []).map(p => p.number ?? '').filter(Boolean)
+
       return res.status(200).json({
         emails,
         phones,
-        linkedInUrl:  c.linkedinUrl ?? linkedin_url ?? null,
-        jobTitle:     c.jobTitle    ?? null,
-        firstName:    c.firstName   ?? fn  ?? null,
-        lastName:     c.lastName    ?? ln  ?? null,
-        company:      c.currentEmployer?.name ?? c.company ?? company ?? null,
-        credits_used: data.credits_used ?? 1,
-        status:       c.status ?? null,
-        _raw:         data,   // structure complète Lusha pour débogage
+        linkedInUrl:  c.socialLinks?.linkedin ?? linkedin_url ?? null,
+        jobTitle:     c.jobTitle?.title ?? null,
+        firstName:    c.firstName  ?? fn ?? null,
+        lastName:     c.lastName   ?? ln ?? null,
+        company:      companyData?.name ?? c.company ?? company ?? null,
+        isCreditCharged: entry.isCreditCharged ?? null,
+        _raw:         data,
       })
     } catch (e) { return res.status(500).json({ error: e.message }) }
   }
