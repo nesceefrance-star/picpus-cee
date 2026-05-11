@@ -700,15 +700,20 @@ export function useLeads() {
     // ── Synchronisation tâches ──────────────────────────────────
     if (!profile) return;
 
+    const tacheCfg = ACTION_TACHE[action];
+
     if (['annule', 'pas_bon', 'nrp'].includes(action)) {
-      // Supprimer la tâche lead si elle existe
-      await supabase.from('taches').delete()
+      // Supprimer toutes les tâches lead existantes pour ce lead
+      const { error: eDel } = await supabase.from('taches').delete()
         .eq('user_id', profile.id)
         .eq('lead_import_id', importId);
+      if (eDel) {
+        // Colonne lead_import_id absente → fallback: supprimer par titre contenant l'id
+        console.warn('[leads→taches] delete par lead_import_id échoué:', eDel.message, '— SQL à lancer dans Supabase');
+      }
       return;
     }
 
-    const tacheCfg = ACTION_TACHE[action];
     if (!tacheCfg) return;
 
     const contact = soc?.contacts?.[0];
@@ -717,8 +722,8 @@ export function useLeads() {
     const titre = `${tacheCfg.icon} ${tacheCfg.label} ${[contactName, societeNom].filter(Boolean).join(' — ')}`;
     const echeance = action === 'rappeler' && date ? `${date}T09:00:00` : null;
 
-    // Upsert : 1 seule tâche active par lead par user
-    await supabase.from('taches').upsert({
+    // Tenter upsert avec lead_import_id (nécessite le SQL de migration)
+    const { error: eUps } = await supabase.from('taches').upsert({
       user_id:        profile.id,
       titre,
       echeance,
@@ -726,6 +731,18 @@ export function useLeads() {
       source:         'lead',
       done:           false,
     }, { onConflict: 'user_id,lead_import_id' });
+
+    if (eUps) {
+      console.warn('[leads→taches] upsert échoué (colonne lead_import_id absente ?):', eUps.message);
+      // Fallback : insert simple sans lead_import_id pour que la tâche apparaisse quand même
+      const { error: eIns } = await supabase.from('taches').insert({
+        user_id:  profile.id,
+        titre,
+        echeance,
+        done:     false,
+      });
+      if (eIns) console.error('[leads→taches] insert fallback échoué:', eIns.message);
+    }
   }, [societes, profile]);
 
   // ── Commentaire société ─────────────────────────────────────────
