@@ -75,22 +75,27 @@ const CIBLES_PRESETS = [
   },
 ];
 
+// Couleurs statiques pour les configs niveau module (indépendantes du thème)
 const SCORE_CONFIG = [
-  { min: 90, label: 'S1', color: C.green,   bg: C.greenSoft,  tip: 'Cible principale' },
-  { min: 70, label: 'S2', color: C.accent,  bg: C.accentSoft, tip: 'Cible secondaire' },
-  { min: 40, label: 'S3', color: C.yellow,  bg: C.yellowSoft, tip: 'Décideur général' },
-  { min: 0,  label: 'S4', color: C.textSub, bg: 'rgba(122,153,176,0.08)', tip: 'Hors cible' },
+  { min: 90, label: 'S1', color: '#00D09E', bg: 'rgba(0,208,158,0.10)',  tip: 'Cible principale' },
+  { min: 70, label: 'S2', color: '#00C6FF', bg: 'rgba(0,198,255,0.10)',  tip: 'Cible secondaire' },
+  { min: 40, label: 'S3', color: '#FFD166', bg: 'rgba(255,209,102,0.10)',tip: 'Décideur général' },
+  { min: 0,  label: 'S4', color: '#7A99B0', bg: 'rgba(122,153,176,0.08)',tip: 'Hors cible' },
 ];
 function getScoreCfg(score) { return SCORE_CONFIG.find(c => score >= c.min) ?? SCORE_CONFIG[3]; }
 
-const STATUT_CFG = {
-  'À qualifier':         { color: C.textSub, bg: 'rgba(122,153,176,0.10)' },
-  'Contacté':            { color: C.accent,  bg: C.accentSoft },
-  'RDV planifié':        { color: C.yellow,  bg: C.yellowSoft },
-  'Non qualifié':        { color: C.red,     bg: C.redSoft },
-  'Non pertinent':       { color: C.textDim, bg: 'rgba(61,85,112,0.15)' },
-  'Converti en dossier': { color: C.green,   bg: C.greenSoft },
-};
+// STATUT_CFG est utilisé dynamiquement via useC() dans les composants
+function useStatutCfg() {
+  const C = useC();
+  return {
+    'À qualifier':         { color: C.textSub, bg: 'rgba(122,153,176,0.10)' },
+    'Contacté':            { color: C.accent,  bg: C.accentSoft },
+    'RDV planifié':        { color: C.yellow,  bg: C.yellowSoft },
+    'Non qualifié':        { color: C.red,     bg: C.redSoft },
+    'Non pertinent':       { color: C.textDim, bg: 'rgba(61,85,112,0.15)' },
+    'Converti en dossier': { color: C.green,   bg: C.greenSoft },
+  };
+}
 
 // ─── MICRO-COMPOSANTS ────────────────────────────────────────────
 function Badge({ label, color, bg, size = 11 }) {
@@ -1576,7 +1581,7 @@ export default function LeadsModule() {
     lusha:     societesBrutes.reduce((acc, s) => acc + (s.contacts?.filter(c => c.lusha_fetched).length ?? 0), 0),
   };
 
-  const STATUTS_FILTRE = ['Tous', ...Object.keys(STATUT_CFG)];
+  const STATUTS_FILTRE = ['Tous', 'À qualifier', 'Contacté', 'RDV planifié', 'Non qualifié', 'Non pertinent', 'Converti en dossier'];
 
   return (
     <LeadsTheme.Provider value={C}>
