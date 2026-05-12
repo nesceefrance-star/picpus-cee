@@ -712,7 +712,7 @@ function ClientAutocomplete({ value, onChange, onSelect, style }) {
 }
 
 // ── Étape 1 — Infos client ────────────────────────────────────────────────
-function ModalNouveauDevis({ onConfirm, onCancel }) {
+function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
   const [ficheDevis, setFicheDevis]   = useState("BAT-TH-142");
   const [nomClient, setNomClient]     = useState("");
   const [siret, setSiret]             = useState("");
@@ -726,6 +726,52 @@ function ModalNouveauDevis({ onConfirm, onCancel }) {
   const [telephoneClient, setTelephoneClient] = useState("");
   const [emailClient, setEmailClient] = useState("");
   const [codeNAF, setCodeNAF]         = useState("");
+
+  // ── Chargement depuis un dossier existant ─────────────────────────────
+  const [dossierId, setDossierId]         = useState(null);
+  const [dossierLoaded, setDossierLoaded] = useState(null); // { ref, raison_sociale }
+  const [dossierSearch, setDossierSearch] = useState("");
+  const [showDossierList, setShowDossierList] = useState(false);
+  const [loadingDossier, setLoadingDossier]   = useState(false);
+  const dossierSearchRef = useRef(null);
+
+  const filteredDossiers = dossierSearch.trim().length >= 1
+    ? dossiersList.filter(d => {
+        const q = dossierSearch.toLowerCase();
+        return d.ref?.toLowerCase().includes(q) || d.prospects?.raison_sociale?.toLowerCase().includes(q);
+      })
+    : dossiersList;
+
+  const chargerDossier = async (id) => {
+    setLoadingDossier(true);
+    setShowDossierList(false);
+    setDossierSearch("");
+    const { data } = await supabase.from('dossiers')
+      .select('id, ref, fiche_cee, adresse_site, prospects(raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_tel, contact_email, naf)')
+      .eq('id', id)
+      .single();
+    setLoadingDossier(false);
+    if (!data) return;
+    const p = data.prospects || {};
+    setDossierId(data.id);
+    setDossierLoaded({ ref: data.ref, raison_sociale: p.raison_sociale });
+    // Auto-fill des champs
+    setNomClient(p.raison_sociale || "");
+    setSiret(p.siret || "");
+    setAdresseSite(data.adresse_site || "");
+    setAdresseSiege([p.adresse, p.code_postal, p.ville].filter(Boolean).join(', '));
+    setNomContact(p.contact_nom || "");
+    setTelephoneClient(p.contact_tel || "");
+    setEmailClient(p.contact_email || "");
+    setCodeNAF(p.naf || "");
+    if (data.fiche_cee) setFicheDevis(data.fiche_cee);
+  };
+
+  const effacerDossier = () => {
+    setDossierId(null);
+    setDossierLoaded(null);
+    setDossierSearch("");
+  };
   const [destratDesignation, setDestratDesignation] = useState("DESTRATIFICATEUR TECH - 14000m3/h");
   const [destratPrix, setDestratPrix] = useState(650);
 
@@ -743,7 +789,11 @@ function ModalNouveauDevis({ onConfirm, onCancel }) {
 
   const go = () => {
     if (!nomClient.trim()) return;
-    onConfirm({ ficheDevis, nomClient, siret, adresseSite, refDevis, dateDevis, nomContact, fonctionContact, adresseSiege, telephoneClient, emailClient, codeNAF, destratDesignation, destratPrix,
+    onConfirm({
+      ficheDevis, nomClient, siret, adresseSite, refDevis, dateDevis,
+      nomContact, fonctionContact, adresseSiege, telephoneClient, emailClient, codeNAF,
+      destratDesignation, destratPrix,
+      dossierId: dossierId || null,
       ...(ficheDevis === 'BAT-TH-116' ? { prime: kwh116, sim116: { classe:classe116, secteur:secteur116, zone:zone116, bonif:bonif116, surfs:surfs116, kwh:kwh116 } } : {}),
     });
   };
@@ -763,6 +813,57 @@ function ModalNouveauDevis({ onConfirm, onCancel }) {
           ))}
         </div>
         <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:16}}>📄 Nouveau devis</div>
+
+        {/* ── Chargement depuis un dossier existant ── */}
+        <div style={{marginBottom:18,padding:"12px 14px",background:"#F0FDF4",borderRadius:8,border:"1px solid #86EFAC",position:"relative"}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#15803D",marginBottom:8,textTransform:"uppercase",letterSpacing:.4}}>
+            📂 Charger depuis un dossier existant
+          </div>
+          {dossierLoaded ? (
+            /* Dossier sélectionné */
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{flex:1,background:"#DCFCE7",border:"1px solid #4ADE80",borderRadius:7,padding:"8px 12px"}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#15803D"}}>✓ {dossierLoaded.ref}</div>
+                <div style={{fontSize:11,color:"#166534"}}>{dossierLoaded.raison_sociale}</div>
+              </div>
+              <button onClick={effacerDossier} style={{background:"none",border:"1px solid #BBF7D0",color:"#15803D",borderRadius:6,padding:"6px 10px",fontSize:11,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                ✕ Effacer
+              </button>
+            </div>
+          ) : (
+            /* Recherche */
+            <div style={{position:"relative"}}>
+              <input
+                ref={dossierSearchRef}
+                value={dossierSearch}
+                onChange={e => { setDossierSearch(e.target.value); setShowDossierList(true); }}
+                onFocus={() => setShowDossierList(true)}
+                onBlur={() => setTimeout(() => setShowDossierList(false), 200)}
+                placeholder={loadingDossier ? "Chargement…" : "Rechercher par référence ou nom client…"}
+                disabled={loadingDossier}
+                style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #86EFAC",borderRadius:7,padding:"8px 12px",fontSize:13,color:C.text,outline:"none",fontFamily:"inherit",opacity:loadingDossier?.6:1}}
+              />
+              {showDossierList && filteredDossiers.length > 0 && (
+                <div style={{position:"absolute",top:"100%",left:0,right:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.12)",zIndex:500,maxHeight:200,overflowY:"auto",marginTop:4}}>
+                  {filteredDossiers.slice(0,20).map(d => (
+                    <div key={d.id}
+                      onMouseDown={() => chargerDossier(d.id)}
+                      style={{padding:"9px 12px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,display:"flex",gap:10,alignItems:"center"}}
+                      onMouseEnter={e=>e.currentTarget.style.background=C.bg}
+                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      <span style={{fontSize:11,fontWeight:700,color:C.accent,fontFamily:"monospace",flexShrink:0}}>{d.ref}</span>
+                      <span style={{fontSize:12,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.prospects?.raison_sociale || "—"}</span>
+                      {d.fiche_cee && <span style={{fontSize:10,color:C.textSoft,flexShrink:0,marginLeft:"auto"}}>{d.fiche_cee}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <div style={{fontSize:10,color:"#16A34A",marginTop:6}}>
+            Sélectionner un dossier pré-remplit automatiquement tous les champs client.
+          </div>
+        </div>
 
         {/* Fiche CEE */}
         <div style={{marginBottom:18,padding:"12px 14px",background:C.accentL,borderRadius:8,border:`1px solid #BFDBFE`}}>
@@ -2594,6 +2695,7 @@ function MargesDevis({ prefill }) {
         <ModalNouveauDevis
           onConfirm={infos => { setInfosEnCours(infos); setStep("upload"); }}
           onCancel={() => setStep(null)}
+          dossiersList={dossiersList}
         />
       )}
 
