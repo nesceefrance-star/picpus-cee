@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useBreakpoint } from '../lib/useBreakpoint'
 
 const C = {
   bg: '#F1F5F9', surface: '#FFFFFF', border: '#E2E8F0',
@@ -347,6 +348,7 @@ function Card({ title, children }) {
 // ── Page principale ──────────────────────────────────────────────────────────
 export default function SimulateurRapide() {
   const navigate = useNavigate()
+  const { isMobile, isCompact } = useBreakpoint()
   const [form, setForm] = useState(INIT_FORM)
   const [prixMwh, setPrixMwh] = useState('7.5')
 
@@ -437,17 +439,17 @@ export default function SimulateurRapide() {
   const is116       = form.fiche_cee === 'BAT-TH-116'
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, padding: '24px 24px 40px', fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" }}>
+    <div style={{ minHeight: '100vh', background: C.bg, padding: isMobile ? '14px 12px 40px' : '24px 24px 40px', fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" }}>
 
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: C.text }}>⚡ Simulateur rapide CEE</div>
-        <div style={{ fontSize: 13, color: C.textMid, marginTop: 4 }}>
+      <div style={{ marginBottom: isMobile ? 14 : 24 }}>
+        <div style={{ fontSize: isMobile ? 17 : 20, fontWeight: 800, color: C.text }}>⚡ Simulateur rapide CEE</div>
+        {!isMobile && <div style={{ fontSize: 13, color: C.textMid, marginTop: 4 }}>
           Calculez instantanément la rentabilité d'une opération sans créer de dossier client.
-        </div>
+        </div>}
       </div>
 
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', maxWidth: 1100 }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 14 : 24, alignItems: 'flex-start', maxWidth: 1100 }}>
 
         {/* ── Formulaire ─────────────────────────────────────────────────── */}
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -455,7 +457,7 @@ export default function SimulateurRapide() {
           {/* Sélection fiche */}
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '18px 20px', marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>1. Sélectionnez la fiche CEE</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isCompact ? 'repeat(4, 1fr)' : 'repeat(5, 1fr)', gap: isMobile ? 6 : 8 }}>
               {FICHES.map(f => (
                 <button key={f.id} type="button"
                   onClick={() => !f.coming && switchFiche(f.id)}
@@ -911,8 +913,8 @@ export default function SimulateurRapide() {
           </div>
         </div>
 
-        {/* ── Panel résultats (sticky) ──────────────────────────────────── */}
-        <div style={{ width: 300, flexShrink: 0, position: 'sticky', top: 24 }}>
+        {/* ── Panel résultats ──────────────────────────────────────────── */}
+        <div style={{ width: isMobile ? '100%' : 300, flexShrink: 0, position: isMobile ? 'static' : 'sticky', top: 24 }}>
 
           {/* Prix MWh */}
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px 18px', marginBottom: 12 }}>

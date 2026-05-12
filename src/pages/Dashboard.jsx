@@ -5,6 +5,7 @@ import NouveauDossierWizard from '../components/NouveauDossierWizard'
 import { nextRef } from '../lib/genRef'
 import { supabase } from '../lib/supabase'
 import { useAppTheme } from '../lib/theme'
+import { useBreakpoint } from '../lib/useBreakpoint'
 
 const STATUTS = [
   { id: 'simulation',       label: 'Simulation',        color: '#7C3AED', bg: '#EDE9FE' },
@@ -81,6 +82,7 @@ function StatutBadge({ statut }) {
 export default function Dashboard() {
   const navigate = useNavigate()
   const C = useAppTheme()
+  const { isMobile, isCompact } = useBreakpoint()
   const INP = {
     width: '100%', boxSizing: 'border-box',
     background: C.surface, border: `1px solid ${C.border}`,
@@ -431,37 +433,39 @@ export default function Dashboard() {
     <div style={{ minHeight: '100vh', background: C.bg, fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" }}>
 
       {/* ── Nav ── */}
-      <div style={{ background: C.nav, borderBottom: '1px solid #334155', padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 20, fontWeight: 900, color: '#60A5FA', letterSpacing: 2 }}>PICPUS</span>
-          <span style={{ color: '#64748B', fontSize: 13 }}>/ CRM CEE</span>
+      <div style={{ background: C.nav, borderBottom: '1px solid #334155', padding: `0 ${isMobile ? 12 : 24}px`, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: isMobile ? 17 : 20, fontWeight: 900, color: '#60A5FA', letterSpacing: 2 }}>PICPUS</span>
+          {!isMobile && <span style={{ color: '#64748B', fontSize: 13 }}>/ CRM CEE</span>}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={() => navigate('/')} style={{ background: 'transparent', border: 'none', color: '#94A3B8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: '5px 10px', borderRadius: 6 }}>🏠 Dashboard</button>
-          <button onClick={() => navigate('/hub')} style={{ background: 'transparent', border: 'none', color: '#94A3B8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: '5px 10px', borderRadius: 6 }}>🔧 Outils Hub</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 8, overflowX: 'auto' }}>
+          {!isMobile && <button onClick={() => navigate('/')} style={{ background: 'transparent', border: 'none', color: '#94A3B8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: '5px 10px', borderRadius: 6, whiteSpace: 'nowrap' }}>🏠 Dashboard</button>}
+          {!isMobile && <button onClick={() => navigate('/hub')} style={{ background: 'transparent', border: 'none', color: '#94A3B8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: '5px 10px', borderRadius: 6, whiteSpace: 'nowrap' }}>🔧 Hub</button>}
           {isAdmin && (
-            <button onClick={() => navigate('/admin/users')} style={{ background: '#1D4ED822', border: '1px solid #2563EB66', color: '#60A5FA', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', padding: '5px 12px', borderRadius: 6 }}>👥 Utilisateurs</button>
+            <button onClick={() => navigate('/admin/users')} style={{ background: '#1D4ED822', border: '1px solid #2563EB66', color: '#60A5FA', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', padding: '5px 10px', borderRadius: 6, whiteSpace: 'nowrap' }}>👥{!isMobile && ' Utilisateurs'}</button>
           )}
-          <div style={{ width: 1, height: 20, background: '#334155', margin: '0 4px' }}/>
-          <span style={{ fontSize: 12, color: '#64748B' }}>{user?.email}</span>
-          <button onClick={signOut} style={{ background: 'transparent', border: '1px solid #334155', color: '#94A3B8', borderRadius: 7, padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Déco</button>
+          {!isMobile && <div style={{ width: 1, height: 20, background: '#334155', margin: '0 2px', flexShrink: 0 }}/>}
+          {!isMobile && <span style={{ fontSize: 11, color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>{user?.email}</span>}
+          <button onClick={signOut} style={{ background: 'transparent', border: '1px solid #334155', color: '#94A3B8', borderRadius: 7, padding: '5px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+            {isMobile ? '↪' : 'Déco'}
+          </button>
         </div>
       </div>
 
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 24px' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: isMobile ? '16px 12px' : isCompact ? '20px 16px' : '28px 24px' }}>
 
         {/* ── Header ── */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', marginBottom: isMobile ? 16 : 24, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 12 : 0 }}>
           <div>
-            <h1 style={{ fontSize: 24, fontWeight: 800, color: C.text, margin: 0, marginBottom: 4 }}>
+            <h1 style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, color: C.text, margin: 0, marginBottom: 3 }}>
               Bonjour {prenom} 👋
             </h1>
             <p style={{ fontSize: 13, color: C.textMid, margin: 0 }}>
-              {totalTaches > 0 ? `${totalTaches} action${totalTaches > 1 ? 's' : ''} à traiter aujourd'hui` : 'Aucune action en attente — belle journée !'}
+              {totalTaches > 0 ? `${totalTaches} action${totalTaches > 1 ? 's' : ''} à traiter` : 'Aucune action en attente — belle journée !'}
               {' · '}{activeDossiers.filter(d => !['facture','archive'].includes(d.statut)).length} dossiers actifs
             </p>
           </div>
-          <button onClick={() => setShowModal(true)} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 9, padding: '11px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+          <button onClick={() => setShowModal(true)} style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 9, padding: isMobile ? '10px 16px' : '11px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', alignSelf: isMobile ? 'stretch' : 'auto', textAlign: 'center' }}>
             ➕ Nouveau dossier
           </button>
         </div>
@@ -494,7 +498,7 @@ export default function Dashboard() {
             </div>
 
             {/* Cards tâches */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(180px, 1fr))', gap: isMobile ? 8 : 10 }}>
               {tachesByKey.filter(t => t.dossiers.length > 0).map(t => (
                 <div key={t.label}>
                   <div
@@ -567,7 +571,7 @@ export default function Dashboard() {
         )}
 
         {/* ── KPIs financiers ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isCompact ? 'repeat(3, 1fr)' : 'repeat(6, 1fr)', gap: isMobile ? 8 : 10, marginBottom: isMobile ? 16 : 24 }}>
           {[
             { label: 'Dossiers en cours',  value: activeDossiers.filter(d => STATUTS_EN_COURS.includes(d.statut)).length, color: C.accent,    sub: 'visio planifiée → facturé' },
             { label: 'CA prévisionnel',    value: fmtK(finGlobal.primePrev), color: '#7C3AED',  sub: 'Primes brutes hors facturé' },
@@ -576,16 +580,16 @@ export default function Dashboard() {
             { label: 'Travaux en cours',   value: activeDossiers.filter(d => STATUTS_TRAVAUX.includes(d.statut)).length, color: '#C2410C',  sub: 'Travaux → conforme' },
             { label: 'Total cumac',        value: fmtGwh(finGlobal.totalMwh), color: '#0891B2', sub: 'Volume CEE tous dossiers' },
           ].map(k => (
-            <div key={k.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>{k.label}</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: k.color, lineHeight: 1.1 }}>{k.value}</div>
-              {k.sub && <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>{k.sub}</div>}
+            <div key={k.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: isMobile ? '11px 12px' : '14px 16px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 3 }}>{k.label}</div>
+              <div style={{ fontSize: isMobile ? 17 : 20, fontWeight: 800, color: k.color, lineHeight: 1.1 }}>{k.value}</div>
+              {k.sub && !isMobile && <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>{k.sub}</div>}
             </div>
           ))}
         </div>
 
         {/* ── Agenda + Tâches ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: googleConnected ? '1fr 1fr' : '1fr', gap: 16, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: (googleConnected && !isMobile) ? '1fr 1fr' : '1fr', gap: isMobile ? 12 : 16, marginBottom: isMobile ? 16 : 24 }}>
 
           {/* Panel Tâches */}
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
@@ -935,27 +939,29 @@ export default function Dashboard() {
         {/* ── Filtres + recherche ── */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Rechercher référence, prospect, contact…"
-            style={{ ...INP, flex: 1, minWidth: 200, fontSize: 14, padding: '10px 16px', borderRadius: 9 }}/>
-          {isAdmin && (
-            <select value={filtreCommercial} onChange={e => setFiltreCommercial(e.target.value)}
-              style={{ ...INP, width: 170, padding: '10px 12px', borderRadius: 9, cursor: 'pointer' }}>
-              <option value="all">Tous les commerciaux</option>
-              {profiles.filter(p => ['admin','commercial'].includes(p.role)).map(p => (
-                <option key={p.id} value={p.id}>{(`${p.prenom || ''} ${p.nom || ''}`.trim()) || p.email}</option>
-              ))}
+            placeholder={isMobile ? 'Rechercher…' : 'Rechercher référence, prospect, contact…'}
+            style={{ ...INP, flex: 1, minWidth: isMobile ? 0 : 200, fontSize: 14, padding: '10px 16px', borderRadius: 9, width: isMobile ? '100%' : 'auto' }}/>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: isMobile ? '100%' : 'auto' }}>
+            {isAdmin && (
+              <select value={filtreCommercial} onChange={e => setFiltreCommercial(e.target.value)}
+                style={{ ...INP, flex: isMobile ? 1 : 'none', width: isMobile ? 'auto' : 170, padding: '10px 12px', borderRadius: 9, cursor: 'pointer' }}>
+                <option value="all">Tous les commerciaux</option>
+                {profiles.filter(p => ['admin','commercial'].includes(p.role)).map(p => (
+                  <option key={p.id} value={p.id}>{(`${p.prenom || ''} ${p.nom || ''}`.trim()) || p.email}</option>
+                ))}
+              </select>
+            )}
+            <select value={filtreFiche} onChange={e => setFiltreFiche(e.target.value)}
+              style={{ ...INP, flex: isMobile ? 1 : 'none', width: isMobile ? 'auto' : 160, padding: '10px 12px', borderRadius: 9, cursor: 'pointer' }}>
+              <option value="all">Toutes les fiches</option>
+              {fiches.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
-          )}
-          <select value={filtreFiche} onChange={e => setFiltreFiche(e.target.value)}
-            style={{ ...INP, width: 160, padding: '10px 12px', borderRadius: 9, cursor: 'pointer' }}>
-            <option value="all">Toutes les fiches</option>
-            {fiches.map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
-          <select value={filtreStatut} onChange={e => setFiltreStatut(e.target.value)}
-            style={{ ...INP, width: 160, padding: '10px 12px', borderRadius: 9, cursor: 'pointer' }}>
-            <option value="all">Tous les statuts</option>
-            {STATUTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
+            <select value={filtreStatut} onChange={e => setFiltreStatut(e.target.value)}
+              style={{ ...INP, flex: isMobile ? 1 : 'none', width: isMobile ? 'auto' : 160, padding: '10px 12px', borderRadius: 9, cursor: 'pointer' }}>
+              <option value="all">Tous les statuts</option>
+              {STATUTS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          </div>
         </div>
 
         {/* Toolbar sélection groupée */}
