@@ -731,9 +731,7 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
   const [dossierId, setDossierId]         = useState(null);
   const [dossierLoaded, setDossierLoaded] = useState(null); // { ref, raison_sociale }
   const [dossierSearch, setDossierSearch] = useState("");
-  const [showDossierList, setShowDossierList] = useState(false);
   const [loadingDossier, setLoadingDossier]   = useState(false);
-  const dossierSearchRef = useRef(null);
 
   const filteredDossiers = dossierSearch.trim().length >= 1
     ? dossiersList.filter(d => {
@@ -744,7 +742,6 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
 
   const chargerDossier = async (id) => {
     setLoadingDossier(true);
-    setShowDossierList(false);
     setDossierSearch("");
     const { data } = await supabase.from('dossiers')
       .select('id, ref, fiche_cee, adresse_site, prospects(raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_tel, contact_email, naf)')
@@ -831,23 +828,20 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
               </button>
             </div>
           ) : (
-            /* Recherche */
-            <div style={{position:"relative"}}>
+            /* Recherche + liste inline (pas de position:absolute pour éviter le clipping du modal overflow) */
+            <>
               <input
-                ref={dossierSearchRef}
                 value={dossierSearch}
-                onChange={e => { setDossierSearch(e.target.value); setShowDossierList(true); }}
-                onFocus={() => setShowDossierList(true)}
-                onBlur={() => setTimeout(() => setShowDossierList(false), 350)}
+                onChange={e => setDossierSearch(e.target.value)}
                 placeholder={loadingDossier ? "Chargement…" : "Rechercher par référence ou nom client…"}
                 disabled={loadingDossier}
-                style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #86EFAC",borderRadius:7,padding:"8px 12px",fontSize:13,color:C.text,outline:"none",fontFamily:"inherit",opacity:loadingDossier?.6:1}}
+                style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #86EFAC",borderRadius:7,padding:"8px 12px",fontSize:13,color:C.text,outline:"none",fontFamily:"inherit",opacity:loadingDossier?0.6:1}}
               />
-              {showDossierList && filteredDossiers.length > 0 && (
-                <div style={{position:"absolute",top:"100%",left:0,right:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.12)",zIndex:500,maxHeight:200,overflowY:"auto",marginTop:4}}>
+              {filteredDossiers.length > 0 && (
+                <div style={{marginTop:6,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",background:C.surface,maxHeight:200,overflowY:"auto"}}>
                   {filteredDossiers.slice(0,20).map(d => (
                     <div key={d.id}
-                      onMouseDown={e => { e.preventDefault(); chargerDossier(d.id); }}
+                      onClick={() => chargerDossier(d.id)}
                       style={{padding:"9px 12px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,display:"flex",gap:10,alignItems:"center"}}
                       onMouseEnter={e=>e.currentTarget.style.background=C.bg}
                       onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
@@ -858,7 +852,7 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
                   ))}
                 </div>
               )}
-            </div>
+            </>
           )}
           <div style={{fontSize:10,color:"#16A34A",marginTop:6}}>
             Sélectionner un dossier pré-remplit automatiquement tous les champs client.
