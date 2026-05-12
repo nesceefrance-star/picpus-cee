@@ -838,7 +838,7 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
                 value={dossierSearch}
                 onChange={e => { setDossierSearch(e.target.value); setShowDossierList(true); }}
                 onFocus={() => setShowDossierList(true)}
-                onBlur={() => setTimeout(() => setShowDossierList(false), 200)}
+                onBlur={() => setTimeout(() => setShowDossierList(false), 350)}
                 placeholder={loadingDossier ? "Chargement…" : "Rechercher par référence ou nom client…"}
                 disabled={loadingDossier}
                 style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #86EFAC",borderRadius:7,padding:"8px 12px",fontSize:13,color:C.text,outline:"none",fontFamily:"inherit",opacity:loadingDossier?.6:1}}
@@ -847,7 +847,7 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
                 <div style={{position:"absolute",top:"100%",left:0,right:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.12)",zIndex:500,maxHeight:200,overflowY:"auto",marginTop:4}}>
                   {filteredDossiers.slice(0,20).map(d => (
                     <div key={d.id}
-                      onMouseDown={() => chargerDossier(d.id)}
+                      onMouseDown={e => { e.preventDefault(); chargerDossier(d.id); }}
                       style={{padding:"9px 12px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,display:"flex",gap:10,alignItems:"center"}}
                       onMouseEnter={e=>e.currentTarget.style.background=C.bg}
                       onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
