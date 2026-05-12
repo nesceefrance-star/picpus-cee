@@ -728,31 +728,45 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
   const [codeNAF, setCodeNAF]         = useState("");
 
   // ── Chargement depuis un dossier existant ─────────────────────────────
-  const [dossierId, setDossierId]         = useState(null);
-  const [dossierLoaded, setDossierLoaded] = useState(null); // { ref, raison_sociale }
-  const [dossierSearch, setDossierSearch] = useState("");
-  const [loadingDossier, setLoadingDossier]   = useState(false);
+  const [dossierId, setDossierId]           = useState(null);
+  const [dossierLoaded, setDossierLoaded]   = useState(null);
+  const [dossierSearch, setDossierSearch]   = useState("");
+  const [loadingDossier, setLoadingDossier] = useState(false);
+  const [erreurDossier, setErreurDossier]   = useState(null);
 
-  const filteredDossiers = dossierSearch.trim().length >= 1
-    ? dossiersList.filter(d => {
-        const q = dossierSearch.toLowerCase();
-        return d.ref?.toLowerCase().includes(q) || d.prospects?.raison_sociale?.toLowerCase().includes(q);
-      })
-    : dossiersList;
+  const filteredDossiers = dossiersList.filter(d => {
+    if (!dossierSearch.trim()) return true;
+    const q = dossierSearch.toLowerCase();
+    return d.ref?.toLowerCase().includes(q) || d.prospects?.raison_sociale?.toLowerCase().includes(q);
+  });
 
   const chargerDossier = async (id) => {
     setLoadingDossier(true);
-    setDossierSearch("");
-    const { data } = await supabase.from('dossiers')
-      .select('id, ref, fiche_cee, adresse_site, prospects(raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_tel, contact_email, naf)')
+    setErreurDossier(null);
+    // Fetch complet : dossier + prospect
+    const { data, error } = await supabase
+      .from('dossiers')
+      .select('id, ref, fiche_cee, adresse_site, prospect_id, prospects(raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_tel, contact_email, naf)')
       .eq('id', id)
-      .single();
+      .maybeSingle();
     setLoadingDossier(false);
-    if (!data) return;
-    const p = data.prospects || {};
+    if (error || !data) {
+      setErreurDossier(error?.message || "Dossier introuvable");
+      return;
+    }
+    // Si prospects est null, tenter un fetch direct par prospect_id
+    let p = data.prospects || {};
+    if (!p.raison_sociale && data.prospect_id) {
+      const { data: pr } = await supabase
+        .from('prospects')
+        .select('raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_tel, contact_email, naf')
+        .eq('id', data.prospect_id)
+        .maybeSingle();
+      if (pr) p = pr;
+    }
     setDossierId(data.id);
-    setDossierLoaded({ ref: data.ref, raison_sociale: p.raison_sociale });
-    // Auto-fill des champs
+    setDossierSearch("");
+    setDossierLoaded({ ref: data.ref, raison_sociale: p.raison_sociale || data.ref });
     setNomClient(p.raison_sociale || "");
     setSiret(p.siret || "");
     setAdresseSite(data.adresse_site || "");
@@ -768,6 +782,7 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
     setDossierId(null);
     setDossierLoaded(null);
     setDossierSearch("");
+    setErreurDossier(null);
   };
   const [destratDesignation, setDestratDesignation] = useState("DESTRATIFICATEUR TECH - 14000m3/h");
   const [destratPrix, setDestratPrix] = useState(650);
@@ -817,26 +832,33 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
             📂 Charger depuis un dossier existant
           </div>
           {dossierLoaded ? (
-            /* Dossier sélectionné */
+            /* ── Dossier sélectionné ── */
             <div style={{display:"flex",alignItems:"center",gap:10}}>
               <div style={{flex:1,background:"#DCFCE7",border:"1px solid #4ADE80",borderRadius:7,padding:"8px 12px"}}>
                 <div style={{fontSize:13,fontWeight:700,color:"#15803D"}}>✓ {dossierLoaded.ref}</div>
                 <div style={{fontSize:11,color:"#166534"}}>{dossierLoaded.raison_sociale}</div>
               </div>
-              <button onClick={effacerDossier} style={{background:"none",border:"1px solid #BBF7D0",color:"#15803D",borderRadius:6,padding:"6px 10px",fontSize:11,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                ✕ Effacer
-              </button>
+              <button onClick={effacerDossier} style={{background:"none",border:"1px solid #BBF7D0",color:"#15803D",borderRadius:6,padding:"6px 10px",fontSize:11,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>✕ Effacer</button>
+            </div>
+          ) : loadingDossier ? (
+            /* ── Chargement ── */
+            <div style={{padding:"10px 12px",background:"#fff",border:"1px solid #86EFAC",borderRadius:7,fontSize:13,color:"#15803D"}}>
+              ⏳ Chargement du dossier…
             </div>
           ) : (
-            /* Recherche + liste inline (pas de position:absolute pour éviter le clipping du modal overflow) */
+            /* ── Recherche + liste inline ── */
             <>
               <input
                 value={dossierSearch}
                 onChange={e => setDossierSearch(e.target.value)}
-                placeholder={loadingDossier ? "Chargement…" : "Rechercher par référence ou nom client…"}
-                disabled={loadingDossier}
-                style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #86EFAC",borderRadius:7,padding:"8px 12px",fontSize:13,color:C.text,outline:"none",fontFamily:"inherit",opacity:loadingDossier?0.6:1}}
+                placeholder="Rechercher par référence ou nom client…"
+                style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #86EFAC",borderRadius:7,padding:"8px 12px",fontSize:13,color:C.text,outline:"none",fontFamily:"inherit"}}
               />
+              {erreurDossier && (
+                <div style={{marginTop:4,padding:"6px 10px",background:"#FEF2F2",border:"1px solid #FCA5A5",borderRadius:6,fontSize:11,color:"#DC2626"}}>
+                  ⚠️ {erreurDossier}
+                </div>
+              )}
               {filteredDossiers.length > 0 && (
                 <div style={{marginTop:6,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",background:C.surface,maxHeight:200,overflowY:"auto"}}>
                   {filteredDossiers.slice(0,20).map(d => (
