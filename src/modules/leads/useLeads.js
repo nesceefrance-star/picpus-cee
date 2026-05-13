@@ -393,11 +393,16 @@ export function useLeads() {
     if (!profile) return null;
     const existing = batchesData.find(b => b.nom === 'Mes leads' && b.assigne_a === profile.id);
     if (existing) return existing;
-    const { data: nb } = await supabase.from('leads_batches').insert({
+    // Vérifier en base avant de créer (évite les doublons en cas de race)
+    const { data: existingDb } = await supabase.from('leads_batches')
+      .select('*').eq('nom', 'Mes leads').eq('assigne_a', profile.id).maybeSingle();
+    if (existingDb) return existingDb;
+    const { data: nb, error: eNb } = await supabase.from('leads_batches').insert({
       nom: 'Mes leads', lead_type: 'Autre',
       assigne_a: profile.id, created_by: profile.id,
       nb_societes: 0, nb_contacts: 0,
     }).select().single();
+    if (eNb) { console.error('[assurerMesLeads] insert error:', eNb.message); return null; }
     return nb;
   }, [profile]);
 
@@ -759,13 +764,22 @@ export function useLeads() {
       // Trouver ou créer "Mes leads"
       let mesLeads = batches.find(b => b.nom === 'Mes leads' && b.assigne_a === profile?.id);
       if (!mesLeads) {
-        const { data: nb } = await supabase.from('leads_batches').insert({
-          nom: 'Mes leads', lead_type: 'Autre',
-          assigne_a: profile?.id, created_by: profile?.id,
-          nb_societes: 0, nb_contacts: 0,
-        }).select().single();
-        mesLeads = nb;
+        // Vérifier en base (état local peut être périmé)
+        const { data: existingBatch } = await supabase.from('leads_batches')
+          .select('*').eq('nom', 'Mes leads').eq('assigne_a', profile?.id).maybeSingle();
+        if (existingBatch) {
+          mesLeads = existingBatch;
+        } else {
+          const { data: nb, error: eNb } = await supabase.from('leads_batches').insert({
+            nom: 'Mes leads', lead_type: 'Autre',
+            assigne_a: profile?.id, created_by: profile?.id,
+            nb_societes: 0, nb_contacts: 0,
+          }).select().single();
+          if (eNb) throw new Error(`Impossible de créer le batch "Mes leads" : ${eNb.message}`);
+          mesLeads = nb;
+        }
       }
+      if (!mesLeads) throw new Error('Batch "Mes leads" introuvable — contactez un administrateur');
 
       const statut = ACTION_STATUT_MAP[next_action] ?? 'À qualifier';
       const { data: imp, error: eImp } = await supabase.from('leads_import').insert({
@@ -959,19 +973,28 @@ export function useLeads() {
     // 2. Trouver ou créer le batch "Leads Lusha"
     let lushaBatch = batches.find(b => b.nom === 'Leads Lusha' && b.assigne_a === profile.id);
     if (!lushaBatch) {
-      const { data: nb } = await supabase.from('leads_batches').insert({
-        nom: 'Leads Lusha', lead_type: 'Tertiaire',
-        assigne_a: profile.id, created_by: profile.id,
-        nb_societes: 0, nb_contacts: 0,
-      }).select().single();
-      lushaBatch = nb;
+      // Vérifier en base (état local peut être périmé)
+      const { data: existingLusha } = await supabase.from('leads_batches')
+        .select('*').eq('nom', 'Leads Lusha').eq('assigne_a', profile.id).maybeSingle();
+      if (existingLusha) {
+        lushaBatch = existingLusha;
+      } else {
+        const { data: nb, error: eNb } = await supabase.from('leads_batches').insert({
+          nom: 'Leads Lusha', lead_type: 'Tertiaire',
+          assigne_a: profile.id, created_by: profile.id,
+          nb_societes: 0, nb_contacts: 0,
+        }).select().single();
+        if (eNb) console.error('[sauvegarderReveal] Leads Lusha batch create error:', eNb.message);
+        else lushaBatch = nb;
+      }
     }
 
     if (lushaBatch) {
-      const { data: imp } = await supabase.from('leads_import').insert({
+      const { data: imp, error: eImp } = await supabase.from('leads_import').insert({
         raison_sociale: revealData.company ?? 'Entreprise (Lusha)',
         batch_id: lushaBatch.id, assigne_a: profile.id, import_batch_id: lushaBatch.id,
       }).select().single();
+      if (eImp) console.error('[sauvegarderReveal] leads_import insert error:', eImp.message);
       if (imp) {
         await supabase.from('leads_contacts').insert({
           import_id:    imp.id,
