@@ -1388,7 +1388,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
   const setBatPuVente = v => setDevis(d => ({...d, batPuVente: v, updatedAt: Date.now()}));
   const setBatQte = v => setDevis(d => ({...d, batQte: v, updatedAt: Date.now()}));
 
-  const actives     = lignes.filter(l => l.inclus);
+  const actives     = lignes.filter(l => l.isSection || l.inclus);
   const hasSections = lignes.some(l => l.isSection);
   const cats        = [...new Set(actives.filter(l => !l.isSection).map(l => l.cat))];
   const primeCEESimu = devis.prime || 0;
@@ -1448,7 +1448,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
 
   const addSection = () => {
     const newId = Math.max(0, ...lignes.map(l=>l.id)) + 1;
-    setLignes(ls => [...ls, {id:newId, cat:"SECTION", designation:"Nouvelle section", isSection:true}]);
+    setLignes(ls => [...ls, {id:newId, cat:"SECTION", designation:"Nouvelle section", isSection:true, inclus:true}]);
   };
 
   const delLigne = id => setLignes(ls => ls.filter(l => l.id !== id));
