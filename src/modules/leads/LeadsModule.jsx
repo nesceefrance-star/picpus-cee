@@ -1267,28 +1267,18 @@ function CommentZone({ soc, onSave }) {
 }
 
 // ─── MODAL CRÉATION LEAD MANUEL ──────────────────────────────────
-function ManuelModal({ onClose, onCreer, saving }) {
+function ManuelModal({ onClose, onAnnuler, onCreer, saving, form, setForm }) {
   const C = useC();
-  const [societe,    setSociete]    = useState('');
-  const [prenom,     setPrenom]     = useState('');
-  const [nom,        setNom]        = useState('');
-  const [email,      setEmail]      = useState('');
-  const [tel,        setTel]        = useState('');
-  const [type,       setType]       = useState('');
-  const [commentaire,setCommentaire]= useState('');
-  const [dernEch,    setDernEch]    = useState('');
-  const [nextAction, setNextAction] = useState('');
-  const [nextDate,   setNextDate]   = useState('');
-  const [error,      setError]      = useState('');
+  const [error, setError] = useState('');
 
+  const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const inpStyle = { width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.borderLight}`, background: C.bgInput, color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' };
 
   const handleSubmit = async () => {
-    if (!prenom.trim() && !nom.trim() && !societe.trim()) { setError('Renseignez au moins un nom ou une société'); return; }
+    if (!form.prenom.trim() && !form.nom.trim() && !form.societe.trim()) { setError('Renseignez au moins un nom ou une société'); return; }
     setError('');
     try {
-      await onCreer({ societe, prenom, nom, email, tel, type, commentaire, dernier_echange: dernEch || null, next_action: nextAction || null, next_action_date: nextDate || null });
-      onClose();
+      await onCreer({ societe: form.societe, prenom: form.prenom, nom: form.nom, email: form.email, tel: form.tel, type: form.type, commentaire: form.commentaire, dernier_echange: form.dernEch || null, next_action: form.nextAction || null, next_action_date: form.nextDate || null });
     } catch (e) { setError(e.message); }
   };
 
@@ -1304,34 +1294,34 @@ function ManuelModal({ onClose, onCreer, saving }) {
           {/* Société */}
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Société / Entreprise</div>
-            <input value={societe} onChange={e => setSociete(e.target.value)} placeholder="ex : SCI Les Chênes" style={inpStyle} autoFocus />
+            <input value={form.societe} onChange={e => upd('societe', e.target.value)} placeholder="ex : SCI Les Chênes" style={inpStyle} autoFocus />
           </div>
           {/* Prénom + Nom */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Prénom</div>
-              <input value={prenom} onChange={e => setPrenom(e.target.value)} placeholder="Jean" style={inpStyle} />
+              <input value={form.prenom} onChange={e => upd('prenom', e.target.value)} placeholder="Jean" style={inpStyle} />
             </div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Nom</div>
-              <input value={nom} onChange={e => setNom(e.target.value)} placeholder="Dupont" style={inpStyle} />
+              <input value={form.nom} onChange={e => upd('nom', e.target.value)} placeholder="Dupont" style={inpStyle} />
             </div>
           </div>
           {/* Email + Tel */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Email</div>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jean@exemple.fr" style={inpStyle} />
+              <input type="email" value={form.email} onChange={e => upd('email', e.target.value)} placeholder="jean@exemple.fr" style={inpStyle} />
             </div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Téléphone</div>
-              <input type="tel" value={tel} onChange={e => setTel(e.target.value)} placeholder="06 12 34 56 78" style={inpStyle} />
+              <input type="tel" value={form.tel} onChange={e => upd('tel', e.target.value)} placeholder="06 12 34 56 78" style={inpStyle} />
             </div>
           </div>
           {/* Type */}
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Type de cible</div>
-            <select value={type} onChange={e => setType(e.target.value)} style={{ ...inpStyle, cursor: 'pointer' }}>
+            <select value={form.type} onChange={e => upd('type', e.target.value)} style={{ ...inpStyle, cursor: 'pointer' }}>
               <option value="">— Sélectionner —</option>
               {TYPES_PERSO.map(t => <option key={t}>{t}</option>)}
             </select>
@@ -1339,7 +1329,7 @@ function ManuelModal({ onClose, onCreer, saving }) {
           {/* Date dernier échange */}
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Date dernier échange</div>
-            <input type="date" value={dernEch} onChange={e => setDernEch(e.target.value)} style={inpStyle} />
+            <input type="date" value={form.dernEch} onChange={e => upd('dernEch', e.target.value)} style={inpStyle} />
           </div>
           {/* Next step */}
           <div>
@@ -1347,32 +1337,32 @@ function ManuelModal({ onClose, onCreer, saving }) {
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {Object.entries(NEXT_ACTION_CFG).map(([key, cfg]) => {
                 const color = C[cfg.colorKey] ?? C.textSub;
-                const active = nextAction === key;
+                const active = form.nextAction === key;
                 return (
-                  <button key={key} onClick={() => setNextAction(active ? '' : key)}
+                  <button key={key} onClick={() => upd('nextAction', active ? '' : key)}
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${active ? color : color + '40'}`, background: active ? `${color}25` : `${color}0D`, color }}>
                     {cfg.icon} {cfg.label}
                   </button>
                 );
               })}
             </div>
-            {nextAction === 'rappeler' && (
+            {form.nextAction === 'rappeler' && (
               <div style={{ marginTop: 8 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Rappeler le</div>
-                <input type="date" value={nextDate} onChange={e => setNextDate(e.target.value)} style={{ ...inpStyle, width: 'auto' }} />
+                <input type="date" value={form.nextDate} onChange={e => upd('nextDate', e.target.value)} style={{ ...inpStyle, width: 'auto' }} />
               </div>
             )}
           </div>
           {/* Commentaire */}
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 4 }}>Commentaire / Notes</div>
-            <textarea value={commentaire} onChange={e => setCommentaire(e.target.value)} placeholder="Contexte, notes, observations…" rows={3}
+            <textarea value={form.commentaire} onChange={e => upd('commentaire', e.target.value)} placeholder="Contexte, notes, observations…" rows={3}
               style={{ ...inpStyle, resize: 'vertical', lineHeight: 1.5 }} />
           </div>
           {error && <div style={{ padding: '8px 12px', borderRadius: 7, background: C.redSoft, color: C.red, fontSize: 12 }}>{error}</div>}
         </div>
         <div style={{ padding: '12px 22px', borderTop: `1px solid ${C.border}`, flexShrink: 0, display: 'flex', gap: 8 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: '9px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.textSub, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+          <button onClick={onAnnuler ?? onClose} style={{ flex: 1, padding: '9px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.textSub, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
             Annuler
           </button>
           <button onClick={handleSubmit} disabled={saving}
@@ -1538,6 +1528,11 @@ export default function LeadsModule() {
   const [showEnrichirModal,setShowEnrichirModal]= useState(false);
   const [showManuelModal,  setShowManuelModal]  = useState(false);
   const [importMsg,        setImportMsg]        = useState(null);
+
+  // État formulaire lead manuel — persisté au niveau parent pour survivre fermeture/réouverture
+  const MANUEL_INIT = { societe:'', prenom:'', nom:'', email:'', tel:'', type:'', commentaire:'', dernEch:'', nextAction:'', nextDate:'' };
+  const [manuelForm, setManuelForm] = useState(MANUEL_INIT);
+  const resetManuelForm = () => setManuelForm(MANUEL_INIT);
 
   const handleChoixEntree = useCallback((choix) => {
     setShowEntreeModal(false);
@@ -1780,8 +1775,11 @@ export default function LeadsModule() {
       {showManuelModal && (
         <ManuelModal
           onClose={() => setShowManuelModal(false)}
-          onCreer={creerLeadManuel}
+          onCreer={async (data) => { await creerLeadManuel(data); resetManuelForm(); }}
+          onAnnuler={() => { setShowManuelModal(false); resetManuelForm(); }}
           saving={importing}
+          form={manuelForm}
+          setForm={setManuelForm}
         />
       )}
     </div>
