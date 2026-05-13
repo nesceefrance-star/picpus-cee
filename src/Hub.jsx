@@ -1446,6 +1446,11 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
     setLignes(ls => [...ls, {id:newId, cat:"MATÉRIEL", designation:"Nouvelle ligne", qte:1, unite:"U", puAchat:0, margePct:30, puVente:0, inclus:true}]);
   };
 
+  const addSection = () => {
+    const newId = Math.max(0, ...lignes.map(l=>l.id)) + 1;
+    setLignes(ls => [...ls, {id:newId, cat:"SECTION", designation:"Nouvelle section", isSection:true}]);
+  };
+
   const delLigne = id => setLignes(ls => ls.filter(l => l.id !== id));
 
   const [exporting, setExporting] = useState(false);
@@ -1625,8 +1630,12 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
               />
               <span style={{fontSize:11,color:C.textMid}}>%</span>
             </div>
+            <button onClick={addSection}
+              style={{marginLeft:"auto",background:"#1E3A8A",color:"#fff",border:"none",borderRadius:6,padding:"4px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              📁 Section
+            </button>
             <button onClick={addLigne}
-              style={{marginLeft:"auto",background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"4px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"4px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
               ＋ Ligne
             </button>
           </div>
@@ -1653,7 +1662,12 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
                         <tr key={l.id}>
                           <td style={{...TD,textAlign:"center",color:C.textSoft,fontSize:11}}>—</td>
                           <td colSpan={6} style={{...TD,background:"#1E3A8A",color:"#fff",fontWeight:700,fontSize:11,letterSpacing:.3}}>
-                            📁 {l.designation}
+                            <span style={{marginRight:6}}>📁</span>
+                            <input
+                              value={l.designation}
+                              onChange={e => upd(l.id, "designation", e.target.value)}
+                              style={{background:"transparent",border:"none",borderBottom:"1px solid #93C5FD",color:"#fff",fontWeight:700,fontSize:11,letterSpacing:.3,outline:"none",fontFamily:"inherit",width:"calc(100% - 24px)",padding:"2px 0"}}
+                            />
                           </td>
                           <td style={{...TD,textAlign:"center",background:"#1E3A8A"}}>
                             <button onClick={()=>delLigne(l.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#93C5FD",fontSize:14,padding:"2px"}}>✕</button>
