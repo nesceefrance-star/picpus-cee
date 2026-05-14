@@ -281,32 +281,37 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
 
                 <input
                   ref={el => inputs.current[cat.id] = el}
+                  id={`photo-input-${cat.id}`}
                   type="file"
                   accept="image/*"
                   multiple
+                  disabled={!visiteId}
                   style={{ display: 'none' }}
                   onChange={e => {
                     Array.from(e.target.files).forEach(file => handleFile(cat.id, file))
                     if (inputs.current[cat.id]) inputs.current[cat.id].value = ''
                   }}
                 />
-                <button
-                  onClick={() => inputs.current[cat.id]?.click()}
-                  disabled={!visiteId}
+                <label
+                  htmlFor={`photo-input-${cat.id}`}
                   onDragOver={e => { e.preventDefault(); setDragOverCat(cat.id) }}
                   onDragLeave={() => setDragOverCat(null)}
                   onDrop={e => handleDrop(cat.id, e)}
                   style={{
+                    display: 'block',
                     background: dragOverCat === cat.id ? '#DBEAFE' : uploading ? C.bg : '#EFF6FF',
                     border: `1.5px dashed ${dragOverCat === cat.id ? C.accent : uploading ? C.border : '#93C5FD'}`,
                     borderRadius: 8, padding: '10px 0', width: '100%',
-                    color: uploading ? C.textSoft : C.accent,
-                    fontSize: 13, fontWeight: 600, cursor: !visiteId ? 'not-allowed' : 'pointer',
+                    color: uploading ? C.textSoft : !visiteId ? C.textSoft : C.accent,
+                    fontSize: 13, fontWeight: 600,
+                    cursor: !visiteId || uploading ? 'not-allowed' : 'pointer',
                     fontFamily: 'inherit', marginTop: catPhotos.length > 0 ? 0 : 12,
+                    textAlign: 'center', boxSizing: 'border-box',
+                    pointerEvents: !visiteId || uploading ? 'none' : 'auto',
                   }}
                 >
                   {uploading ? '⏳ Upload en cours…' : isMobile ? '📷 Ajouter une photo' : '📁 Glisser-déposer ou cliquer pour sélectionner'}
-                </button>
+                </label>
               </div>
             )}
           </div>
