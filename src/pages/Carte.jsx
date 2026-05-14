@@ -41,12 +41,7 @@ const FICHE_LABELS = {
   'IND-BA-110': 'Destrat Industrie', 'BAT-TH-125': 'VMC Simple', 'BAT-TH-126': 'VMC Double',
 }
 
-const TRANSPORT_MODES = [
-  { id: 'driving', label: 'Voiture',     icon: '🚗', osrm: 'driving',  gmaps: 'driving'   },
-  { id: 'transit', label: 'Transports',  icon: '🚇', osrm: null,       gmaps: 'transit'   },
-  { id: 'foot',    label: 'À pied',      icon: '🚶', osrm: 'foot',     gmaps: 'walking'   },
-  { id: 'bike',    label: 'Vélo',        icon: '🚲', osrm: 'bike',     gmaps: 'bicycling' },
-]
+const OFFICE_ADDRESS = '80 Boulevard de Picpus, 75012 Paris'
 
 // Cache module-level : clé = "dossierId:adresse" pour invalider si l'adresse change
 const geoCache = new Map()
@@ -66,14 +61,98 @@ function fmtDist(meters) {
   return `${Math.round(meters)} m`
 }
 
-async function getOsrmRoute(profile, olat, olng, dlat, dlng) {
+function fmtNavitiaTime(str) {
+  // "20260514T091500" → "09:15"
+  if (!str || str.length < 13) return ''
+  return str.slice(9, 11) + ':' + str.slice(11, 13)
+}
+
+// ── Google Maps Directions API ────────────────────────────────────────────────
+async function getGoogleRoute(olat, olng, dlat, dlng, unixDeparture) {
+  const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+  if (!key) return null
+  try {
+    const params = new URLSearchParams({
+      origin:       `${olat},${olng}`,
+      destination:  `${dlat},${dlng}`,
+      mode:         'driving',
+      departure_time: unixDeparture || 'now',
+      traffic_model: 'best_guess',
+      key,
+    })
+    const r = await fetch(`https://maps.googleapis.com/maps/api/directions/json?${params}`)
+    const d = await r.json()
+    if (d.status !== 'OK') return null
+    const leg = d.routes[0].legs[0]
+    return {
+      duration: leg.duration_in_traffic?.value ?? leg.duration.value,
+      distance: leg.distance.value,
+      source: 'google',
+    }
+  } catch { return null }
+}
+
+// ── OSRM fallback (voiture) ───────────────────────────────────────────────────
+async function getOsrmRoute(olat, olng, dlat, dlng) {
   try {
     const r = await fetch(
-      `https://router.project-osrm.org/route/v1/${profile}/${olng},${olat};${dlng},${dlat}?overview=false`
+      `https://router.project-osrm.org/route/v1/driving/${olng},${olat};${dlng},${dlat}?overview=false`
     )
     const d = await r.json()
     if (d.code !== 'Ok' || !d.routes?.[0]) return null
-    return { duration: d.routes[0].duration, distance: d.routes[0].distance }
+    return { duration: d.routes[0].duration, distance: d.routes[0].distance, source: 'osrm' }
+  } catch { return null }
+}
+
+// ── Navitia / SNCF ────────────────────────────────────────────────────────────
+async function getTrainJourney(olat, olng, dlat, dlng, navitiaDatetime, isArrival) {
+  const key = import.meta.env.VITE_NAVITIA_KEY
+  if (!key) return { noKey: true }
+  try {
+    const params = new URLSearchParams({
+      from:                 `${olng};${olat}`,   // navitia = lng;lat
+      to:                   `${dlng};${dlat}`,
+      datetime:             navitiaDatetime,      // "20260514T090000"
+      datetime_represents:  isArrival ? 'arrival' : 'departure',
+      count:                '5',
+      data_freshness:       'realtime',
+    })
+    const r = await fetch(`https://api.navitia.io/v1/journeys?${params}`, {
+      headers: { Authorization: 'Basic ' + btoa(key + ':') },
+    })
+    const d = await r.json()
+    if (!d.journeys?.length) return null
+
+    // Préférer un trajet avec section train longue distance
+    const TRAIN_MODES = ['tgv', 'ter', 'intercités', 'train', 'intercity', 'ic', 'night train']
+    const isTrainSection = (s) =>
+      s.type === 'public_transport' &&
+      TRAIN_MODES.some(m =>
+        (s.display_informations?.commercial_mode || '').toLowerCase().includes(m) ||
+        (s.display_informations?.network || '').toLowerCase().includes('sncf')
+      )
+
+    const journey = d.journeys.find(j => j.sections?.some(isTrainSection)) || d.journeys[0]
+    if (!journey) return null
+
+    const ptSections = (journey.sections || []).filter(s => s.type === 'public_transport')
+    const trainSections = ptSections.filter(isTrainSection)
+    const firstPT = ptSections[0]
+    const lastPT  = ptSections[ptSections.length - 1]
+
+    // Gare de départ et d'arrivée (section train ou première/dernière PT)
+    const firstTrain = trainSections[0] || firstPT
+    const lastTrain  = trainSections[trainSections.length - 1] || lastPT
+
+    return {
+      duration:      journey.duration,
+      transfers:     ptSections.length - 1,
+      departStation: firstTrain?.from?.stop_area?.name || firstTrain?.from?.stop_point?.label || null,
+      arriveStation: lastTrain?.to?.stop_area?.name   || lastTrain?.to?.stop_point?.label   || null,
+      departTime:    firstPT?.departure_date_time || null,
+      arriveTime:    lastPT?.arrival_date_time    || null,
+      source:        'navitia',
+    }
   } catch { return null }
 }
 
@@ -136,23 +215,36 @@ async function geocodeBatch(dossiers) {
 // ── Panneau Itinéraire ────────────────────────────────────────────────────────
 function ItinerairePanel({ dossier, destCoords, onClose, isMobile }) {
   const now = new Date()
-  const [origin,        setOrigin]       = useState('')
-  const [suggestions,   setSuggestions]  = useState([])
-  const [showSugg,      setShowSugg]     = useState(false)
-  const [originCoords,  setOriginCoords] = useState(null)
-  const [date,          setDate]         = useState(now.toISOString().slice(0, 10))
-  const [time,          setTime]         = useState(
+  const [origin,       setOrigin]       = useState('')
+  const [suggestions,  setSuggestions]  = useState([])
+  const [showSugg,     setShowSugg]     = useState(false)
+  const [originCoords, setOriginCoords] = useState(null)
+  const [date,         setDate]         = useState(now.toISOString().slice(0, 10))
+  const [time,         setTime]         = useState(
     `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
   )
-  const [timeType,      setTimeType]     = useState('depart')
-  const [routes,        setRoutes]       = useState({})
-  const [loading,       setLoading]      = useState(false)
+  const [timeType,     setTimeType]     = useState('depart')
+  const [car,          setCar]          = useState(null)   // { duration, distance, source }
+  const [train,        setTrain]        = useState(null)   // navitia result
+  const [loadingCar,   setLoadingCar]   = useState(false)
+  const [loadingTrain, setLoadingTrain] = useState(false)
   const suggTimeout = useRef(null)
+
+  const hasGoogleKey  = !!import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+  const hasNavitiaKey = !!import.meta.env.VITE_NAVITIA_KEY
+
+  // Construit le datetime pour les APIs
+  const getDatetimes = () => {
+    const dt = new Date(`${date}T${time}:00`)
+    const unix    = Math.floor(dt.getTime() / 1000)
+    const navitia = date.replace(/-/g, '') + 'T' + time.replace(':', '') + '00'
+    return { unix, navitia }
+  }
 
   const handleOriginInput = (val) => {
     setOrigin(val)
     setOriginCoords(null)
-    setRoutes({})
+    setCar(null); setTrain(null)
     clearTimeout(suggTimeout.current)
     if (val.length < 3) { setSuggestions([]); setShowSugg(false); return }
     suggTimeout.current = setTimeout(async () => {
@@ -166,72 +258,99 @@ function ItinerairePanel({ dossier, destCoords, onClose, isMobile }) {
   }
 
   const selectSuggestion = (feat) => {
-    const label = feat.properties.label
-    const coords = { lat: feat.geometry.coordinates[1], lng: feat.geometry.coordinates[0] }
-    setOrigin(label)
-    setOriginCoords(coords)
+    setOrigin(feat.properties.label)
+    setOriginCoords({ lat: feat.geometry.coordinates[1], lng: feat.geometry.coordinates[0] })
     setSuggestions([])
     setShowSugg(false)
   }
 
-  const calculate = async (oc = originCoords) => {
-    if (!oc || !destCoords) return
-    setLoading(true)
-    const results = {}
-    await Promise.all(
-      TRANSPORT_MODES.filter(m => m.osrm).map(async m => {
-        const r = await getOsrmRoute(m.osrm, oc.lat, oc.lng, destCoords[0], destCoords[1])
-        if (r) results[m.id] = r
+  // Pré-remplir avec l'adresse du bureau
+  const fillOffice = () => {
+    handleOriginInput(OFFICE_ADDRESS)
+    // Géocode direct sans attendre la frappe
+    clearTimeout(suggTimeout.current)
+    fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(OFFICE_ADDRESS)}&limit=1`)
+      .then(r => r.json())
+      .then(d => {
+        const f = d.features?.[0]
+        if (f) {
+          setOrigin(f.properties.label)
+          setOriginCoords({ lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] })
+          setSuggestions([])
+        }
       })
-    )
-    setRoutes(results)
-    setLoading(false)
+      .catch(() => {})
   }
 
-  // Calcule automatiquement quand l'origine est sélectionnée
+  const calculate = async (oc = originCoords) => {
+    if (!oc || !destCoords) return
+    const { unix, navitia } = getDatetimes()
+    const isArrival = timeType === 'arrivee'
+
+    // ── Voiture ──
+    setLoadingCar(true)
+    let carResult = null
+    if (hasGoogleKey) {
+      carResult = await getGoogleRoute(oc.lat, oc.lng, destCoords[0], destCoords[1], isArrival ? undefined : unix)
+    }
+    if (!carResult) {
+      carResult = await getOsrmRoute(oc.lat, oc.lng, destCoords[0], destCoords[1])
+    }
+    setCar(carResult)
+    setLoadingCar(false)
+
+    // ── Train ──
+    setLoadingTrain(true)
+    const trainResult = await getTrainJourney(oc.lat, oc.lng, destCoords[0], destCoords[1], navitia, isArrival)
+    setTrain(trainResult)
+    setLoadingTrain(false)
+  }
+
   useEffect(() => {
     if (originCoords && destCoords) calculate(originCoords)
   }, [originCoords])
 
-  const gmapsUrl = (gmapsMode) => {
+  const gmapsUrl = (mode) => {
     const orig = origin ? encodeURIComponent(origin) : ''
     const dest = dossier.adresse_site ? encodeURIComponent(dossier.adresse_site) : ''
-    return `https://www.google.com/maps/dir/?api=1&origin=${orig}&destination=${dest}&travelmode=${gmapsMode}`
+    return `https://www.google.com/maps/dir/?api=1&origin=${orig}&destination=${dest}&travelmode=${mode}`
+  }
+
+  const sncfUrl = () => {
+    const from = train?.departStation ? encodeURIComponent(train.departStation) : ''
+    const to   = train?.arriveStation ? encodeURIComponent(train.arriveStation) : ''
+    const d    = date || ''
+    if (from && to) {
+      return `https://www.sncf-connect.com/app/home/shop/search?from=${from}&to=${to}&date=${d}&passengers=1`
+    }
+    return 'https://www.sncf-connect.com'
   }
 
   const statut = STATUTS.find(s => s.id === dossier.statut) || { label: dossier.statut, color: C.textSoft }
 
   return (
     <div style={{
-      position: 'absolute',
-      top: 0,
-      right: 0,
+      position: 'absolute', top: 0, right: 0,
       width: isMobile ? '100%' : 340,
       height: '100%',
       background: C.surface,
       borderLeft: `1px solid ${C.border}`,
       zIndex: 1000,
-      display: 'flex',
-      flexDirection: 'column',
-      boxShadow: '-6px 0 24px rgba(0,0,0,.13)',
+      display: 'flex', flexDirection: 'column',
+      boxShadow: '-6px 0 28px rgba(0,0,0,.14)',
       fontFamily: "system-ui,'Segoe UI',Arial,sans-serif",
     }}>
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}`, flexShrink: 0, background: '#F8FAFC' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.text, display: 'flex', alignItems: 'center', gap: 6 }}>
-              🧭 Itinéraire
-            </div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>🧭 Itinéraire</div>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {dossier.prospects?.raison_sociale || dossier.ref}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: C.textSoft, padding: '0 0 0 10px', lineHeight: 1, flexShrink: 0 }}
-          >✕</button>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: C.textSoft, padding: '0 0 0 10px', lineHeight: 1, flexShrink: 0 }}>✕</button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 10, fontWeight: 700, color: statut.color, background: statut.color + '18', border: `1px solid ${statut.color}44`, borderRadius: 10, padding: '2px 7px', flexShrink: 0 }}>
@@ -243,29 +362,42 @@ function ItinerairePanel({ dossier, destCoords, onClose, isMobile }) {
         </div>
       </div>
 
-      {/* Corps */}
+      {/* ── Corps scrollable ── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
 
-        {/* ── Origine ── */}
-        <div style={{ marginBottom: 14, position: 'relative' }}>
+        {/* Origine */}
+        <div style={{ marginBottom: 10, position: 'relative' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.04em' }}>
             Départ depuis
           </div>
+          {/* Bouton Bureau */}
+          <button
+            onClick={fillOffice}
+            style={{
+              width: '100%', marginBottom: 6,
+              background: '#EFF6FF', border: '1.5px solid #BFDBFE',
+              borderRadius: 7, padding: '7px 10px',
+              fontSize: 11, fontWeight: 700, color: '#1D4ED8',
+              cursor: 'pointer', fontFamily: 'inherit',
+              textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            🏢 <span>Bureau — 80 Bd de Picpus, 75012 Paris</span>
+          </button>
           <input
             value={origin}
             onChange={e => handleOriginInput(e.target.value)}
             onFocus={() => suggestions.length > 0 && setShowSugg(true)}
-            onBlur={() => setTimeout(() => setShowSugg(false), 200)}
-            placeholder="Votre adresse de départ…"
+            onBlur={() => setTimeout(() => setShowSugg(false), 220)}
+            placeholder="Ou saisir une autre adresse…"
             style={{
               width: '100%', boxSizing: 'border-box',
               background: C.bg, border: `1.5px solid ${C.border}`,
               borderRadius: 8, padding: '9px 11px', fontSize: 12,
               color: C.text, fontFamily: 'inherit', outline: 'none',
-              transition: 'border-color .15s',
             }}
-            onFocusCapture={e => { e.target.style.borderColor = C.accent }}
-            onBlurCapture={e => { e.target.style.borderColor = C.border }}
+            onFocus={e => { e.target.style.borderColor = C.accent }}
+            onBlur={e => { e.target.style.borderColor = C.border }}
           />
           {showSugg && suggestions.length > 0 && (
             <div style={{
@@ -278,11 +410,7 @@ function ItinerairePanel({ dossier, destCoords, onClose, isMobile }) {
                 <div
                   key={i}
                   onMouseDown={() => selectSuggestion(s)}
-                  style={{
-                    padding: '9px 12px', fontSize: 12, color: C.text, cursor: 'pointer',
-                    borderBottom: i < suggestions.length - 1 ? `1px solid ${C.border}` : 'none',
-                    transition: 'background .1s',
-                  }}
+                  style={{ padding: '9px 12px', fontSize: 12, color: C.text, cursor: 'pointer', borderBottom: i < suggestions.length - 1 ? `1px solid ${C.border}` : 'none' }}
                   onMouseEnter={e => { e.currentTarget.style.background = C.bg }}
                   onMouseLeave={e => { e.currentTarget.style.background = C.surface }}
                 >
@@ -294,143 +422,179 @@ function ItinerairePanel({ dossier, destCoords, onClose, isMobile }) {
           )}
         </div>
 
-        {/* ── Date & Heure ── */}
+        {/* Date & Heure */}
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.04em' }}>
             Date & heure
           </div>
           <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-            <input
-              type="date" value={date} onChange={e => setDate(e.target.value)}
-              style={{ flex: 1, background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', fontSize: 12, color: C.text, fontFamily: 'inherit', outline: 'none' }}
-            />
-            <input
-              type="time" value={time} onChange={e => setTime(e.target.value)}
-              style={{ flex: '0 0 100px', background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', fontSize: 12, color: C.text, fontFamily: 'inherit', outline: 'none' }}
-            />
+            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+              style={{ flex: 1, background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', fontSize: 12, color: C.text, fontFamily: 'inherit', outline: 'none' }} />
+            <input type="time" value={time} onChange={e => setTime(e.target.value)}
+              style={{ flex: '0 0 96px', background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', fontSize: 12, color: C.text, fontFamily: 'inherit', outline: 'none' }} />
           </div>
-          {/* Toggle départ / arrivée */}
           <div style={{ display: 'flex', background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: 3, gap: 3 }}>
             {[['depart', '↗ Départ'], ['arrivee', '↙ Arrivée']].map(([val, lbl]) => (
-              <button
-                key={val}
-                onClick={() => setTimeType(val)}
-                style={{
-                  flex: 1, background: timeType === val ? C.accent : 'transparent',
-                  color: timeType === val ? '#fff' : C.textMid,
-                  border: 'none', borderRadius: 6, padding: '6px 0',
-                  fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                  fontFamily: 'inherit', transition: 'all .15s',
-                }}
-              >{lbl}</button>
+              <button key={val} onClick={() => setTimeType(val)} style={{
+                flex: 1, background: timeType === val ? C.accent : 'transparent',
+                color: timeType === val ? '#fff' : C.textMid,
+                border: 'none', borderRadius: 6, padding: '6px 0',
+                fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
+              }}>{lbl}</button>
             ))}
           </div>
         </div>
 
-        {/* ── Modes de transport ── */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.04em' }}>
-          Modes de transport
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-          {TRANSPORT_MODES.map(m => {
-            const r = routes[m.id]
-            const isTransit = m.id === 'transit'
-            return (
-              <div
-                key={m.id}
-                style={{
-                  background: C.bg,
-                  border: `1.5px solid ${r && !isTransit ? C.accent + '55' : C.border}`,
-                  borderRadius: 10,
-                  padding: '12px 10px 10px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 3,
-                  transition: 'border-color .2s',
-                }}
-              >
-                <div style={{ fontSize: 24, lineHeight: 1 }}>{m.icon}</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.text }}>{m.label}</div>
-
-                {/* Durée / info */}
-                <div style={{ minHeight: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-                  {loading && m.osrm ? (
-                    <div style={{ fontSize: 10, color: C.textSoft }}>Calcul…</div>
-                  ) : isTransit ? (
-                    <div style={{ fontSize: 10, color: C.textSoft, textAlign: 'center', lineHeight: 1.3 }}>
-                      Durée via<br/>Google Maps
+        {/* ── Carte Voiture ── */}
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+            🚗 Voiture
+          </div>
+          <div style={{
+            background: car ? '#F0FDF4' : C.bg,
+            border: `1.5px solid ${car ? '#86EFAC' : C.border}`,
+            borderRadius: 10, padding: '14px 14px 12px',
+          }}>
+            {loadingCar ? (
+              <div style={{ textAlign: 'center', color: C.textSoft, fontSize: 12, padding: '8px 0' }}>Calcul en cours…</div>
+            ) : car ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 26, fontWeight: 900, color: '#16A34A', lineHeight: 1 }}>
+                    {fmtDuration(car.duration)}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.textSoft, marginTop: 2 }}>{fmtDist(car.distance)}</div>
+                  {car.source === 'osrm' && (
+                    <div style={{ fontSize: 9, color: C.textSoft, marginTop: 3, fontStyle: 'italic' }}>
+                      estimatif · sans trafic
+                      {!hasGoogleKey && <span> · <a href="https://console.cloud.google.com" target="_blank" rel="noopener noreferrer" style={{ color: C.accent }}>activer Google Maps</a></span>}
                     </div>
-                  ) : r ? (
-                    <>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: C.accent, lineHeight: 1 }}>
-                        {fmtDuration(r.duration)}
+                  )}
+                  {car.source === 'google' && (
+                    <div style={{ fontSize: 9, color: '#16A34A', marginTop: 3 }}>✓ trafic temps réel Google</div>
+                  )}
+                </div>
+                <a href={gmapsUrl('driving')} target="_blank" rel="noopener noreferrer"
+                  style={{ flexShrink: 0, background: '#16A34A', color: '#fff', borderRadius: 7, padding: '8px 12px', fontSize: 11, fontWeight: 700, textDecoration: 'none', fontFamily: 'inherit' }}>
+                  Maps →
+                </a>
+              </div>
+            ) : originCoords ? (
+              <div style={{ textAlign: 'center', color: '#DC2626', fontSize: 12 }}>Itinéraire indisponible</div>
+            ) : (
+              <div style={{ textAlign: 'center', color: C.textSoft, fontSize: 12 }}>Saisissez une adresse de départ</div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Carte Train SNCF ── */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+            🚄 Train SNCF
+          </div>
+          <div style={{
+            background: train && !train.noKey ? '#EFF6FF' : C.bg,
+            border: `1.5px solid ${train && !train.noKey && !loadingTrain ? '#93C5FD' : C.border}`,
+            borderRadius: 10, padding: '14px 14px 12px',
+          }}>
+            {!hasNavitiaKey ? (
+              <div style={{ fontSize: 11, color: C.textMid, lineHeight: 1.5 }}>
+                🔑 Clé API Navitia non configurée.<br/>
+                <a href="https://navitia.io" target="_blank" rel="noopener noreferrer" style={{ color: C.accent, fontWeight: 700 }}>
+                  Inscription gratuite → navitia.io
+                </a>
+                <div style={{ marginTop: 4, fontSize: 10, color: C.textSoft }}>Puis ajouter <code>VITE_NAVITIA_KEY</code> dans .env et Vercel.</div>
+              </div>
+            ) : loadingTrain ? (
+              <div style={{ textAlign: 'center', color: C.textSoft, fontSize: 12, padding: '8px 0' }}>Recherche trajets SNCF…</div>
+            ) : train && !train.noKey ? (
+              <div>
+                {/* Durée + correspondances */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 26, fontWeight: 900, color: C.accent, lineHeight: 1 }}>
+                      {fmtDuration(train.duration)}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.textSoft, marginTop: 2 }}>
+                      {train.transfers === 0 ? 'Direct' : `${train.transfers} correspondance${train.transfers > 1 ? 's' : ''}`}
+                    </div>
+                  </div>
+                  {train.departTime && train.arriveTime && (
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>
+                        {fmtNavitiaTime(train.departTime)} → {fmtNavitiaTime(train.arriveTime)}
                       </div>
-                      <div style={{ fontSize: 10, color: C.textSoft }}>{fmtDist(r.distance)}</div>
-                    </>
-                  ) : originCoords && !loading ? (
-                    <div style={{ fontSize: 10, color: '#DC2626' }}>Indisponible</div>
-                  ) : (
-                    <div style={{ fontSize: 10, color: C.textSoft }}>—</div>
+                    </div>
                   )}
                 </div>
 
-                {/* Bouton Google Maps */}
-                <a
-                  href={gmapsUrl(m.gmaps)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    marginTop: 4,
-                    display: 'block', width: '100%', boxSizing: 'border-box',
-                    background: origin ? C.accent : C.textSoft,
-                    color: '#fff', borderRadius: 6,
-                    padding: '5px 0', fontSize: 10, fontWeight: 700,
-                    textDecoration: 'none', textAlign: 'center',
-                    fontFamily: 'inherit',
-                    pointerEvents: origin ? 'auto' : 'none',
-                    opacity: origin ? 1 : 0.45,
-                  }}
-                >
-                  Ouvrir Maps →
+                {/* Gares */}
+                {(train.departStation || train.arriveStation) && (
+                  <div style={{ background: '#fff', border: `1px solid #BFDBFE`, borderRadius: 7, padding: '8px 10px', marginBottom: 10, fontSize: 11, color: C.text, lineHeight: 1.5 }}>
+                    {train.departStation && (
+                      <div>🚉 <strong>Départ :</strong> {train.departStation}</div>
+                    )}
+                    {train.arriveStation && (
+                      <div>🏁 <strong>Arrivée :</strong> {train.arriveStation}</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Prix */}
+                <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 10, fontStyle: 'italic' }}>
+                  💶 Prix non disponibles via API gratuite — voir sur SNCF Connect
+                </div>
+
+                {/* Lien SNCF */}
+                <a href={sncfUrl()} target="_blank" rel="noopener noreferrer" style={{
+                  display: 'block', width: '100%', boxSizing: 'border-box',
+                  background: C.accent, color: '#fff',
+                  borderRadius: 7, padding: '9px 0',
+                  fontSize: 12, fontWeight: 700, textDecoration: 'none',
+                  textAlign: 'center', fontFamily: 'inherit',
+                }}>
+                  Voir billets sur SNCF Connect →
                 </a>
               </div>
-            )
-          })}
+            ) : originCoords ? (
+              <div>
+                <div style={{ textAlign: 'center', color: C.textSoft, fontSize: 12, marginBottom: 10 }}>
+                  Aucun trajet trouvé
+                </div>
+                <a href={`https://www.sncf-connect.com/app/home/shop/search?date=${date}`} target="_blank" rel="noopener noreferrer"
+                  style={{ display: 'block', background: C.accent, color: '#fff', borderRadius: 7, padding: '8px 0', fontSize: 11, fontWeight: 700, textDecoration: 'none', textAlign: 'center', fontFamily: 'inherit' }}>
+                  SNCF Connect →
+                </a>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', color: C.textSoft, fontSize: 12 }}>Saisissez une adresse de départ</div>
+            )}
+          </div>
         </div>
 
         {/* Recalculer */}
         {originCoords && (
           <button
             onClick={() => calculate()}
-            disabled={loading}
+            disabled={loadingCar || loadingTrain}
             style={{
-              width: '100%',
-              background: C.surface, border: `1.5px solid ${C.border}`,
+              width: '100%', background: C.surface, border: `1.5px solid ${C.border}`,
               borderRadius: 8, padding: '9px 0', fontSize: 12,
               fontWeight: 600, color: C.textMid,
-              cursor: loading ? 'default' : 'pointer',
-              fontFamily: 'inherit', transition: 'background .1s',
+              cursor: loadingCar || loadingTrain ? 'default' : 'pointer', fontFamily: 'inherit',
             }}
-            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = C.bg }}
+            onMouseEnter={e => { e.currentTarget.style.background = C.bg }}
             onMouseLeave={e => { e.currentTarget.style.background = C.surface }}
           >
-            {loading ? '⏳ Calcul en cours…' : '↺ Recalculer'}
+            {loadingCar || loadingTrain ? '⏳ Calcul…' : '↺ Recalculer'}
           </button>
-        )}
-
-        {/* Hint si pas d'adresse */}
-        {!origin && (
-          <div style={{ marginTop: 12, padding: '10px 12px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, fontSize: 11, color: '#1D4ED8', lineHeight: 1.5 }}>
-            💡 Saisissez votre adresse de départ pour calculer la durée par mode de transport.
-          </div>
         )}
       </div>
 
-      {/* Footer */}
-      <div style={{ padding: '10px 16px', borderTop: `1px solid ${C.border}`, flexShrink: 0, background: '#F8FAFC' }}>
+      {/* ── Footer ── */}
+      <div style={{ padding: '8px 16px', borderTop: `1px solid ${C.border}`, flexShrink: 0, background: '#F8FAFC' }}>
         <div style={{ fontSize: 10, color: C.textSoft, textAlign: 'center' }}>
-          Durées calculées via OSRM · Transit via Google Maps
+          {hasGoogleKey ? 'Google Maps (trafic réel)' : 'OSRM (estimatif)'} · {hasNavitiaKey ? 'Navitia SNCF' : 'Navitia non configuré'}
         </div>
       </div>
     </div>
