@@ -279,38 +279,39 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
                   </div>
                 )}
 
-                {/* position:fixed sur l'input = bypass total de overflow:hidden des parents */}
-                <label
-                  onDragOver={e => { e.preventDefault(); setDragOverCat(cat.id) }}
-                  onDragLeave={() => setDragOverCat(null)}
-                  onDrop={e => handleDrop(cat.id, e)}
-                  style={{
+                {/* Wrapper div : gère le drag-and-drop desktop */}
+                {/* Label intérieur : déclenche l'input nativement sur iOS (sans .click()) */}
+                {/* Input position:fixed : échappe à overflow:hidden des parents */}
+                <div
+                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverCat(cat.id) }}
+                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverCat(null) }}
+                  onDrop={e => { e.preventDefault(); e.stopPropagation(); handleDrop(cat.id, e) }}
+                  style={{ marginTop: catPhotos.length > 0 ? 0 : 12 }}
+                >
+                  <label style={{
                     display: 'block', textAlign: 'center',
-                    cursor: visiteId && !uploading ? 'pointer' : 'not-allowed',
+                    cursor: visiteId && !uploading ? 'pointer' : 'default',
                     background: uploading ? C.bg : dragOverCat === cat.id ? '#DBEAFE' : '#EFF6FF',
                     border: `1.5px dashed ${uploading ? C.border : dragOverCat === cat.id ? C.accent : '#93C5FD'}`,
                     borderRadius: 8, padding: '12px 0', width: '100%', boxSizing: 'border-box',
                     color: uploading || !visiteId ? C.textSoft : C.accent,
                     fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
-                    marginTop: catPhotos.length > 0 ? 0 : 12,
                     pointerEvents: visiteId && !uploading ? 'auto' : 'none',
-                  }}
-                >
-                  {uploading ? '⏳ Upload en cours…' : isMobile ? '📷 Ajouter une photo' : '📁 Glisser-déposer ou cliquer'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={e => {
-                      Array.from(e.target.files).forEach(f => handleFile(cat.id, f))
-                      e.target.value = ''
-                    }}
-                    style={{
-                      position: 'fixed', top: 0, left: 0,
-                      width: 1, height: 1, opacity: 0,
-                    }}
-                  />
-                </label>
+                    userSelect: 'none',
+                  }}>
+                    {uploading ? '⏳ Upload en cours…' : isMobile ? '📷 Ajouter une photo' : '📁 Glisser-déposer ou cliquer'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={e => {
+                        Array.from(e.target.files).forEach(f => handleFile(cat.id, f))
+                        e.target.value = ''
+                      }}
+                      style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0 }}
+                    />
+                  </label>
+                </div>
               </div>
             )}
           </div>
