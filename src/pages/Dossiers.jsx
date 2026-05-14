@@ -83,6 +83,7 @@ export default function Dossiers() {
   const [simuMap, setSimuMap]                   = useState({})
 
   const isAdmin = profile?.role === 'admin'
+  const isMobile = window.innerWidth < 700
 
   useEffect(() => {
     if (!profile) return
@@ -239,7 +240,43 @@ export default function Dossiers() {
             <div style={{ fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 6 }}>Aucun dossier</div>
             <div style={{ fontSize: 13, color: C.textMid }}>Créez votre premier dossier pour démarrer</div>
           </div>
+        ) : isMobile ? (
+          /* ── Vue mobile : cartes ── */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {filtered.map(d => {
+              const isPerdu = d.statut === 'perdu'
+              const prime   = d.prime_estimee || 0
+              const cout    = d.montant_devis || 0
+              const margeNette = prime > 0 ? Math.round((prime * 0.9 - cout) * 100) / 100 : null
+              const mwh     = simuMap[d.id]?.mwh_cumac || null
+              const jPlus   = daysSince(d.created_at)
+              return (
+                <div key={d.id} onClick={() => !deletingIds.has(d.id) && openDossier(d)}
+                  style={{ background: isPerdu ? '#FFF5F5' : C.surface, border: `1px solid ${isPerdu ? '#FCA5A5' : C.border}`, borderRadius: 10, padding: '14px 16px', cursor: 'pointer', opacity: isPerdu ? 0.8 : 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.prospects?.raison_sociale || '—'}</div>
+                      {d.prospects?.contact_nom && <div style={{ fontSize: 12, color: C.textMid }}>{d.prospects.contact_nom}</div>}
+                    </div>
+                    <StatutBadge statut={d.statut} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', fontFamily: 'monospace' }}>{d.ref}</span>
+                    <span style={{ fontSize: 11, color: C.textMid, fontWeight: 600 }}>{d.fiche_cee}</span>
+                    {mwh && <span style={{ fontSize: 11, fontWeight: 700, color: C.accent }}>{fmtMwh(mwh)}</span>}
+                    {prime > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED' }}>{fmtK(prime)}</span>}
+                    {margeNette != null && <span style={{ fontSize: 11, fontWeight: 700, color: margeNette >= 0 ? '#16A34A' : '#DC2626' }}>m: {fmtK(margeNette)}</span>}
+                    {isAdmin
+                      ? <span style={{ fontSize: 11, color: C.textSoft, marginLeft: 'auto' }}>{profileName(d.assigne_a)}</span>
+                      : <span style={{ fontSize: 11, color: jPlus > 14 ? '#DC2626' : jPlus > 7 ? '#D97706' : C.textSoft, fontWeight: jPlus > 7 ? 700 : 400, marginLeft: 'auto' }}>J+{jPlus}</span>
+                    }
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         ) : (
+          /* ── Vue desktop : tableau ── */
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflowX: 'auto' }}>
           <div style={{ minWidth: 820 }}>
             {/* En-tête */}

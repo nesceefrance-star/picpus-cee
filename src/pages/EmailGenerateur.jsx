@@ -106,18 +106,20 @@ export default function EmailGenerateur() {
   const needsSlots = currentTypeConfig?.needsSlots
   const canGenerate = !!selectedType && (!needsSlots || selectedSlots.length > 0)
 
+  const isMobile = window.innerWidth < 700
+
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, padding: '24px 24px 40px', fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" }}>
+    <div style={{ minHeight: '100vh', background: C.bg, padding: isMobile ? '16px 12px 40px' : '24px 24px 40px', fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" }}>
 
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: C.text }}>✉️ Générateur d'emails CEE</div>
+        <div style={{ fontSize: isMobile ? 17 : 20, fontWeight: 800, color: C.text }}>✉️ Générateur d'emails CEE</div>
         <div style={{ fontSize: 13, color: C.textMid, marginTop: 4 }}>
           Générez un email personnalisé — aucun dossier requis, juste le nom du contact et son entreprise.
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', maxWidth: 1100 }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 24, alignItems: 'flex-start', maxWidth: 1100 }}>
 
         {/* ── Formulaire ──────────────────────────────────────────────────── */}
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -125,7 +127,7 @@ export default function EmailGenerateur() {
           {/* Étape 1 — Contact */}
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '18px 20px', marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>1. Contact (optionnel)</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5 }}>Nom du contact</div>
                 <input
@@ -150,7 +152,7 @@ export default function EmailGenerateur() {
           {/* Étape 2 — Type d'email */}
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '18px 20px', marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>2. Choisissez le type d'email</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 8 }}>
               {EMAIL_TYPES.map(t => (
                 <button key={t.key} type="button" onClick={() => handleTypeChange(t.key)}
                   style={{ padding: '12px 10px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
@@ -230,8 +232,8 @@ export default function EmailGenerateur() {
           )}
         </div>
 
-        {/* ── Panel résultat (sticky) ───────────────────────────────────── */}
-        <div style={{ width: 340, flexShrink: 0, position: 'sticky', top: 24 }}>
+        {/* ── Panel résultat ───────────────────────────────────────────── */}
+        <div style={{ width: isMobile ? '100%' : 340, flexShrink: 0, position: isMobile ? 'static' : 'sticky', top: 24 }}>
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '18px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>✉️ Email généré</div>

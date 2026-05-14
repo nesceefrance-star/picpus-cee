@@ -314,23 +314,24 @@ function BtnGroup({ options, value, onChange }) {
 
 function LigneEquip({ eq, onChange, onRemove, canRemove }) {
   const total = (parseInt(eq.quantite) || 0) * (parseFloat(eq.puissance_unitaire_kw) || 0)
+  const sm = window.innerWidth < 640
   return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+    <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 6, flexWrap: sm ? 'wrap' : 'nowrap' }}>
       <input value={eq.label} onChange={e => onChange({ ...eq, label: e.target.value })} placeholder="Équipement"
-        style={{ flex: 2, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
+        style={{ flex: sm ? '1 1 100%' : 2, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
       <input type="number" value={eq.quantite} onChange={e => onChange({ ...eq, quantite: e.target.value })} placeholder="Qté" min="1"
-        style={{ width: 52, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 6px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit', textAlign: 'center' }} />
-      <div style={{ position: 'relative', width: 90 }}>
+        style={{ width: 44, flexShrink: 0, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 4px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit', textAlign: 'center' }} />
+      <div style={{ position: 'relative', width: sm ? 80 : 90, flexShrink: 0 }}>
         <input type="number" value={eq.puissance_unitaire_kw} onChange={e => onChange({ ...eq, puissance_unitaire_kw: e.target.value })} placeholder="kW"
           style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 26px 7px 8px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
         <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: C.textMid }}>kW</span>
       </div>
-      <div style={{ width: 64, textAlign: 'right', fontSize: 12, fontWeight: 700, color: total > 0 ? '#2563EB' : C.textSoft }}>
+      {!sm && <div style={{ width: 60, flexShrink: 0, textAlign: 'right', fontSize: 12, fontWeight: 700, color: total > 0 ? '#2563EB' : C.textSoft }}>
         {total > 0 ? `${total} kW` : '—'}
-      </div>
+      </div>}
       {canRemove
-        ? <button type="button" onClick={onRemove} style={{ background: 'transparent', border: `1px solid #FECACA`, color: '#DC2626', borderRadius: 5, padding: '4px 6px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>✕</button>
-        : <div style={{ width: 28 }} />
+        ? <button type="button" onClick={onRemove} style={{ background: 'transparent', border: `1px solid #FECACA`, color: '#DC2626', borderRadius: 5, padding: '4px 6px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>✕</button>
+        : <div style={{ width: 24, flexShrink: 0 }} />
       }
     </div>
   )
@@ -520,7 +521,7 @@ export default function SimulateurRapide() {
               )}
 
               {/* Surface + Hauteur */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 0 : '0 16px' }}>
                 <div>
                   <Label>Surface du site</Label>
                   <NumInput value={form.surface_m2} onChange={v => setF('surface_m2', v)} placeholder="ex : 2000" suffix="m²" />
@@ -533,13 +534,13 @@ export default function SimulateurRapide() {
 
               {/* Équipements convectifs */}
               <Card title="🌀 Chauffage convectif (chaudière, aérotherme, rooftop…)">
-                <div style={{ display: 'flex', gap: 6, marginBottom: 6, paddingLeft: 2 }}>
+                {!isMobile && <div style={{ display: 'flex', gap: 5, marginBottom: 6, paddingLeft: 2 }}>
                   <span style={{ flex: 2, fontSize: 10, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .3 }}>Équipement</span>
-                  <span style={{ width: 52, fontSize: 10, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .3, textAlign: 'center' }}>Qté</span>
+                  <span style={{ width: 44, fontSize: 10, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .3, textAlign: 'center' }}>Qté</span>
                   <span style={{ width: 90, fontSize: 10, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .3 }}>kW/unité</span>
-                  <span style={{ width: 64, fontSize: 10, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .3, textAlign: 'right' }}>Total</span>
-                  <div style={{ width: 28 }} />
-                </div>
+                  <span style={{ width: 60, fontSize: 10, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .3, textAlign: 'right' }}>Total</span>
+                  <div style={{ width: 24 }} />
+                </div>}
                 {form.eqs_conv.map((eq, i) => (
                   <LigneEquip key={i} eq={eq}
                     onChange={eq => setForm(f => ({ ...f, eqs_conv: f.eqs_conv.map((e, j) => j === i ? eq : e) }))}
@@ -583,7 +584,7 @@ export default function SimulateurRapide() {
 
               {/* Déstratificateurs */}
               <Card title="🌀 Déstratificateurs">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 0 : '0 16px' }}>
                   <div>
                     <Label>Débit unitaire</Label>
                     <BtnGroup

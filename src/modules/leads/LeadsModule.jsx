@@ -1745,6 +1745,10 @@ export default function LeadsModule() {
   const [showEnrichirModal,setShowEnrichirModal]= useState(false);
   const [showManuelModal,  setShowManuelModal]  = useState(false);
   const [importMsg,        setImportMsg]        = useState(null);
+  const [sidebarOpen,      setSidebarOpen]      = useState(false);
+  const [filterAction,     setFilterAction]     = useState(null); // null = tous
+
+  const isMobile = window.innerWidth < 768;
 
   // État formulaire lead manuel — persisté au niveau parent pour survivre fermeture/réouverture
   const [manuelForm, setManuelForm] = useState(MANUEL_INIT);
@@ -1801,7 +1805,12 @@ export default function LeadsModule() {
     lusha:     societesBrutes.reduce((acc, s) => acc + (s.contacts?.filter(c => c.lusha_fetched).length ?? 0), 0),
   };
 
-  const STATUTS_FILTRE = ['Tous', 'À qualifier', 'Contacté', 'RDV planifié', 'Non qualifié', 'Non pertinent', 'Converti en dossier'];
+  const ACTION_BTNS = [
+    { key: 'rappeler', label: 'À rappeler',   icon: '📞', colorKey: 'accent'  },
+    { key: 'nrp',      label: 'NRP',          icon: '📵', colorKey: 'orange'  },
+    { key: 'mail',     label: 'Mail à faire', icon: '✉️',  colorKey: 'yellow'  },
+    { key: 'visio',    label: 'Visio',        icon: '🎥', colorKey: 'purple'  },
+  ];
 
   return (
     <LeadsTheme.Provider value={C}>
@@ -1847,15 +1856,41 @@ export default function LeadsModule() {
       {/* ── Body (split: panel gauche + contenu) ── */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
 
-        {/* Panel historique batches */}
-        <BatchPanel
-          batches={batches} selectedBatchId={selectedBatchId} loadingBatches={loadingBatches}
-          onSelect={selectBatch} onDelete={supprimerBatch} onReassign={reassignerBatch}
-          isAdmin={isAdmin} profiles={profiles}
-        />
+        {/* Panel historique batches — drawer mobile / inline desktop */}
+        {isMobile ? (
+          <>
+            {sidebarOpen && (
+              <div style={{ position: 'fixed', inset: 0, zIndex: 120, display: 'flex' }}
+                onClick={() => setSidebarOpen(false)}>
+                <div style={{ width: 280, maxWidth: '85vw', height: '100%', display: 'flex', flexDirection: 'column', background: C.bgCard, boxShadow: '4px 0 24px rgba(0,0,0,.4)' }}
+                  onClick={e => e.stopPropagation()}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 14px 0' }}>
+                    <button onClick={() => setSidebarOpen(false)}
+                      style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 7, padding: '4px 10px', color: C.textSub, fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>×</button>
+                  </div>
+                  <div style={{ flex: 1, overflow: 'hidden' }}>
+                    <BatchPanel
+                      batches={batches} selectedBatchId={selectedBatchId} loadingBatches={loadingBatches}
+                      onSelect={(id) => { selectBatch(id); setSidebarOpen(false); }}
+                      onDelete={supprimerBatch} onReassign={reassignerBatch}
+                      isAdmin={isAdmin} profiles={profiles}
+                    />
+                  </div>
+                </div>
+                <div style={{ flex: 1, background: 'rgba(0,0,0,.45)' }} />
+              </div>
+            )}
+          </>
+        ) : (
+          <BatchPanel
+            batches={batches} selectedBatchId={selectedBatchId} loadingBatches={loadingBatches}
+            onSelect={selectBatch} onDelete={supprimerBatch} onReassign={reassignerBatch}
+            isAdmin={isAdmin} profiles={profiles}
+          />
+        )}
 
         {/* Contenu principal */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '14px 14px' : '20px 24px' }}>
 
           {importMsg && (
             <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 8, fontSize: 13,
@@ -1888,14 +1923,16 @@ export default function LeadsModule() {
           </div>
 
           {/* Filtres */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            {isMobile && (
+              <button onClick={() => setSidebarOpen(true)}
+                style={{ padding: '8px 12px', borderRadius: 8, border: `1.5px solid ${C.border}`, background: C.bgCard, color: C.textSub, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', fontWeight: 700 }}>
+                ☰ Imports
+              </button>
+            )}
             <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               placeholder="🔍  Rechercher société, ville, activité..."
-              style={{ flex: 1, minWidth: 200, padding: '8px 12px', borderRadius: 8, border: `1.5px solid ${C.border}`, background: C.bgInput, color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
-            <select value={filterStatut} onChange={e => setFilterStatut(e.target.value)}
-              style={{ padding: '8px 10px', borderRadius: 8, border: `1.5px solid ${C.border}`, background: C.bgInput, color: C.text, fontSize: 12, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
-              {STATUTS_FILTRE.map(s => <option key={s}>{s}</option>)}
-            </select>
+              style={{ flex: 1, minWidth: 160, padding: '8px 12px', borderRadius: 8, border: `1.5px solid ${C.border}`, background: C.bgInput, color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
             <select value={sortBy} onChange={e => setSortBy(e.target.value)}
               style={{ padding: '8px 10px', borderRadius: 8, border: `1.5px solid ${C.border}`, background: C.bgInput, color: C.text, fontSize: 12, cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
               <option value="score">🎯 Meilleure cible</option>
@@ -1906,6 +1943,25 @@ export default function LeadsModule() {
             <div style={{ fontSize: 12, color: C.textSub, padding: '7px 12px', background: C.bgCard, borderRadius: 8, border: `1px solid ${C.border}` }}>
               <b style={{ color: C.text }}>{societes.length}</b> société{societes.length > 1 ? 's' : ''}
             </div>
+          </div>
+
+          {/* Boutons filtre par action */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+            <button onClick={() => setFilterAction(null)}
+              style={{ padding: '6px 13px', borderRadius: 20, border: `1.5px solid ${filterAction === null ? C.accent : C.border}`, background: filterAction === null ? `${C.accent}20` : 'transparent', color: filterAction === null ? C.accent : C.textSub, fontSize: 12, fontWeight: filterAction === null ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Tous
+            </button>
+            {ACTION_BTNS.map(({ key, label, icon, colorKey }) => {
+              const col = C[colorKey] || C.accent;
+              const active = filterAction === key;
+              const count = societes.filter(s => s.next_action === key).length;
+              return (
+                <button key={key} onClick={() => setFilterAction(active ? null : key)}
+                  style={{ padding: '6px 13px', borderRadius: 20, border: `1.5px solid ${active ? col : C.border}`, background: active ? `${col}20` : 'transparent', color: active ? col : C.textSub, fontSize: 12, fontWeight: active ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  {icon} {label}{count > 0 && <span style={{ background: active ? col : C.border, color: active ? '#fff' : C.textSub, borderRadius: 10, padding: '0 6px', fontSize: 10, fontWeight: 700 }}>{count}</span>}
+                </button>
+              );
+            })}
           </div>
 
           {/* Liste sociétés */}
@@ -1930,7 +1986,7 @@ export default function LeadsModule() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {societes.map(soc => (
+              {(filterAction ? societes.filter(s => s.next_action === filterAction) : societes).map(soc => (
                 <SocieteCard key={soc.id} soc={soc}
                   cadastreLoading={cadastreLoading} lushaLoading={lushaLoading} gmbLoading={gmbLoading}
                   onCadastre={enrichirCadastre} onEnrichirLusha={enrichirContactLusha} onGmb={enrichirGMB}
@@ -1939,6 +1995,11 @@ export default function LeadsModule() {
                   onNextAction={setNextAction} onSaveCommentaire={setCommentaireSociete}
                   lushaCredits={lushaCredits} />
               ))}
+              {filterAction && societes.filter(s => s.next_action === filterAction).length === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px 24px', color: C.textSub, background: C.bgCard, borderRadius: 14, border: `1px dashed ${C.borderLight}` }}>
+                  Aucun lead avec cette action pour le moment.
+                </div>
+              )}
             </div>
           )}
         </div>
