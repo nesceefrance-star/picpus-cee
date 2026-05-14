@@ -87,16 +87,26 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
     if (!visiteId) return
     setLocalPhotos(prev => prev.map(p => p.id === tempId ? { ...p, _status: 'uploading' } : p))
     try {
-      const ios  = isIOSDevice()
-      const ipad = isIPadDevice()
+      const ios       = isIOSDevice()
       const isAndroid = /Android/.test(navigator.userAgent)
       if (isAndroid) await saveToDevice(file)
+
+      // Sur iOS (iPhone + iPad) : ne pas passer par canvas.toBlob (instable)
       let toUpload = file
-      if (!ipad) {
+      if (!ios) {
         try { toUpload = await compressImage(file) } catch { toUpload = file }
       }
-      const ext  = (toUpload.type || 'image/jpeg').includes('png') ? 'png' : 'jpg'
+
+      // Détection extension : HEIC/HEIF natif iPhone, PNG, ou JPEG par défaut
+      const mime = toUpload.type || ''
+      const ext  = mime.includes('png')
+        ? 'png'
+        : (mime.includes('heic') || mime.includes('heif'))
+          ? 'heic'
+          : 'jpg'
+      const contentType = mime || 'image/jpeg'
       const path = `${visiteId}/${catId}/${Date.now()}.${ext}`
+
       const buf  = await new Promise((resolve, reject) => {
         const reader = new FileReader()
         reader.onload  = () => resolve(reader.result)
@@ -105,7 +115,7 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
       })
       const { error } = await supabase.storage
         .from('visites-photos')
-        .upload(path, buf, { contentType: toUpload.type || 'image/jpeg', upsert: false })
+        .upload(path, buf, { contentType, upsert: false })
       if (error) throw new Error(error.message || JSON.stringify(error))
 
       const { data: { publicUrl } } = supabase.storage.from('visites-photos').getPublicUrl(path)
@@ -249,10 +259,11 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
                           {isError && (
                             <div
                               onClick={() => retryPhoto(photo)}
-                              style={{ position: 'absolute', inset: 0, background: 'rgba(220,38,38,0.75)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', gap: 2 }}
+                              style={{ position: 'absolute', inset: 0, background: 'rgba(220,38,38,0.80)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', gap: 3, padding: 4 }}
                             >
                               <span style={{ fontSize: 18 }}>⚠️</span>
-                              <span style={{ fontSize: 9, color: '#fff', fontWeight: 700 }}>Réessayer</span>
+                              <span style={{ fontSize: 9, color: '#fff', fontWeight: 700, textAlign: 'center' }}>Réessayer</span>
+                              {photo._error && <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.8)', textAlign: 'center', wordBreak: 'break-all' }}>{photo._error.slice(0, 60)}</span>}
                             </div>
                           )}
                           {/* Bouton suppression (masqué si upload en cours) */}
