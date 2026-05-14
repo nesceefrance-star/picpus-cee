@@ -21,13 +21,15 @@ const C = {
   accent: '#2563EB',
 }
 
-const isIOSDevice = () =>
+// Calculé une fois au chargement du module — pas dans le composant
+const IS_IOS =
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-  (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
+  (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
 
+const isIOSDevice = () => IS_IOS
 const isIPadDevice = () =>
   /iPad/.test(navigator.userAgent) ||
-  (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
+  (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
 
 function compressImage(file, maxPx = 1600) {
   return new Promise(resolve => {
@@ -67,7 +69,6 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
   const [lightbox,    setLightbox]    = useState(null)
   const [dragOverCat, setDragOverCat] = useState(null)
 
-  const isMobile = /Android|iPhone|iPad|iPod/.test(navigator.userAgent) || navigator.maxTouchPoints > 1
   const inputs      = useRef({})
   const pendingRef  = useRef({})  // { tempId: { catId, file, localUrl } }
   const photosRef   = useRef(photos)
@@ -279,38 +280,43 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
                   </div>
                 )}
 
-                {/* Wrapper div : gère le drag-and-drop desktop */}
-                {/* Label intérieur : déclenche l'input nativement sur iOS (sans .click()) */}
-                {/* Input position:fixed : échappe à overflow:hidden des parents */}
+                {/* ── Zone upload ───────────────────────────────────────────
+                    iOS  : capture="environment" + display:none + button.click()
+                          (la seule combinaison qui fonctionne sur Safari iOS)
+                    Desktop : div avec handlers drag-and-drop + input multiple ── */}
+                <input
+                  ref={el => inputs.current[cat.id] = el}
+                  type="file"
+                  accept="image/*"
+                  {...(IS_IOS ? { capture: 'environment' } : { multiple: true })}
+                  onChange={e => {
+                    Array.from(e.target.files || []).forEach(f => handleFile(cat.id, f))
+                    e.target.value = ''
+                  }}
+                  style={{ display: 'none' }}
+                />
                 <div
-                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverCat(cat.id) }}
-                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverCat(null) }}
-                  onDrop={e => { e.preventDefault(); e.stopPropagation(); handleDrop(cat.id, e) }}
+                  onDragOver={!IS_IOS ? e => { e.preventDefault(); e.stopPropagation(); setDragOverCat(cat.id) } : undefined}
+                  onDragLeave={!IS_IOS ? e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverCat(null) } : undefined}
+                  onDrop={!IS_IOS ? e => { e.preventDefault(); e.stopPropagation(); handleDrop(cat.id, e) } : undefined}
                   style={{ marginTop: catPhotos.length > 0 ? 0 : 12 }}
                 >
-                  <label style={{
-                    display: 'block', textAlign: 'center',
-                    cursor: visiteId && !uploading ? 'pointer' : 'default',
-                    background: uploading ? C.bg : dragOverCat === cat.id ? '#DBEAFE' : '#EFF6FF',
-                    border: `1.5px dashed ${uploading ? C.border : dragOverCat === cat.id ? C.accent : '#93C5FD'}`,
-                    borderRadius: 8, padding: '12px 0', width: '100%', boxSizing: 'border-box',
-                    color: uploading || !visiteId ? C.textSoft : C.accent,
-                    fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
-                    pointerEvents: visiteId && !uploading ? 'auto' : 'none',
-                    userSelect: 'none',
-                  }}>
-                    {uploading ? '⏳ Upload en cours…' : isMobile ? '📷 Ajouter une photo' : '📁 Glisser-déposer ou cliquer'}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={e => {
-                        Array.from(e.target.files).forEach(f => handleFile(cat.id, f))
-                        e.target.value = ''
-                      }}
-                      style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 1, opacity: 0 }}
-                    />
-                  </label>
+                  <button
+                    onClick={() => { if (visiteId && !uploading) inputs.current[cat.id]?.click() }}
+                    disabled={!visiteId || uploading}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'center',
+                      cursor: visiteId && !uploading ? 'pointer' : 'default',
+                      background: uploading ? C.bg : dragOverCat === cat.id ? '#DBEAFE' : '#EFF6FF',
+                      border: `1.5px dashed ${uploading ? C.border : dragOverCat === cat.id ? C.accent : '#93C5FD'}`,
+                      borderRadius: 8, padding: '12px 0', boxSizing: 'border-box',
+                      color: uploading || !visiteId ? C.textSoft : C.accent,
+                      fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                      outline: 'none', userSelect: 'none',
+                    }}
+                  >
+                    {uploading ? '⏳ Upload en cours…' : IS_IOS ? '📷 Ajouter une photo' : '📁 Glisser-déposer ou cliquer'}
+                  </button>
                 </div>
               </div>
             )}
