@@ -570,24 +570,6 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ── KPIs financiers ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isCompact ? 'repeat(3, 1fr)' : 'repeat(6, 1fr)', gap: isMobile ? 8 : 10, marginBottom: isMobile ? 16 : 24 }}>
-          {[
-            { label: 'Dossiers en cours',  value: activeDossiers.filter(d => STATUTS_EN_COURS.includes(d.statut)).length, color: C.accent,    sub: 'visio planifiée → facturé' },
-            { label: 'CA prévisionnel',    value: fmtK(finGlobal.primePrev), color: '#7C3AED',  sub: 'Primes brutes hors facturé' },
-            { label: 'CA encaissé',        value: fmtK(finGlobal.primeEnc),  color: '#16A34A',  sub: 'Primes brutes facturées' },
-            { label: 'Marges nettes',      value: fmtK(finGlobal.marge),     color: finGlobal.marge >= 0 ? '#059669' : '#DC2626', sub: 'Prime nette − coût install.' },
-            { label: 'Travaux en cours',   value: activeDossiers.filter(d => STATUTS_TRAVAUX.includes(d.statut)).length, color: '#C2410C',  sub: 'Travaux → conforme' },
-            { label: 'Total cumac',        value: fmtGwh(finGlobal.totalMwh), color: '#0891B2', sub: 'Volume CEE tous dossiers' },
-          ].map(k => (
-            <div key={k.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: isMobile ? '11px 12px' : '14px 16px' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 3 }}>{k.label}</div>
-              <div style={{ fontSize: isMobile ? 17 : 20, fontWeight: 800, color: k.color, lineHeight: 1.1 }}>{k.value}</div>
-              {k.sub && !isMobile && <div style={{ fontSize: 10, color: C.textSoft, marginTop: 3 }}>{k.sub}</div>}
-            </div>
-          ))}
-        </div>
-
         {/* ── Agenda + Tâches ── */}
         <div style={{ display: 'grid', gridTemplateColumns: (googleConnected && !isMobile) ? '1fr 1fr' : '1fr', gap: isMobile ? 12 : 16, marginBottom: isMobile ? 16 : 24 }}>
 

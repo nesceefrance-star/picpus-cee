@@ -38,6 +38,7 @@ import BoltIcon from '@mui/icons-material/Bolt'
 import TravelExploreIcon from '@mui/icons-material/TravelExplore'
 import LightModeIcon from '@mui/icons-material/LightMode'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
+import BarChartIcon from '@mui/icons-material/BarChart'
 
 const DRAWER_OPEN  = 240
 const DRAWER_MINI  = 64
@@ -184,6 +185,9 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
 
           {/* Planning */}
           <Item icon={<CalendarMonthIcon fontSize="small" />} label="Planning" path="/planning" />
+
+          {/* Statistiques */}
+          <Item icon={<BarChartIcon fontSize="small" />} label="Statistiques" path="/statistiques" />
 
           <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
 
