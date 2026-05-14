@@ -160,9 +160,7 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
 
   // ── Prise de photo ─────────────────────────────────────────────────────────
   const handleFile = (catId, file) => {
-    console.log('[PhotoSection] handleFile', catId, file?.name, file?.size, file?.type, 'visiteId:', visiteId)
-    if (!file) { console.warn('[PhotoSection] pas de fichier'); return }
-    if (!visiteId) { alert('Veuillez d\'abord sauvegarder la visite avant d\'ajouter des photos.'); return }
+    if (!file || !visiteId) return
     const localUrl = URL.createObjectURL(file)
     const tempId   = crypto.randomUUID()
     pendingRef.current[tempId] = { catId, file, localUrl }
@@ -199,6 +197,12 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
   // ── Compte (uploadées + locales) ──────────────────────────────────────────
   const pendingCount = localPhotos.length
   const totalCount   = photos.length + pendingCount
+
+  if (!visiteId) return (
+    <div style={{ background: '#FEF9C3', border: '1px solid #FDE047', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#854D0E' }}>
+      💾 Sauvegardez d'abord la visite pour pouvoir ajouter des photos.
+    </div>
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -310,10 +314,7 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
                       multiple
                       disabled={uploading}
                       onChange={e => {
-                        const files = Array.from(e.target.files || [])
-                        console.log('[PhotoSection] onChange cat:', cat.id, 'files:', files.length, files.map(f => f.name + ' ' + f.type))
-                        if (files.length === 0) { console.warn('[PhotoSection] onChange — FileList vide !'); return }
-                        files.forEach(f => handleFile(cat.id, f))
+                        Array.from(e.target.files || []).forEach(f => handleFile(cat.id, f))
                       }}
                       style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
                     />
