@@ -1095,40 +1095,29 @@ function BatchPanel({ batches, selectedBatchId, onSelect, onDelete, onReassign, 
   );
 }
 
-// ─── HELPERS MASQUAGE LUSHA ──────────────────────────────────────
-function maskPhone(phone) {
-  if (!phone) return '';
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length >= 10) return digits.slice(0, 2) + ' •• •• •• ••';
-  return phone.slice(0, 2) + ' ••••••';
-}
-function maskEmail(email) {
-  if (!email) return '';
-  const at = email.indexOf('@');
-  if (at < 0) return email[0] + '***';
-  const local = email.slice(0, at);
-  const domain = email.slice(at + 1);
-  const domParts = domain.split('.');
-  const maskedDom = domParts[0].slice(0, 2) + '***.' + domParts.slice(1).join('.');
-  return local[0] + '***@' + maskedDom;
-}
-
 // ─── MINI MODAL LUSHA CONTACT ─────────────────────────────────────
 function LushaContactModal({ contact, societeNom, onClose, onEnregistrer, lushaCredits }) {
   const C = useC();
-  const [url,      setUrl]      = useState(contact.linkedin_url ?? '');
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState(null);
-  const [preview,  setPreview]  = useState(null);
-  const [revealed, setRevealed] = useState(false);
-  const [saving,   setSaving]   = useState(false);
+  const [url,          setUrl]          = useState(contact.linkedin_url ?? '');
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState(null);
+  const [result,       setResult]       = useState(null);
+  const [saving,       setSaving]       = useState(false);
+  const [needsConfirm, setNeedsConfirm] = useState(false);
 
   const isLinkedin = /linkedin\.com\/in\//i.test(url.trim());
   const reste = lushaCredits.limit > 0 ? lushaCredits.limit - lushaCredits.used : Infinity;
 
-  const handleRechercher = async () => {
+  const handleChercher = () => {
     if (!url.trim()) return;
-    setLoading(true); setError(null); setPreview(null); setRevealed(false);
+    setNeedsConfirm(true);
+    setResult(null);
+    setError(null);
+  };
+
+  const handleConfirmer = async () => {
+    setNeedsConfirm(false);
+    setLoading(true); setError(null);
     try {
       const body = isLinkedin
         ? { action: 'lusha', linkedin_url: url.trim() }
@@ -1136,17 +1125,17 @@ function LushaContactModal({ contact, societeNom, onClose, onEnregistrer, lushaC
       const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `Lusha HTTP ${res.status}`);
-      const credits = 1 + (data.emails?.length ?? 0) * 1 + (data.phones?.length ?? 0) * 5;
-      setPreview({ emails: data.emails ?? [], phones: data.phones ?? [], fromCache: data.isCreditCharged === false, credits, raw: data });
+      const creditsUsed = 1 + (data.emails?.length ?? 0) * 1 + (data.phones?.length ?? 0) * 5;
+      setResult({ emails: data.emails ?? [], phones: data.phones ?? [], fromCache: data.isCreditCharged === false, creditsUsed, raw: data });
     } catch (e) { setError(e.message); }
     setLoading(false);
   };
 
   const handleEnregistrer = async () => {
-    if (!preview) return;
+    if (!result) return;
     setSaving(true);
     try {
-      await onEnregistrer({ contactId: contact.id, linkedinUrl: url.trim() || null, result: preview.raw, creditsUsed: preview.credits });
+      await onEnregistrer({ contactId: contact.id, linkedinUrl: url.trim() || null, result: result.raw, creditsUsed: result.creditsUsed });
       onClose();
     } catch (e) { setError(e.message); }
     setSaving(false);
@@ -1156,6 +1145,8 @@ function LushaContactModal({ contact, societeNom, onClose, onEnregistrer, lushaC
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ background: C.bgCard, border: `1px solid ${C.lusha}50`, borderRadius: 16, width: 480, maxWidth: '98vw', overflow: 'hidden' }}>
+
+        {/* Header */}
         <div style={{ padding: '16px 20px 12px', borderBottom: `1px solid ${C.border}`, background: `${C.lusha}10` }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>💜 Enrichissement Lusha</div>
           <div style={{ fontSize: 12, color: C.textSub, marginTop: 2 }}>
@@ -1167,69 +1158,101 @@ function LushaContactModal({ contact, societeNom, onClose, onEnregistrer, lushaC
             </div>
           )}
         </div>
+
+        {/* Body */}
         <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+          {/* URL input */}
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 5 }}>URL LinkedIn du contact</div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <input value={url} onChange={e => { setUrl(e.target.value); setPreview(null); setRevealed(false); }}
+              <input value={url} onChange={e => { setUrl(e.target.value); setNeedsConfirm(false); setResult(null); setError(null); }}
                 placeholder="https://linkedin.com/in/prenom-nom-xxx"
                 style={{ flex: 1, padding: '8px 11px', borderRadius: 8, border: `1px solid ${isLinkedin ? C.lusha : C.borderLight}`, background: C.bgInput, color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
-                onKeyDown={e => { if (e.key === 'Enter') handleRechercher(); }}
+                onKeyDown={e => { if (e.key === 'Enter' && !needsConfirm && !loading) handleChercher(); }}
                 autoFocus />
-              <button onClick={handleRechercher} disabled={!url.trim() || loading}
-                style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: !url.trim() || loading ? C.borderLight : C.lusha, color: !url.trim() || loading ? C.textDim : '#fff', fontWeight: 700, fontSize: 12, cursor: !url.trim() || loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                {loading ? '⏳' : '🔍 Chercher'}
-              </button>
+              {!needsConfirm && !result && (
+                <button onClick={handleChercher} disabled={!url.trim() || loading}
+                  style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: !url.trim() || loading ? C.borderLight : C.lusha, color: !url.trim() || loading ? C.textDim : '#fff', fontWeight: 700, fontSize: 12, cursor: !url.trim() || loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  🔍 Chercher
+                </button>
+              )}
             </div>
-            {!isLinkedin && url.trim() && (
+            {!isLinkedin && url.trim() && !result && (
               <div style={{ fontSize: 11, color: C.orange, marginTop: 4 }}>⚠ Collez une URL LinkedIn pour un meilleur résultat</div>
             )}
           </div>
-          {error && <div style={{ padding: '8px 12px', borderRadius: 8, background: C.redSoft, color: C.red, fontSize: 12 }}>⚠ {error}</div>}
-          {preview && (
-            <div style={{ background: C.bg, border: `1px solid ${C.lusha}30`, borderRadius: 10, padding: '12px 14px' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: preview.fromCache ? C.green : C.lusha, marginBottom: 10 }}>
-                {preview.fromCache ? '📦 Cache (0 crédit)' : `💜 ${preview.credits} crédit${preview.credits > 1 ? 's' : ''} consommé${preview.credits > 1 ? 's' : ''}`}
+
+          {/* Confirmation avant appel */}
+          {needsConfirm && (
+            <div style={{ background: `${C.lusha}12`, border: `1px solid ${C.lusha}40`, borderRadius: 10, padding: '14px 16px' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.lusha, marginBottom: 6 }}>💜 Confirmer la recherche Lusha ?</div>
+              <div style={{ fontSize: 12, color: C.textSub, marginBottom: 12, lineHeight: 1.5 }}>
+                {isLinkedin
+                  ? <>Recherche par URL LinkedIn : <b style={{ color: C.text }}>résultat plus précis</b>.</>
+                  : <>Recherche par nom + société : <b style={{ color: C.text }}>{contact.prenom} {contact.nom}</b> chez <b style={{ color: C.text }}>{societeNom}</b>.</>
+                }
+                <br />Cette opération <b style={{ color: C.lusha }}>consomme des crédits Lusha</b> selon les coordonnées trouvées.
               </div>
-              {preview.emails.length === 0 && preview.phones.length === 0 ? (
-                <div style={{ fontSize: 12, color: C.textSub, fontStyle: 'italic' }}>Aucune coordonnée trouvée.</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setNeedsConfirm(false)}
+                  style={{ flex: 1, padding: '8px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.textSub, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  Annuler
+                </button>
+                <button onClick={handleConfirmer}
+                  style={{ flex: 2, padding: '8px', borderRadius: 8, border: 'none', background: C.lusha, color: '#fff', fontWeight: 800, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  ✓ Confirmer et lancer la recherche
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Chargement */}
+          {loading && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 10, background: `${C.lusha}10`, border: `1px solid ${C.lusha}30` }}>
+              <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${C.lusha}40`, borderTopColor: C.lusha, animation: 'spin .7s linear infinite', flexShrink: 0 }} />
+              <span style={{ fontSize: 13, color: C.lusha, fontWeight: 600 }}>Recherche en cours…</span>
+            </div>
+          )}
+
+          {/* Erreur */}
+          {error && <div style={{ padding: '8px 12px', borderRadius: 8, background: C.redSoft, color: C.red, fontSize: 12 }}>⚠ {error}</div>}
+
+          {/* Résultats complets */}
+          {result && (
+            <div style={{ background: C.bg, border: `1px solid ${result.fromCache ? C.accent : C.lusha}40`, borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: result.fromCache ? C.accent : C.lusha, marginBottom: 10 }}>
+                {result.fromCache ? '📦 Résultat en cache (0 crédit)' : `💜 ${result.creditsUsed} crédit${result.creditsUsed > 1 ? 's' : ''} consommé${result.creditsUsed > 1 ? 's' : ''}`}
+              </div>
+              {result.emails.length === 0 && result.phones.length === 0 ? (
+                <div style={{ fontSize: 12, color: C.textSub, fontStyle: 'italic' }}>Aucune coordonnée trouvée pour ce contact.</div>
               ) : (
-                <>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: revealed ? 0 : 12 }}>
-                    {preview.phones.map((p, i) => {
-                      const digits = p.replace(/\D/g, '');
-                      const isMobile = digits.startsWith('06') || digits.startsWith('07');
-                      return (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {revealed
-                            ? <a href={`tel:${p}`} style={{ fontSize: 14, color: C.green, fontWeight: 700, textDecoration: 'none' }}>{isMobile ? '📱' : '☎'} {p}</a>
-                            : <span style={{ fontSize: 13, color: C.green, fontWeight: 700, letterSpacing: 1, fontFamily: 'monospace' }}>{maskPhone(p)}</span>}
-                          <Badge label={isMobile ? 'Mobile' : 'Fixe'} color={C.green} bg={C.greenSoft} size={10} />
-                        </div>
-                      );
-                    })}
-                    {preview.emails.map((em, i) => (
-                      revealed
-                        ? <a key={i} href={`mailto:${em}`} style={{ fontSize: 13, color: C.accent, textDecoration: 'none' }}>✉ {em}</a>
-                        : <span key={i} style={{ fontSize: 13, color: C.accent, fontFamily: 'monospace', letterSpacing: .3 }}>{maskEmail(em)}</span>
-                    ))}
-                  </div>
-                  {!revealed && (
-                    <button onClick={() => setRevealed(true)}
-                      style={{ width: '100%', padding: '8px', borderRadius: 8, border: `1px solid ${C.lusha}40`, background: `${C.lusha}15`, color: C.lusha, fontWeight: 800, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
-                      👁 Révéler les coordonnées complètes
-                    </button>
-                  )}
-                </>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {result.phones.map((p, i) => {
+                    const digits = p.replace(/\D/g, '');
+                    const isMobile = digits.startsWith('06') || digits.startsWith('07');
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <a href={`tel:${p}`} style={{ fontSize: 14, color: C.green, fontWeight: 700, textDecoration: 'none' }}>{isMobile ? '📱' : '☎'} {p}</a>
+                        <Badge label={isMobile ? 'Mobile' : 'Fixe'} color={C.green} bg={C.greenSoft} size={10} />
+                      </div>
+                    );
+                  })}
+                  {result.emails.map((em, i) => (
+                    <a key={i} href={`mailto:${em}`} style={{ fontSize: 13, color: C.accent, textDecoration: 'none' }}>✉ {em}</a>
+                  ))}
+                </div>
               )}
             </div>
           )}
         </div>
+
+        {/* Footer */}
         <div style={{ padding: '12px 20px', borderTop: `1px solid ${C.border}`, display: 'flex', gap: 8 }}>
           <button onClick={onClose} style={{ flex: 1, padding: '8px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.textSub, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
             Fermer
           </button>
-          {preview && (preview.emails.length > 0 || preview.phones.length > 0) && (
+          {result && (result.emails.length > 0 || result.phones.length > 0) && (
             <button onClick={handleEnregistrer} disabled={saving}
               style={{ flex: 2, padding: '8px', borderRadius: 8, border: 'none', background: saving ? C.borderLight : C.lusha, color: saving ? C.textDim : '#fff', fontWeight: 800, fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
               {saving ? '⏳ Enregistrement…' : '💾 Enregistrer sur ce contact'}
@@ -1314,6 +1337,18 @@ function ContactRow({ contact, societeNom, onEnrichirLusha, lushaLoading, onSetL
 }
 
 // ─── CONFIG SUIVI ────────────────────────────────────────────────
+// ─── SÉPARATEUR DE SECTION ───────────────────────────────────────
+function SecSep({ label, color }) {
+  const C = useC();
+  const col = color ?? C.textDim;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 18px', background: C.border + '22', borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ width: 3, height: 12, borderRadius: 2, background: col, flexShrink: 0 }} />
+      <span style={{ fontSize: 9, fontWeight: 800, color: col, textTransform: 'uppercase', letterSpacing: '.1em' }}>{label}</span>
+    </div>
+  );
+}
+
 const NEXT_ACTION_CFG = {
   rappeler:  { label: 'À rappeler',        icon: '📞', colorKey: 'accent',  showDate: true  },
   nrp:       { label: 'NRP',               icon: '📵', colorKey: 'orange',  showDate: false },
@@ -1577,13 +1612,13 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
       </div>
 
       {open && (
-        <div style={{ borderTop: `1px solid ${C.border}` }}>
-          {/* Barre de suivi */}
+        <div style={{ borderTop: `2px solid ${C.accent}30` }}>
+          <SecSep label="Prochaine étape" color={C.accent} />
           <SuiviBar soc={soc} onNextAction={onNextAction} />
-          {/* Commentaire */}
+          <SecSep label="Notes" color={C.textSub} />
           <CommentZone soc={soc} onSave={onSaveCommentaire} />
-          {/* Outils */}
-          <div style={{ display: 'flex', gap: 8, padding: '10px 18px', flexWrap: 'wrap', alignItems: 'center', background: C.bgInput, borderBottom: `1px solid ${C.border}` }}>
+          <SecSep label="Actions" color={C.yellow} />
+          <div style={{ display: 'flex', gap: 8, padding: '10px 18px', flexWrap: 'wrap', alignItems: 'center' }}>
             <Btn onClick={() => onCadastre(soc.id)} loading={cadastreLoading[soc.id]} icon="📐" label={soc.cadastre_fetched ? 'Recalculer' : 'Cadastre'} color={C.yellow} />
             <Btn onClick={() => onGmb(soc.id)} loading={gmbLoading[soc.id]} icon="📍" label="Google Maps" color={C.orange} />
             <Btn onClick={() => { setShowMap(m => !m); if (!open) setOpen(true); }} icon="🗺" label={showMap ? 'Masquer carte' : 'Carte parcelles'} color={C.purple} />
@@ -1621,6 +1656,8 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
           </div>
 
           {soc.cadastre_fetched && (
+            <>
+            <SecSep label="Cadastre" color={C.yellow} />
             <div style={{ display: 'flex', gap: 16, padding: '10px 18px', background: `${C.yellow}08`, borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap', alignItems: 'flex-start' }}>
               {[
                 { label: 'Parcelle', value: `${soc.section_cadastrale ?? '?'}${soc.numero_parcelle ?? '?'}` },
@@ -1637,6 +1674,7 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
                 </div>
               ))}
             </div>
+            </>
           )}
 
           {showMap && (
@@ -1654,10 +1692,11 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
             </div>
           )}
 
-          <div style={{ padding: '10px 18px 14px', background: C.bg }}>
+          <SecSep label={`Contacts (${soc.contacts?.length ?? 0})`} color={C.lusha} />
+          <div style={{ padding: '10px 18px 14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: C.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                👤 Contacts ({soc.contacts?.length ?? 0})
+                Score des contacts
               </span>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {SCORE_CONFIG.map(c => <Badge key={c.label} label={`${c.label} ${c.tip}`} color={c.color} bg={c.bg} size={10} />)}
@@ -1889,7 +1928,7 @@ export default function LeadsModule() {
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {societes.map(soc => (
                 <SocieteCard key={soc.id} soc={soc}
                   cadastreLoading={cadastreLoading} lushaLoading={lushaLoading} gmbLoading={gmbLoading}
