@@ -160,7 +160,9 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
 
   // ── Prise de photo ─────────────────────────────────────────────────────────
   const handleFile = (catId, file) => {
-    if (!file || !visiteId) return
+    console.log('[PhotoSection] handleFile', catId, file?.name, file?.size, file?.type, 'visiteId:', visiteId)
+    if (!file) { console.warn('[PhotoSection] pas de fichier'); return }
+    if (!visiteId) { alert('Veuillez d\'abord sauvegarder la visite avant d\'ajouter des photos.'); return }
     const localUrl = URL.createObjectURL(file)
     const tempId   = crypto.randomUUID()
     pendingRef.current[tempId] = { catId, file, localUrl }
@@ -308,8 +310,10 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
                       multiple
                       disabled={uploading}
                       onChange={e => {
-                        Array.from(e.target.files || []).forEach(f => handleFile(cat.id, f))
-                        e.target.value = ''
+                        const files = Array.from(e.target.files || [])
+                        console.log('[PhotoSection] onChange cat:', cat.id, 'files:', files.length, files.map(f => f.name + ' ' + f.type))
+                        if (files.length === 0) { console.warn('[PhotoSection] onChange — FileList vide !'); return }
+                        files.forEach(f => handleFile(cat.id, f))
                       }}
                       style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
                     />
