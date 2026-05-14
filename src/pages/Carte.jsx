@@ -61,23 +61,17 @@ function fmtDist(meters) {
   return `${Math.round(meters)} m`
 }
 
-function fmtNavitiaTime(str) {
-  // "20260514T091500" → "09:15"
-  if (!str || str.length < 13) return ''
-  return str.slice(9, 11) + ':' + str.slice(11, 13)
-}
-
-// ── Google Maps Directions API ────────────────────────────────────────────────
+// ── Google Maps Directions API — voiture ─────────────────────────────────────
 async function getGoogleRoute(olat, olng, dlat, dlng, unixDeparture) {
   const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
   if (!key) return null
   try {
     const params = new URLSearchParams({
-      origin:       `${olat},${olng}`,
-      destination:  `${dlat},${dlng}`,
-      mode:         'driving',
+      origin:         `${olat},${olng}`,
+      destination:    `${dlat},${dlng}`,
+      mode:           'driving',
       departure_time: unixDeparture || 'now',
-      traffic_model: 'best_guess',
+      traffic_model:  'best_guess',
       key,
     })
     const r = await fetch(`https://maps.googleapis.com/maps/api/directions/json?${params}`)
@@ -92,7 +86,7 @@ async function getGoogleRoute(olat, olng, dlat, dlng, unixDeparture) {
   } catch { return null }
 }
 
-// ── OSRM fallback (voiture) ───────────────────────────────────────────────────
+// ── OSRM fallback (voiture, sans clé Google) ─────────────────────────────────
 async function getOsrmRoute(olat, olng, dlat, dlng) {
   try {
     const r = await fetch(
@@ -104,54 +98,58 @@ async function getOsrmRoute(olat, olng, dlat, dlng) {
   } catch { return null }
 }
 
-// ── Navitia / SNCF ────────────────────────────────────────────────────────────
-async function getTrainJourney(olat, olng, dlat, dlng, navitiaDatetime, isArrival) {
-  const key = import.meta.env.VITE_NAVITIA_KEY
+// ── Google Maps Directions API — transit (train) ──────────────────────────────
+const TRAIN_VEHICLE_TYPES = new Set([
+  'HEAVY_RAIL', 'HIGH_SPEED_TRAIN', 'COMMUTER_TRAIN', 'RAIL',
+  'LONG_DISTANCE_TRAIN', 'INTERCITY_BUS',
+])
+
+async function getGoogleTransit(olat, olng, dlat, dlng, unixTime, isArrival) {
+  const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
   if (!key) return { noKey: true }
   try {
     const params = new URLSearchParams({
-      from:                 `${olng};${olat}`,   // navitia = lng;lat
-      to:                   `${dlng};${dlat}`,
-      datetime:             navitiaDatetime,      // "20260514T090000"
-      datetime_represents:  isArrival ? 'arrival' : 'departure',
-      count:                '5',
-      data_freshness:       'realtime',
+      origin:       `${olat},${olng}`,
+      destination:  `${dlat},${dlng}`,
+      mode:         'transit',
+      transit_mode: 'rail',
+      key,
     })
-    const r = await fetch(`https://api.navitia.io/v1/journeys?${params}`, {
-      headers: { Authorization: 'Basic ' + btoa(key + ':') },
-    })
+    if (isArrival) params.set('arrival_time', unixTime)
+    else           params.set('departure_time', unixTime || Math.floor(Date.now() / 1000))
+
+    const r = await fetch(`https://maps.googleapis.com/maps/api/directions/json?${params}`)
     const d = await r.json()
-    if (!d.journeys?.length) return null
+    if (d.status !== 'OK' || !d.routes?.[0]) return null
 
-    // Préférer un trajet avec section train longue distance
-    const TRAIN_MODES = ['tgv', 'ter', 'intercités', 'train', 'intercity', 'ic', 'night train']
-    const isTrainSection = (s) =>
-      s.type === 'public_transport' &&
-      TRAIN_MODES.some(m =>
-        (s.display_informations?.commercial_mode || '').toLowerCase().includes(m) ||
-        (s.display_informations?.network || '').toLowerCase().includes('sncf')
-      )
+    const leg = d.routes[0].legs[0]
+    const steps = leg.steps || []
 
-    const journey = d.journeys.find(j => j.sections?.some(isTrainSection)) || d.journeys[0]
-    if (!journey) return null
+    const transitSteps = steps.filter(s => s.travel_mode === 'TRANSIT')
+    if (!transitSteps.length) return null
 
-    const ptSections = (journey.sections || []).filter(s => s.type === 'public_transport')
-    const trainSections = ptSections.filter(isTrainSection)
-    const firstPT = ptSections[0]
-    const lastPT  = ptSections[ptSections.length - 1]
+    // Chercher les étapes train (hors metro/bus)
+    const trainSteps = transitSteps.filter(s =>
+      TRAIN_VEHICLE_TYPES.has(s.transit_details?.line?.vehicle?.type)
+    )
+    const mainSteps = trainSteps.length ? trainSteps : transitSteps
 
-    // Gare de départ et d'arrivée (section train ou première/dernière PT)
-    const firstTrain = trainSections[0] || firstPT
-    const lastTrain  = trainSections[trainSections.length - 1] || lastPT
+    const first = transitSteps[0]
+    const last  = transitSteps[transitSteps.length - 1]
+
+    // Ligne principale (TGV, TER, Intercités…)
+    const mainLine = mainSteps[0]?.transit_details
+    const lineName = mainLine?.line?.short_name || mainLine?.line?.name || null
 
     return {
-      duration:      journey.duration,
-      transfers:     ptSections.length - 1,
-      departStation: firstTrain?.from?.stop_area?.name || firstTrain?.from?.stop_point?.label || null,
-      arriveStation: lastTrain?.to?.stop_area?.name   || lastTrain?.to?.stop_point?.label   || null,
-      departTime:    firstPT?.departure_date_time || null,
-      arriveTime:    lastPT?.arrival_date_time    || null,
-      source:        'navitia',
+      duration:      leg.duration.value,
+      transfers:     transitSteps.length - 1,
+      departStation: first?.transit_details?.departure_stop?.name || null,
+      arriveStation: last?.transit_details?.arrival_stop?.name   || null,
+      departTime:    first?.transit_details?.departure_time?.text || null,
+      arriveTime:    last?.transit_details?.arrival_time?.text   || null,
+      lineName,
+      source: 'google',
     }
   } catch { return null }
 }
@@ -230,15 +228,12 @@ function ItinerairePanel({ dossier, destCoords, onClose, isMobile }) {
   const [loadingTrain, setLoadingTrain] = useState(false)
   const suggTimeout = useRef(null)
 
-  const hasGoogleKey  = !!import.meta.env.VITE_GOOGLE_MAPS_API_KEY
-  const hasNavitiaKey = !!import.meta.env.VITE_NAVITIA_KEY
+  const hasGoogleKey = !!import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
-  // Construit le datetime pour les APIs
-  const getDatetimes = () => {
+  // Construit le unix timestamp pour les APIs
+  const getUnix = () => {
     const dt = new Date(`${date}T${time}:00`)
-    const unix    = Math.floor(dt.getTime() / 1000)
-    const navitia = date.replace(/-/g, '') + 'T' + time.replace(':', '') + '00'
-    return { unix, navitia }
+    return Math.floor(dt.getTime() / 1000)
   }
 
   const handleOriginInput = (val) => {
@@ -284,24 +279,28 @@ function ItinerairePanel({ dossier, destCoords, onClose, isMobile }) {
 
   const calculate = async (oc = originCoords) => {
     if (!oc || !destCoords) return
-    const { unix, navitia } = getDatetimes()
+    const unix      = getUnix()
     const isArrival = timeType === 'arrivee'
 
-    // ── Voiture ──
+    // ── Voiture (parallèle avec transit) ──
     setLoadingCar(true)
-    let carResult = null
-    if (hasGoogleKey) {
-      carResult = await getGoogleRoute(oc.lat, oc.lng, destCoords[0], destCoords[1], isArrival ? undefined : unix)
-    }
-    if (!carResult) {
-      carResult = await getOsrmRoute(oc.lat, oc.lng, destCoords[0], destCoords[1])
-    }
+    setLoadingTrain(true)
+
+    const [carResult, trainResult] = await Promise.all([
+      // Voiture : Google si clé dispo, OSRM sinon
+      (async () => {
+        if (hasGoogleKey) {
+          const g = await getGoogleRoute(oc.lat, oc.lng, destCoords[0], destCoords[1], isArrival ? undefined : unix)
+          if (g) return g
+        }
+        return getOsrmRoute(oc.lat, oc.lng, destCoords[0], destCoords[1])
+      })(),
+      // Train : Google Transit (même clé)
+      getGoogleTransit(oc.lat, oc.lng, destCoords[0], destCoords[1], unix, isArrival),
+    ])
+
     setCar(carResult)
     setLoadingCar(false)
-
-    // ── Train ──
-    setLoadingTrain(true)
-    const trainResult = await getTrainJourney(oc.lat, oc.lng, destCoords[0], destCoords[1], navitia, isArrival)
     setTrain(trainResult)
     setLoadingTrain(false)
   }
@@ -487,73 +486,66 @@ function ItinerairePanel({ dossier, destCoords, onClose, isMobile }) {
           </div>
         </div>
 
-        {/* ── Carte Train SNCF ── */}
+        {/* ── Carte Train ── */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.04em' }}>
-            🚄 Train SNCF
+            🚄 Train / Transports
           </div>
           <div style={{
             background: train && !train.noKey ? '#EFF6FF' : C.bg,
             border: `1.5px solid ${train && !train.noKey && !loadingTrain ? '#93C5FD' : C.border}`,
             borderRadius: 10, padding: '14px 14px 12px',
           }}>
-            {!hasNavitiaKey ? (
+            {!hasGoogleKey ? (
               <div style={{ fontSize: 11, color: C.textMid, lineHeight: 1.5 }}>
-                🔑 Clé API Navitia non configurée.<br/>
-                <a href="https://navitia.io" target="_blank" rel="noopener noreferrer" style={{ color: C.accent, fontWeight: 700 }}>
-                  Inscription gratuite → navitia.io
-                </a>
-                <div style={{ marginTop: 4, fontSize: 10, color: C.textSoft }}>Puis ajouter <code>VITE_NAVITIA_KEY</code> dans .env et Vercel.</div>
+                🔑 Clé <code>VITE_GOOGLE_MAPS_API_KEY</code> non configurée.
+                <div style={{ marginTop: 4, fontSize: 10, color: C.textSoft }}>
+                  Ajouter la clé dans .env et Vercel Dashboard.
+                </div>
               </div>
             ) : loadingTrain ? (
-              <div style={{ textAlign: 'center', color: C.textSoft, fontSize: 12, padding: '8px 0' }}>Recherche trajets SNCF…</div>
+              <div style={{ textAlign: 'center', color: C.textSoft, fontSize: 12, padding: '8px 0' }}>Recherche trajets…</div>
             ) : train && !train.noKey ? (
               <div>
-                {/* Durée + correspondances */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
+                {/* Durée + correspondances + horaires */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 26, fontWeight: 900, color: C.accent, lineHeight: 1 }}>
                       {fmtDuration(train.duration)}
                     </div>
                     <div style={{ fontSize: 11, color: C.textSoft, marginTop: 2 }}>
                       {train.transfers === 0 ? 'Direct' : `${train.transfers} correspondance${train.transfers > 1 ? 's' : ''}`}
+                      {train.lineName && <span style={{ marginLeft: 6, fontWeight: 700, color: C.accent }}>· {train.lineName}</span>}
                     </div>
                   </div>
                   {train.departTime && train.arriveTime && (
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>
-                        {fmtNavitiaTime(train.departTime)} → {fmtNavitiaTime(train.arriveTime)}
+                      <div style={{ fontSize: 14, fontWeight: 800, color: C.text, lineHeight: 1.2 }}>
+                        {train.departTime}
                       </div>
+                      <div style={{ fontSize: 11, color: C.textSoft }}>→ {train.arriveTime}</div>
                     </div>
                   )}
                 </div>
 
                 {/* Gares */}
                 {(train.departStation || train.arriveStation) && (
-                  <div style={{ background: '#fff', border: `1px solid #BFDBFE`, borderRadius: 7, padding: '8px 10px', marginBottom: 10, fontSize: 11, color: C.text, lineHeight: 1.5 }}>
-                    {train.departStation && (
-                      <div>🚉 <strong>Départ :</strong> {train.departStation}</div>
-                    )}
-                    {train.arriveStation && (
-                      <div>🏁 <strong>Arrivée :</strong> {train.arriveStation}</div>
-                    )}
+                  <div style={{ background: '#fff', border: '1px solid #BFDBFE', borderRadius: 7, padding: '8px 10px', marginBottom: 10, fontSize: 11, color: C.text, lineHeight: 1.6 }}>
+                    {train.departStation && <div>🚉 <strong>Départ :</strong> {train.departStation}</div>}
+                    {train.arriveStation && <div>🏁 <strong>Arrivée :</strong> {train.arriveStation}</div>}
                   </div>
                 )}
 
-                {/* Prix */}
-                <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 10, fontStyle: 'italic' }}>
-                  💶 Prix non disponibles via API gratuite — voir sur SNCF Connect
+                {/* Prix + lien SNCF */}
+                <div style={{ fontSize: 10, color: C.textSoft, marginBottom: 8, fontStyle: 'italic' }}>
+                  💶 Prix → voir sur SNCF Connect
                 </div>
-
-                {/* Lien SNCF */}
                 <a href={sncfUrl()} target="_blank" rel="noopener noreferrer" style={{
                   display: 'block', width: '100%', boxSizing: 'border-box',
-                  background: C.accent, color: '#fff',
-                  borderRadius: 7, padding: '9px 0',
-                  fontSize: 12, fontWeight: 700, textDecoration: 'none',
-                  textAlign: 'center', fontFamily: 'inherit',
+                  background: C.accent, color: '#fff', borderRadius: 7, padding: '9px 0',
+                  fontSize: 12, fontWeight: 700, textDecoration: 'none', textAlign: 'center', fontFamily: 'inherit',
                 }}>
-                  Voir billets sur SNCF Connect →
+                  Voir billets SNCF Connect →
                 </a>
               </div>
             ) : originCoords ? (
@@ -594,7 +586,7 @@ function ItinerairePanel({ dossier, destCoords, onClose, isMobile }) {
       {/* ── Footer ── */}
       <div style={{ padding: '8px 16px', borderTop: `1px solid ${C.border}`, flexShrink: 0, background: '#F8FAFC' }}>
         <div style={{ fontSize: 10, color: C.textSoft, textAlign: 'center' }}>
-          {hasGoogleKey ? 'Google Maps (trafic réel)' : 'OSRM (estimatif)'} · {hasNavitiaKey ? 'Navitia SNCF' : 'Navitia non configuré'}
+          {hasGoogleKey ? '✓ Google Maps — trafic réel + transit' : 'OSRM (estimatif) · clé Google requise pour le train'}
         </div>
       </div>
     </div>
