@@ -9,10 +9,12 @@ const COLS = [
   { id: 'visio_effectuee',  label: 'Visio effectuée',    color: '#059669' },
   { id: 'visite_planifiee', label: 'Visite planifiée',   color: '#D97706' },
   { id: 'visite_effectuee', label: 'Visite effectuée',   color: '#EA580C' },
-  { id: 'devis',            label: 'Devis envoyé',       color: '#7C3AED' },
-  { id: 'ah',               label: 'AH signé',           color: '#16A34A' },
-  { id: 'conforme',         label: 'Conforme',           color: '#15803D' },
-  { id: 'facture',          label: 'Facturé',            color: '#64748B' },
+  { id: 'devis',              label: 'Devis envoyé',       color: '#7C3AED' },
+  { id: 'ah',                label: 'AH signé',           color: '#16A34A' },
+  { id: 'travaux',           label: 'Travaux',            color: '#B45309' },
+  { id: 'depot_delegataire', label: 'Dépôt délégataire', color: '#0369A1' },
+  { id: 'conforme',          label: 'Conforme',           color: '#15803D' },
+  { id: 'facture',           label: 'Facturé',            color: '#64748B' },
 ]
 
 const C = {

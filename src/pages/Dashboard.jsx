@@ -492,7 +492,7 @@ export default function Dashboard() {
                         style={{ background: '#fff', border: '1px solid #FCD34D', borderRadius: 6, padding: '2px 9px', fontSize: 11, color: '#92400E', cursor: 'pointer', fontWeight: 600, transition: 'background .1s' }}
                         onMouseEnter={e => e.currentTarget.style.background = '#FEF08A'}
                         onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
-                        {d.ref}
+                        {d.prospects?.raison_sociale || d.ref}
                       </span>
                     ))}
                     {stagnants.length > 6 && <span style={{ fontSize: 11, color: '#92400E', alignSelf: 'center' }}>+{stagnants.length - 6} autres</span>}

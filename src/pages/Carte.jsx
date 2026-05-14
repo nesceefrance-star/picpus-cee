@@ -92,7 +92,7 @@ async function geocodeBatch(dossiers) {
   for (let i = 0; i < dossiers.length; i += BATCH) {
     const slice = dossiers.slice(i, i + BATCH)
     const resolved = await Promise.all(slice.map(async d => {
-      const addr = d.adresse_site || d.prospects?.adresse
+      const addr = d.adresse_site
       const coords = await geocodeAddress(addr)
       return [d.id, coords]
     }))
@@ -130,7 +130,7 @@ export default function Carte() {
   useEffect(() => {
     if (!dossiers.length) return
     const myDossiers = isAdmin ? dossiers : dossiers.filter(d => d.assigne_a === user?.id)
-    const toGeocode  = myDossiers.filter(d => d.statut !== 'perdu' && (d.adresse_site || d.prospects?.adresse))
+    const toGeocode  = myDossiers.filter(d => d.statut !== 'perdu' && d.adresse_site)
     if (!toGeocode.length) return
     setGeocoding(true)
     geocodeBatch(toGeocode).then(results => {
