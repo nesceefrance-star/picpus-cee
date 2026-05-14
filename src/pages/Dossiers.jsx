@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import useStore from '../store/useStore'
 import NouveauDossierWizard from '../components/NouveauDossierWizard'
+import KanbanView from '../components/KanbanView'
 import { supabase } from '../lib/supabase'
 
 const STATUTS = [
@@ -81,6 +82,7 @@ export default function Dossiers() {
   const [confirmDeleteId, setConfirmDeleteId]   = useState(null)
   const [deletingIds, setDeletingIds]           = useState(new Set())
   const [simuMap, setSimuMap]                   = useState({})
+  const [viewMode, setViewMode]                 = useState('list') // 'list' | 'kanban'
 
   const isAdmin = profile?.role === 'admin'
   const isMobile = window.innerWidth < 700
@@ -150,6 +152,12 @@ export default function Dossiers() {
 
   const openDossier = (dossier) => { setCurrentDossier(dossier); navigate(`/dossier/${dossier.id}`) }
 
+  const handleStatutChange = async (dossierId, newStatut) => {
+    const now = new Date().toISOString()
+    const { error } = await supabase.from('dossiers').update({ statut: newStatut, updated_at: now }).eq('id', dossierId)
+    if (!error) fetchDossiers()
+  }
+
   const toggleSelect = (id, e) => {
     e.stopPropagation()
     setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -190,10 +198,28 @@ export default function Dossiers() {
               {myDossiers.filter(d => !['facture','archive'].includes(d.statut)).length} dossiers actifs
             </p>
           </div>
-          <button onClick={() => setShowModal(true)}
-            style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 9, padding: '11px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-            ➕ Nouveau dossier
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {/* Toggle vue */}
+            {!isMobile && (
+              <div style={{ display: 'flex', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: 3, gap: 2 }}>
+                {[['list', '☰ Liste'], ['kanban', '🗂 Kanban']].map(([mode, label]) => (
+                  <button key={mode} onClick={() => setViewMode(mode)} style={{
+                    background: viewMode === mode ? C.surface : 'transparent',
+                    border: viewMode === mode ? `1px solid ${C.border}` : '1px solid transparent',
+                    borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: viewMode === mode ? 700 : 500,
+                    color: viewMode === mode ? C.text : C.textSoft, cursor: 'pointer', fontFamily: 'inherit',
+                    boxShadow: viewMode === mode ? '0 1px 3px rgba(0,0,0,.08)' : 'none', transition: 'all .15s',
+                  }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setShowModal(true)}
+              style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 9, padding: '11px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+              ➕ Nouveau dossier
+            </button>
+          </div>
         </div>
 
         {/* ── Filtres ── */}
@@ -231,8 +257,15 @@ export default function Dossiers() {
           </div>
         )}
 
-        {/* ── Tableau identique au Dashboard ── */}
-        {loading ? (
+        {/* ── Contenu ── */}
+        {viewMode === 'kanban' && !loading ? (
+          <KanbanView
+            dossiers={filtered.filter(d => d.statut !== 'perdu')}
+            onStatutChange={handleStatutChange}
+            profiles={profiles}
+            isAdmin={isAdmin}
+          />
+        ) : loading ? (
           <div style={{ textAlign: 'center', padding: '60px 0', color: C.textMid }}>Chargement…</div>
         ) : filtered.length === 0 ? (
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '60px 24px', textAlign: 'center' }}>

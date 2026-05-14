@@ -39,6 +39,7 @@ import TravelExploreIcon from '@mui/icons-material/TravelExplore'
 import LightModeIcon from '@mui/icons-material/LightMode'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
 import BarChartIcon from '@mui/icons-material/BarChart'
+import MapIcon from '@mui/icons-material/Map'
 
 const DRAWER_OPEN  = 240
 const DRAWER_MINI  = 64
@@ -54,11 +55,20 @@ const DARK = {
   accentBg:  '#1e3a6e',
 }
 
+const STATUTS_STAGNANT = ['visio_planifiee','visio_effectuee','visite_planifiee','visite_effectuee','devis','ah']
+
 export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }) {
   const navigate   = useNavigate()
   const location   = useLocation()
-  const { profile, signOut, theme, toggleTheme } = useStore()
+  const { profile, signOut, theme, toggleTheme, dossiers, user } = useStore()
   const isAdmin    = profile?.role === 'admin'
+
+  // Badge alertes : dossiers stagnants (+14j sans activité, statuts actifs)
+  const myDossiers = isAdmin ? dossiers : dossiers.filter(d => d.assigne_a === user?.id)
+  const stagnantCount = myDossiers.filter(d =>
+    STATUTS_STAGNANT.includes(d.statut) &&
+    Math.floor((Date.now() - new Date(d.updated_at)) / 86400000) > 14
+  ).length
 
   const [outilsOpen,       setOutilsOpen]       = useState(true)
   const [prospectionOpen,  setProspectionOpen]  = useState(true)
@@ -86,7 +96,7 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
   const initials = [profile?.prenom?.[0], profile?.nom?.[0]].filter(Boolean).join('').toUpperCase() || '?'
 
   // ── Item générique ──────────────────────────────────────────────────────────
-  const Item = ({ icon, label, path, module, indent = false }) => {
+  const Item = ({ icon, label, path, module, indent = false, badge = 0 }) => {
     const active = isActive(path, module)
     const content = (
       <ListItemButton
@@ -106,20 +116,27 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
           {icon}
         </ListItemIcon>
         {open && (
-          <ListItemText
-            primary={label}
-            primaryTypographyProps={{
-              fontSize: 13,
-              fontWeight: active ? 700 : 500,
-              color: active ? '#fff' : DARK.text,
-              fontFamily: "system-ui,'Segoe UI',Arial,sans-serif",
-              noWrap: true,
-            }}
-          />
+          <>
+            <ListItemText
+              primary={label}
+              primaryTypographyProps={{
+                fontSize: 13,
+                fontWeight: active ? 700 : 500,
+                color: active ? '#fff' : DARK.text,
+                fontFamily: "system-ui,'Segoe UI',Arial,sans-serif",
+                noWrap: true,
+              }}
+            />
+            {badge > 0 && (
+              <Box sx={{ background: '#DC2626', color: '#fff', borderRadius: 10, minWidth: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, px: 0.6, ml: 0.5, flexShrink: 0 }}>
+                {badge > 99 ? '99+' : badge}
+              </Box>
+            )}
+          </>
         )}
       </ListItemButton>
     )
-    if (!open) return <Tooltip title={label} placement="right" arrow>{content}</Tooltip>
+    if (!open) return <Tooltip title={badge > 0 ? `${label} (${badge} alertes)` : label} placement="right" arrow>{content}</Tooltip>
     return content
   }
 
@@ -181,13 +198,16 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
           <Item icon={<DashboardIcon fontSize="small" />} label="Tableau de bord" path="/" />
 
           {/* Dossiers */}
-          <Item icon={<FolderIcon fontSize="small" />} label="Dossiers" path="/dossiers" />
+          <Item icon={<FolderIcon fontSize="small" />} label="Dossiers" path="/dossiers" badge={stagnantCount} />
 
           {/* Planning */}
           <Item icon={<CalendarMonthIcon fontSize="small" />} label="Planning" path="/planning" />
 
           {/* Statistiques */}
           <Item icon={<BarChartIcon fontSize="small" />} label="Statistiques" path="/statistiques" />
+
+          {/* Carte */}
+          <Item icon={<MapIcon fontSize="small" />} label="Carte" path="/carte" />
 
           <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
 

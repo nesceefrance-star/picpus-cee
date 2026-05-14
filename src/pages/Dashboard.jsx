@@ -470,6 +470,55 @@ export default function Dashboard() {
           </button>
         </div>
 
+        {/* ── Alertes proactives ── */}
+        {!loading && (() => {
+          const stagnants = activeDossiers.filter(d =>
+            STATUTS_EN_COURS.includes(d.statut) &&
+            Math.floor((Date.now() - new Date(d.updated_at)) / 86400000) > 14
+          )
+          const retard = taches.filter(t => !t.done && t.echeance && new Date(t.echeance) < new Date())
+          if (stagnants.length === 0 && retard.length === 0) return null
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: isMobile ? 16 : 20 }}>
+              {stagnants.length > 0 && (
+                <div style={{ background: '#FEF9C3', border: '1px solid #FDE047', borderRadius: 10, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 15, flexShrink: 0 }}>⏳</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#92400E', flexShrink: 0 }}>
+                    {stagnants.length} dossier{stagnants.length > 1 ? 's' : ''} sans activité depuis +14 jours
+                  </span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {stagnants.slice(0, 6).map(d => (
+                      <span key={d.id} onClick={() => openDossier(d)}
+                        style={{ background: '#fff', border: '1px solid #FCD34D', borderRadius: 6, padding: '2px 9px', fontSize: 11, color: '#92400E', cursor: 'pointer', fontWeight: 600, transition: 'background .1s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#FEF08A'}
+                        onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                        {d.ref}
+                      </span>
+                    ))}
+                    {stagnants.length > 6 && <span style={{ fontSize: 11, color: '#92400E', alignSelf: 'center' }}>+{stagnants.length - 6} autres</span>}
+                  </div>
+                </div>
+              )}
+              {retard.length > 0 && (
+                <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 15, flexShrink: 0 }}>🔴</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#991B1B', flexShrink: 0 }}>
+                    {retard.length} tâche{retard.length > 1 ? 's' : ''} en retard
+                  </span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {retard.slice(0, 4).map(t => (
+                      <span key={t.id} style={{ background: '#fff', border: '1px solid #FCA5A5', borderRadius: 6, padding: '2px 9px', fontSize: 11, color: '#991B1B', fontWeight: 600 }}>
+                        {t.titre.length > 28 ? t.titre.slice(0, 28) + '…' : t.titre}
+                      </span>
+                    ))}
+                    {retard.length > 4 && <span style={{ fontSize: 11, color: '#991B1B', alignSelf: 'center' }}>+{retard.length - 4} autres</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
         {/* ── Bloc tâches du jour ── */}
         {totalTaches > 0 && (
           <div style={{ marginBottom: 24 }}>

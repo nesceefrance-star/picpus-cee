@@ -17,6 +17,7 @@ import VisiteTechniqueDetail from './pages/VisiteTechniqueDetail'
 import RapportPublic from './pages/RapportPublic'
 import Planning from './pages/Planning'
 import Statistiques from './pages/Statistiques'
+import Carte from './pages/Carte'
 import SimulateurRapide from './pages/SimulateurRapide'
 import EmailGenerateur from './pages/EmailGenerateur'
 import AppLayout from './components/AppLayout'
@@ -105,6 +106,7 @@ export default function AppRouter() {
           <Route path="/visites/:id"     element={<WithLayout><VisiteTechniqueDetail /></WithLayout>} />
           <Route path="/planning"        element={<WithLayout><Planning /></WithLayout>} />
           <Route path="/statistiques"    element={<WithLayout><Statistiques /></WithLayout>} />
+          <Route path="/carte"           element={<WithLayout><Carte /></WithLayout>} />
           <Route path="/simulateur"      element={<WithLayout><SimulateurRapide /></WithLayout>} />
           <Route path="/emails"          element={<WithLayout><EmailGenerateur /></WithLayout>} />
           <Route path="/leads"           element={<WithLayout><Suspense fallback={<div style={{padding:40,color:'#64748B'}}>Chargement…</div>}><LeadsModule /></Suspense></WithLayout>} />
