@@ -1095,8 +1095,154 @@ function BatchPanel({ batches, selectedBatchId, onSelect, onDelete, onReassign, 
   );
 }
 
+// ─── HELPERS MASQUAGE LUSHA ──────────────────────────────────────
+function maskPhone(phone) {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length >= 10) return digits.slice(0, 2) + ' •• •• •• ••';
+  return phone.slice(0, 2) + ' ••••••';
+}
+function maskEmail(email) {
+  if (!email) return '';
+  const at = email.indexOf('@');
+  if (at < 0) return email[0] + '***';
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  const domParts = domain.split('.');
+  const maskedDom = domParts[0].slice(0, 2) + '***.' + domParts.slice(1).join('.');
+  return local[0] + '***@' + maskedDom;
+}
+
+// ─── MINI MODAL LUSHA CONTACT ─────────────────────────────────────
+function LushaContactModal({ contact, societeNom, onClose, onEnregistrer, lushaCredits }) {
+  const C = useC();
+  const [url,      setUrl]      = useState(contact.linkedin_url ?? '');
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState(null);
+  const [preview,  setPreview]  = useState(null);
+  const [revealed, setRevealed] = useState(false);
+  const [saving,   setSaving]   = useState(false);
+
+  const isLinkedin = /linkedin\.com\/in\//i.test(url.trim());
+  const reste = lushaCredits.limit > 0 ? lushaCredits.limit - lushaCredits.used : Infinity;
+
+  const handleRechercher = async () => {
+    if (!url.trim()) return;
+    setLoading(true); setError(null); setPreview(null); setRevealed(false);
+    try {
+      const body = isLinkedin
+        ? { action: 'lusha', linkedin_url: url.trim() }
+        : { action: 'lusha', firstName: contact.prenom, lastName: contact.nom, company: societeNom };
+      const res = await fetch('/api/claude', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `Lusha HTTP ${res.status}`);
+      const credits = 1 + (data.emails?.length ?? 0) * 1 + (data.phones?.length ?? 0) * 5;
+      setPreview({ emails: data.emails ?? [], phones: data.phones ?? [], fromCache: data.isCreditCharged === false, credits, raw: data });
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  };
+
+  const handleEnregistrer = async () => {
+    if (!preview) return;
+    setSaving(true);
+    try {
+      await onEnregistrer({ contactId: contact.id, linkedinUrl: url.trim() || null, result: preview.raw, creditsUsed: preview.credits });
+      onClose();
+    } catch (e) { setError(e.message); }
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: C.bgCard, border: `1px solid ${C.lusha}50`, borderRadius: 16, width: 480, maxWidth: '98vw', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px 12px', borderBottom: `1px solid ${C.border}`, background: `${C.lusha}10` }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>💜 Enrichissement Lusha</div>
+          <div style={{ fontSize: 12, color: C.textSub, marginTop: 2 }}>
+            {contact.prenom} {contact.nom}{contact.fonction && <span style={{ color: C.textDim }}> · {contact.fonction}</span>}
+          </div>
+          {lushaCredits.limit > 0 && (
+            <div style={{ fontSize: 11, color: reste <= 5 ? C.red : C.lusha, marginTop: 4, fontWeight: 600 }}>
+              Crédits restants : {reste === Infinity ? '∞' : reste} / {lushaCredits.limit}
+            </div>
+          )}
+        </div>
+        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 5 }}>URL LinkedIn du contact</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={url} onChange={e => { setUrl(e.target.value); setPreview(null); setRevealed(false); }}
+                placeholder="https://linkedin.com/in/prenom-nom-xxx"
+                style={{ flex: 1, padding: '8px 11px', borderRadius: 8, border: `1px solid ${isLinkedin ? C.lusha : C.borderLight}`, background: C.bgInput, color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
+                onKeyDown={e => { if (e.key === 'Enter') handleRechercher(); }}
+                autoFocus />
+              <button onClick={handleRechercher} disabled={!url.trim() || loading}
+                style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: !url.trim() || loading ? C.borderLight : C.lusha, color: !url.trim() || loading ? C.textDim : '#fff', fontWeight: 700, fontSize: 12, cursor: !url.trim() || loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                {loading ? '⏳' : '🔍 Chercher'}
+              </button>
+            </div>
+            {!isLinkedin && url.trim() && (
+              <div style={{ fontSize: 11, color: C.orange, marginTop: 4 }}>⚠ Collez une URL LinkedIn pour un meilleur résultat</div>
+            )}
+          </div>
+          {error && <div style={{ padding: '8px 12px', borderRadius: 8, background: C.redSoft, color: C.red, fontSize: 12 }}>⚠ {error}</div>}
+          {preview && (
+            <div style={{ background: C.bg, border: `1px solid ${C.lusha}30`, borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: preview.fromCache ? C.green : C.lusha, marginBottom: 10 }}>
+                {preview.fromCache ? '📦 Cache (0 crédit)' : `💜 ${preview.credits} crédit${preview.credits > 1 ? 's' : ''} consommé${preview.credits > 1 ? 's' : ''}`}
+              </div>
+              {preview.emails.length === 0 && preview.phones.length === 0 ? (
+                <div style={{ fontSize: 12, color: C.textSub, fontStyle: 'italic' }}>Aucune coordonnée trouvée.</div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: revealed ? 0 : 12 }}>
+                    {preview.phones.map((p, i) => {
+                      const digits = p.replace(/\D/g, '');
+                      const isMobile = digits.startsWith('06') || digits.startsWith('07');
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {revealed
+                            ? <a href={`tel:${p}`} style={{ fontSize: 14, color: C.green, fontWeight: 700, textDecoration: 'none' }}>{isMobile ? '📱' : '☎'} {p}</a>
+                            : <span style={{ fontSize: 13, color: C.green, fontWeight: 700, letterSpacing: 1, fontFamily: 'monospace' }}>{maskPhone(p)}</span>}
+                          <Badge label={isMobile ? 'Mobile' : 'Fixe'} color={C.green} bg={C.greenSoft} size={10} />
+                        </div>
+                      );
+                    })}
+                    {preview.emails.map((em, i) => (
+                      revealed
+                        ? <a key={i} href={`mailto:${em}`} style={{ fontSize: 13, color: C.accent, textDecoration: 'none' }}>✉ {em}</a>
+                        : <span key={i} style={{ fontSize: 13, color: C.accent, fontFamily: 'monospace', letterSpacing: .3 }}>{maskEmail(em)}</span>
+                    ))}
+                  </div>
+                  {!revealed && (
+                    <button onClick={() => setRevealed(true)}
+                      style={{ width: '100%', padding: '8px', borderRadius: 8, border: `1px solid ${C.lusha}40`, background: `${C.lusha}15`, color: C.lusha, fontWeight: 800, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      👁 Révéler les coordonnées complètes
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        <div style={{ padding: '12px 20px', borderTop: `1px solid ${C.border}`, display: 'flex', gap: 8 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: '8px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.textSub, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+            Fermer
+          </button>
+          {preview && (preview.emails.length > 0 || preview.phones.length > 0) && (
+            <button onClick={handleEnregistrer} disabled={saving}
+              style={{ flex: 2, padding: '8px', borderRadius: 8, border: 'none', background: saving ? C.borderLight : C.lusha, color: saving ? C.textDim : '#fff', fontWeight: 800, fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+              {saving ? '⏳ Enregistrement…' : '💾 Enregistrer sur ce contact'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── LIGNE CONTACT ────────────────────────────────────────────────
-function ContactRow({ contact, societeNom, onLusha, lushaLoading, onSetLinkedin }) {
+function ContactRow({ contact, societeNom, onEnrichirLusha, lushaLoading, onSetLinkedin, isFirst, lushaCredits }) {
   const C = useC();
   const [editingLi, setEditingLi] = useState(false);
   const [liInput,   setLiInput]   = useState(contact.linkedin_url ?? '');
@@ -1106,51 +1252,64 @@ function ContactRow({ contact, societeNom, onLusha, lushaLoading, onSetLinkedin 
     else window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${contact.prenom} ${contact.nom} ${societeNom}`)}`, '_blank');
   };
 
+  const [showLusha, setShowLusha] = useState(false);
+
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8,
-      background: contact.rang_poste === 1 ? C.accentDim : 'transparent',
-      border: `1px solid ${contact.rang_poste === 1 ? C.borderLight : 'transparent'}`,
-    }}>
-      <ScoreDot score={contact.score_poste ?? 0} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{contact.prenom} {contact.nom}</span>
-          <span style={{ fontSize: 11, color: C.textSub }}>{contact.fonction}</span>
-          {contact.rang_poste === 1 && <Badge label="Cible prioritaire" color={C.green} bg={C.greenSoft} />}
+    <>
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', borderRadius: 10,
+        background: isFirst ? C.accentDim : C.bgCard,
+        border: `1px solid ${isFirst ? C.borderLight : C.border}`,
+      }}>
+        <ScoreDot score={contact.score_poste ?? 0} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{contact.prenom} {contact.nom}</span>
+            {contact.fonction && <span style={{ fontSize: 11, color: C.textSub }}>{contact.fonction}</span>}
+            {isFirst && <Badge label="Cible prioritaire" color={C.green} bg={C.greenSoft} />}
+            {contact.lusha_fetched && <Badge label="Lusha ✓" color={C.lusha} bg={`${C.lusha}15`} />}
+          </div>
+          {(contact.email || contact.tel_societe) && (
+            <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
+              {contact.email && <a href={`mailto:${contact.email}`} style={{ fontSize: 11, color: C.accent, textDecoration: 'none' }}>✉ {contact.email}</a>}
+              {contact.tel_societe && <a href={`tel:${contact.tel_societe}`} style={{ fontSize: 11, color: C.green, textDecoration: 'none' }}>☎ {contact.tel_societe}</a>}
+            </div>
+          )}
+          {contact.lusha_fetched && (contact.lusha_email || contact.lusha_phone) && (
+            <div style={{ display: 'flex', gap: 10, marginTop: 5, flexWrap: 'wrap', padding: '5px 8px', borderRadius: 6, background: `${C.lusha}10`, border: `1px solid ${C.lusha}25` }}>
+              <span style={{ fontSize: 10, color: C.lusha, fontWeight: 800, alignSelf: 'center' }}>💜 Lusha</span>
+              {contact.lusha_email && <a href={`mailto:${contact.lusha_email}`} style={{ fontSize: 12, color: C.accent, textDecoration: 'none' }}>✉ {contact.lusha_email}</a>}
+              {contact.lusha_phone && <a href={`tel:${contact.lusha_phone}`} style={{ fontSize: 12, color: C.green, textDecoration: 'none' }}>☎ {contact.lusha_phone}</a>}
+              {contact.lusha_mobile && contact.lusha_mobile !== contact.lusha_phone && <a href={`tel:${contact.lusha_mobile}`} style={{ fontSize: 12, color: C.yellow, textDecoration: 'none' }}>📱 {contact.lusha_mobile}</a>}
+            </div>
+          )}
+          {editingLi && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
+              <input value={liInput} onChange={e => setLiInput(e.target.value)} placeholder="https://linkedin.com/in/..."
+                style={{ flex: 1, padding: '4px 8px', borderRadius: 6, border: `1px solid ${C.borderLight}`, background: C.bgInput, color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
+                onKeyDown={e => { if (e.key === 'Enter') { onSetLinkedin(contact.id, liInput); setEditingLi(false); } if (e.key === 'Escape') setEditingLi(false); }} autoFocus />
+              <Btn onClick={() => { onSetLinkedin(contact.id, liInput); setEditingLi(false); }} icon="✓" label="OK" color={C.green} small />
+              <Btn onClick={() => setEditingLi(false)} icon="✕" label="" color={C.red} small />
+            </div>
+          )}
         </div>
-        {(contact.email || contact.tel_societe) && (
-          <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
-            {contact.email && <a href={`mailto:${contact.email}`} style={{ fontSize: 11, color: C.accent, textDecoration: 'none', opacity: .85 }}>✉ {contact.email}</a>}
-            {contact.tel_societe && <a href={`tel:${contact.tel_societe}`} style={{ fontSize: 11, color: C.green, textDecoration: 'none', opacity: .85 }}>☎ {contact.tel_societe}</a>}
-          </div>
-        )}
-        {contact.lusha_fetched && (
-          <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap', borderLeft: `2px solid ${C.lusha}40`, paddingLeft: 8 }}>
-            <span style={{ fontSize: 10, color: C.lusha, fontWeight: 700, alignSelf: 'center' }}>Lusha</span>
-            {contact.lusha_email && <a href={`mailto:${contact.lusha_email}`} style={{ fontSize: 12, color: C.accent, textDecoration: 'none' }}>✉ {contact.lusha_email}</a>}
-            {contact.lusha_phone && <a href={`tel:${contact.lusha_phone}`} style={{ fontSize: 12, color: C.green, textDecoration: 'none' }}>☎ {contact.lusha_phone}</a>}
-            {contact.lusha_mobile && contact.lusha_mobile !== contact.lusha_phone && <a href={`tel:${contact.lusha_mobile}`} style={{ fontSize: 12, color: C.yellow, textDecoration: 'none' }}>📱 {contact.lusha_mobile}</a>}
-          </div>
-        )}
-        {editingLi && (
-          <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
-            <input value={liInput} onChange={e => setLiInput(e.target.value)} placeholder="https://linkedin.com/in/..."
-              style={{ flex: 1, padding: '4px 8px', borderRadius: 6, border: `1px solid ${C.borderLight}`, background: C.bgInput, color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
-              onKeyDown={e => { if (e.key === 'Enter') { onSetLinkedin(contact.id, liInput); setEditingLi(false); } if (e.key === 'Escape') setEditingLi(false); }} autoFocus />
-            <Btn onClick={() => { onSetLinkedin(contact.id, liInput); setEditingLi(false); }} icon="✓" label="OK" color={C.green} small />
-            <Btn onClick={() => setEditingLi(false)} icon="✕" label="" color={C.red} small />
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 5, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
+          <Btn onClick={handleOpenLinkedin}
+            icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>}
+            label={contact.linkedin_url ? 'Profil' : 'Chercher'} color={C.linkedin} small />
+          <Btn onClick={() => setEditingLi(e => !e)} icon="🔗" label="URL" color={C.textSub} small />
+          <Btn onClick={() => setShowLusha(true)} icon="💜" label={contact.lusha_fetched ? 'Maj Lusha' : 'Lusha'} color={C.lusha} small />
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 5, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-        <Btn onClick={handleOpenLinkedin}
-          icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>}
-          label={contact.linkedin_url ? 'Profil' : 'Chercher'} color={C.linkedin} small />
-        <Btn onClick={() => setEditingLi(true)} icon="🔗" label="URL" color={C.textSub} small />
-        <Btn onClick={() => onLusha(contact.id)} loading={lushaLoading[contact.id]} icon="📞" label={contact.lusha_fetched ? 'Actualiser' : 'Lusha'} color={C.lusha} small />
-      </div>
-    </div>
+      {showLusha && (
+        <LushaContactModal
+          contact={contact} societeNom={societeNom}
+          onClose={() => setShowLusha(false)}
+          onEnregistrer={onEnrichirLusha}
+          lushaCredits={lushaCredits ?? { limit: 0, used: 0 }}
+        />
+      )}
+    </>
   );
 }
 
@@ -1378,7 +1537,7 @@ function ManuelModal({ onClose, onAnnuler, onCreer, saving, form, setForm }) {
 }
 
 // ─── CARTE SOCIÉTÉ ────────────────────────────────────────────────
-function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastre, onLusha, onGmb, onSetLinkedin, onConvertir, onSupprimer, onNextAction, onSaveCommentaire }) {
+function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastre, onEnrichirLusha, onGmb, onSetLinkedin, onConvertir, onSupprimer, onNextAction, onSaveCommentaire, lushaCredits }) {
   const C = useC();
   const [open,           setOpen]          = useState(false);
   const [showMap,        setShowMap]       = useState(false);
@@ -1429,7 +1588,6 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
             <Btn onClick={() => onGmb(soc.id)} loading={gmbLoading[soc.id]} icon="📍" label="Google Maps" color={C.orange} />
             <Btn onClick={() => { setShowMap(m => !m); if (!open) setOpen(true); }} icon="🗺" label={showMap ? 'Masquer carte' : 'Carte parcelles'} color={C.purple} />
             {soc.lien_geoportail && <Btn onClick={() => window.open(soc.lien_geoportail, '_blank')} icon="🌍" label="Géoportail" color={C.orange} />}
-            {soc.lien_googlemaps && <Btn onClick={() => window.open(soc.lien_googlemaps, '_blank')} icon="🛰" label="Satellite" color={C.accent} />}
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
               <Btn
                 onClick={() => {
@@ -1496,15 +1654,23 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
             </div>
           )}
 
-          <div style={{ padding: '10px 18px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 10, color: C.textDim }}>Score poste :</span>
-              {SCORE_CONFIG.map(c => <Badge key={c.label} label={`${c.label} ${c.tip}`} color={c.color} bg={c.bg} size={10} />)}
+          <div style={{ padding: '10px 18px 14px', background: C.bg }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                👤 Contacts ({soc.contacts?.length ?? 0})
+              </span>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {SCORE_CONFIG.map(c => <Badge key={c.label} label={`${c.label} ${c.tip}`} color={c.color} bg={c.bg} size={10} />)}
+              </div>
             </div>
-            {(soc.contacts ?? []).map(contact => (
-              <ContactRow key={contact.id} contact={contact} societeNom={soc.raison_sociale}
-                onLusha={onLusha} lushaLoading={lushaLoading} onSetLinkedin={onSetLinkedin} />
-            ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {(soc.contacts ?? []).map((contact, idx) => (
+                <ContactRow key={contact.id} contact={contact} societeNom={soc.raison_sociale}
+                  onEnrichirLusha={onEnrichirLusha} lushaLoading={lushaLoading} onSetLinkedin={onSetLinkedin}
+                  lushaCredits={lushaCredits}
+                  isFirst={idx === 0} />
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -1525,7 +1691,7 @@ export default function LeadsModule() {
     cadastreLoading, lushaLoading,
     searchQuery, setSearchQuery, filterStatut, setFilterStatut, sortBy, setSortBy,
     importerExcel, analyserImport, clearAnalyse, analyseData, analyseEnCours,
-    enrichirCadastre, enrichirLusha, enrichirGMB, gmbLoading,
+    enrichirCadastre, enrichirLusha, enrichirContactLusha, enrichirGMB, gmbLoading,
     setLinkedinUrl, setStatutSociete, convertirEnDossier, supprimerSociete,
     setNextAction, setCommentaireSociete, creerLeadManuel,
     creerBatchDepuisSIRENE, ajouterSocieteManuelle,
@@ -1727,10 +1893,11 @@ export default function LeadsModule() {
               {societes.map(soc => (
                 <SocieteCard key={soc.id} soc={soc}
                   cadastreLoading={cadastreLoading} lushaLoading={lushaLoading} gmbLoading={gmbLoading}
-                  onCadastre={enrichirCadastre} onLusha={enrichirLusha} onGmb={enrichirGMB}
+                  onCadastre={enrichirCadastre} onEnrichirLusha={enrichirContactLusha} onGmb={enrichirGMB}
                   onSetLinkedin={setLinkedinUrl} onConvertir={convertirEnDossier}
                   onSupprimer={supprimerSociete}
-                  onNextAction={setNextAction} onSaveCommentaire={setCommentaireSociete} />
+                  onNextAction={setNextAction} onSaveCommentaire={setCommentaireSociete}
+                  lushaCredits={lushaCredits} />
               ))}
             </div>
           )}

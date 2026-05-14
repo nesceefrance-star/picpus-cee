@@ -626,6 +626,40 @@ export function useLeads() {
     setCadastreLoading(prev => ({ ...prev, [importId]: false }));
   }, [societes]);
 
+  // ── Enrichissement Lusha depuis LushaContactModal (URL connue, pas de batch Leads Lusha) ──
+  const enrichirContactLusha = useCallback(async ({ contactId, linkedinUrl, result, creditsUsed }) => {
+    const patch = {
+      lusha_fetched: true, lusha_fetched_at: new Date().toISOString(),
+      lusha_email:  result.emails?.[0] ?? null,
+      lusha_phone:  result.phones?.[0] ?? null,
+      lusha_mobile: result.phones?.[1] ?? null,
+      lusha_raw:    result,
+      lusha_credits_used: creditsUsed,
+      ...(linkedinUrl ? { linkedin_url: linkedinUrl } : {}),
+    };
+    const { error: eUp } = await supabase.from('leads_contacts').update(patch).eq('id', contactId);
+    if (eUp) throw new Error(eUp.message);
+    // Logger pour suivi crédits équipe
+    if (profile) {
+      await supabase.from('lusha_reveals').insert({
+        user_id: profile.id,
+        linkedin_url: linkedinUrl ?? null,
+        first_name:   result.firstName ?? null,
+        last_name:    result.lastName  ?? null,
+        company:      result.company   ?? null,
+        emails:       result.emails    ?? [],
+        phones:       result.phones    ?? [],
+        credits_used: creditsUsed,
+        raw_data:     result,
+      });
+      setLushaCredits(prev => ({
+        ...prev, used: prev.used + creditsUsed,
+        reveals: [{ credits_used: creditsUsed, created_at: new Date().toISOString(), first_name: result.firstName, last_name: result.lastName }, ...prev.reveals],
+      }));
+    }
+    setSocietes(prev => prev.map(s => ({ ...s, contacts: s.contacts.map(c => c.id === contactId ? { ...c, ...patch } : c) })));
+  }, [societes, profile]);
+
   // ── Enrichissement Lusha ────────────────────────────────────────
   const enrichirLusha = useCallback(async (contactId) => {
     setLushaLoading(prev => ({ ...prev, [contactId]: true }));
@@ -1144,7 +1178,7 @@ export function useLeads() {
     searchQuery, setSearchQuery, filterStatut, setFilterStatut, sortBy, setSortBy,
     // Actions
     importerExcel, analyserImport, clearAnalyse, analyseData, analyseEnCours,
-    enrichirCadastre, enrichirLusha, enrichirGMB, gmbLoading,
+    enrichirCadastre, enrichirLusha, enrichirContactLusha, enrichirGMB, gmbLoading,
     setLinkedinUrl, setStatutSociete, convertirEnDossier, supprimerSociete,
     setNextAction, setCommentaireSociete, creerLeadManuel,
     refresh: () => { loadBatches(); loadSocietes(selectedBatchId); },
