@@ -41,7 +41,7 @@ const FICHE_LABELS = {
   'IND-BA-110': 'Destrat Industrie', 'BAT-TH-125': 'VMC Simple', 'BAT-TH-126': 'VMC Double',
 }
 
-// Cache module-level pour les géocodages
+// Cache module-level : clé = "dossierId:adresse" pour invalider si l'adresse change
 const geoCache = new Map()
 
 // ── Icône colorée custom ──────────────────────────────────────────────────────
@@ -72,16 +72,17 @@ function FlyTo({ target }) {
 }
 
 // ── Géocodage BAN ─────────────────────────────────────────────────────────────
-async function geocodeAddress(addr) {
+// Clé cache = "dossierId:adresse" — si l'adresse change, le cache est invalidé
+async function geocodeDossier(dossierId, addr) {
   if (!addr?.trim()) return null
-  const key = addr.trim().toLowerCase()
-  if (geoCache.has(key)) return geoCache.get(key)
+  const cacheKey = `${dossierId}:${addr.trim().toLowerCase()}`
+  if (geoCache.has(cacheKey)) return geoCache.get(cacheKey)
   try {
     const r = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(addr)}&limit=1`)
     const d = await r.json()
     const f = d.features?.[0]
     const result = f ? [f.geometry.coordinates[1], f.geometry.coordinates[0]] : null
-    geoCache.set(key, result)
+    geoCache.set(cacheKey, result)
     return result
   } catch { return null }
 }
@@ -92,8 +93,7 @@ async function geocodeBatch(dossiers) {
   for (let i = 0; i < dossiers.length; i += BATCH) {
     const slice = dossiers.slice(i, i + BATCH)
     const resolved = await Promise.all(slice.map(async d => {
-      const addr = d.adresse_site
-      const coords = await geocodeAddress(addr)
+      const coords = await geocodeDossier(d.id, d.adresse_site)
       return [d.id, coords]
     }))
     for (const [id, c] of resolved) { if (c) results[id] = c }
@@ -126,18 +126,26 @@ export default function Carte() {
     init()
   }, [profile?.id])
 
-  // Géocode quand les dossiers sont chargés
+  // Signature des adresses de travaux — se recalcule si une adresse est modifiée
+  const addrSignature = (isAdmin ? dossiers : dossiers.filter(d => d.assigne_a === user?.id))
+    .filter(d => d.statut !== 'perdu' && d.adresse_site)
+    .map(d => `${d.id}:${d.adresse_site}`)
+    .sort()
+    .join('|')
+
+  // Géocode à chaque changement d'adresse de chantier
   useEffect(() => {
-    if (!dossiers.length) return
+    if (!addrSignature) return
     const myDossiers = isAdmin ? dossiers : dossiers.filter(d => d.assigne_a === user?.id)
     const toGeocode  = myDossiers.filter(d => d.statut !== 'perdu' && d.adresse_site)
     if (!toGeocode.length) return
     setGeocoding(true)
     geocodeBatch(toGeocode).then(results => {
-      setCoordsMap(prev => ({ ...prev, ...results }))
+      // Remplace complètement la map pour ne pas garder d'anciennes coordonnées
+      setCoordsMap(results)
       setGeocoding(false)
     })
-  }, [dossiers.length, profile?.id])
+  }, [addrSignature])
 
   const isAdmin_ = profile?.role === 'admin'
   const myDossiers = isAdmin_ ? dossiers : dossiers.filter(d => d.assigne_a === user?.id)
