@@ -1613,12 +1613,45 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
 
       {open && (
         <div style={{ borderTop: `2px solid ${C.accent}30` }}>
-          <SecSep label="Prochaine étape" color={C.accent} />
-          <SuiviBar soc={soc} onNextAction={onNextAction} />
-          <SecSep label="Notes" color={C.textSub} />
-          <CommentZone soc={soc} onSave={onSaveCommentaire} />
-          <SecSep label="Actions" color={C.yellow} />
-          <div style={{ display: 'flex', gap: 8, padding: '10px 18px', flexWrap: 'wrap', alignItems: 'center' }}>
+
+          {/* 1 — Données cadastrales */}
+          {soc.cadastre_fetched && (
+            <div style={{ display: 'flex', gap: 16, padding: '10px 18px', background: `${C.yellow}08`, borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              {[
+                { label: 'Parcelle', value: `${soc.section_cadastrale ?? '?'}${soc.numero_parcelle ?? '?'}` },
+                { label: 'Surface parcelle', value: soc.surface_parcelle_m2 ? `${soc.surface_parcelle_m2.toLocaleString()} m²` : '—' },
+                { label: soc.geocode_methode === 'exact' ? 'Emprise bâtiment ✓' : 'Emprise zone 30m', value: soc.surface_bati_m2 ? `${soc.surface_bati_m2.toLocaleString()} m²` : '—' },
+                { label: 'Bâtiments', value: soc.nb_batiments ?? '—' },
+                { label: 'SIRET', value: soc.siret ?? '—' },
+                { label: 'Source GPS', value: soc.geocode_source === 'sirene' ? '📍 SIRENE' : '📍 BAN' },
+                { label: 'Adresse normalisée', value: soc.adresse_normalisee ?? '—' },
+              ].map(({ label, value }) => (
+                <div key={label} style={{ minWidth: 110 }}>
+                  <div style={{ fontSize: 10, color: C.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>{label}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: label.includes('SIRENE') || label === 'Source GPS' ? C.green : C.text, marginTop: 2 }}>{value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Carte parcelles */}
+          {showMap && (
+            <div style={{ padding: '0 18px 14px' }}>
+              <Suspense fallback={<div style={{ padding: 20, textAlign: 'center', color: C.textSub, fontSize: 12 }}>Chargement carte…</div>}>
+                <CadastreMap
+                  adresse={soc.adresse}
+                  codePostal={soc.cp}
+                  ville={soc.ville}
+                  siret={soc.siret ?? ''}
+                  raisonSociale={soc.raison_sociale}
+                  dossierId={`lead_${soc.id}`}
+                />
+              </Suspense>
+            </div>
+          )}
+
+          {/* 2 — Actions */}
+          <div style={{ display: 'flex', gap: 8, padding: '10px 18px', flexWrap: 'wrap', alignItems: 'center', borderBottom: `1px solid ${C.border}` }}>
             <Btn onClick={() => onCadastre(soc.id)} loading={cadastreLoading[soc.id]} icon="📐" label={soc.cadastre_fetched ? 'Recalculer' : 'Cadastre'} color={C.yellow} />
             <Btn onClick={() => onGmb(soc.id)} loading={gmbLoading[soc.id]} icon="📍" label="Google Maps" color={C.orange} />
             <Btn onClick={() => { setShowMap(m => !m); if (!open) setOpen(true); }} icon="🗺" label={showMap ? 'Masquer carte' : 'Carte parcelles'} color={C.purple} />
@@ -1655,52 +1688,15 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
             </div>
           </div>
 
-          {soc.cadastre_fetched && (
-            <>
-            <SecSep label="Cadastre" color={C.yellow} />
-            <div style={{ display: 'flex', gap: 16, padding: '10px 18px', background: `${C.yellow}08`, borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-              {[
-                { label: 'Parcelle', value: `${soc.section_cadastrale ?? '?'}${soc.numero_parcelle ?? '?'}` },
-                { label: 'Surface parcelle', value: soc.surface_parcelle_m2 ? `${soc.surface_parcelle_m2.toLocaleString()} m²` : '—' },
-                { label: soc.geocode_methode === 'exact' ? 'Emprise bâtiment ✓' : 'Emprise zone 30m', value: soc.surface_bati_m2 ? `${soc.surface_bati_m2.toLocaleString()} m²` : '—' },
-                { label: 'Bâtiments', value: soc.nb_batiments ?? '—' },
-                { label: 'SIRET', value: soc.siret ?? '—' },
-                { label: 'Source GPS', value: soc.geocode_source === 'sirene' ? '📍 SIRENE' : '📍 BAN' },
-                { label: 'Adresse normalisée', value: soc.adresse_normalisee ?? '—' },
-              ].map(({ label, value }) => (
-                <div key={label} style={{ minWidth: 110 }}>
-                  <div style={{ fontSize: 10, color: C.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>{label}</div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: label.includes('SIRENE') || label === 'Source GPS' ? C.green : C.text, marginTop: 2 }}>{value}</div>
-                </div>
-              ))}
-            </div>
-            </>
-          )}
+          {/* 3 — Notes */}
+          <SecSep label="Notes" color={C.textSub} />
+          <CommentZone soc={soc} onSave={onSaveCommentaire} />
 
-          {showMap && (
-            <div style={{ padding: '0 18px 14px' }}>
-              <Suspense fallback={<div style={{ padding: 20, textAlign: 'center', color: C.textSub, fontSize: 12 }}>Chargement carte…</div>}>
-                <CadastreMap
-                  adresse={soc.adresse}
-                  codePostal={soc.cp}
-                  ville={soc.ville}
-                  siret={soc.siret ?? ''}
-                  raisonSociale={soc.raison_sociale}
-                  dossierId={`lead_${soc.id}`}
-                />
-              </Suspense>
-            </div>
-          )}
-
+          {/* 4 — Contacts */}
           <SecSep label={`Contacts (${soc.contacts?.length ?? 0})`} color={C.lusha} />
           <div style={{ padding: '10px 18px 14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: C.textSub, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                Score des contacts
-              </span>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {SCORE_CONFIG.map(c => <Badge key={c.label} label={`${c.label} ${c.tip}`} color={c.color} bg={c.bg} size={10} />)}
-              </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+              {SCORE_CONFIG.map(c => <Badge key={c.label} label={`${c.label} ${c.tip}`} color={c.color} bg={c.bg} size={10} />)}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {(soc.contacts ?? []).map((contact, idx) => (
@@ -1711,6 +1707,9 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
               ))}
             </div>
           </div>
+
+          {/* 5 — Prochaine étape (tout en bas) */}
+          <SuiviBar soc={soc} onNextAction={onNextAction} />
         </div>
       )}
     </div>
