@@ -1361,7 +1361,7 @@ const NEXT_ACTION_CFG = {
 const TYPES_PERSO = ['Foncière', 'Gestionnaire', 'Santé', 'Centre commercial', 'Entrepôt', 'Industrie', 'Bureaux', 'BE', 'Apporteur d\'affaires', 'Promoteur', 'Collectivité', 'Autre'];
 
 // ─── BARRE DE SUIVI ──────────────────────────────────────────────
-function SuiviBar({ soc, onNextAction }) {
+function SuiviBar({ soc, onNextAction, children }) {
   const C = useC();
   const [pickingDate, setPickingDate] = useState(false);
   const [dateVal,     setDateVal]     = useState('');
@@ -1407,6 +1407,7 @@ function SuiviBar({ soc, onNextAction }) {
             </button>
           );
         })}
+        {children && <div style={{ marginLeft: 'auto' }}>{children}</div>}
       </div>
       {pickingDate && (
         <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: `${C.accent}10`, border: `1px solid ${C.accent}30` }}>
@@ -1657,14 +1658,6 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
             <Btn onClick={() => { setShowMap(m => !m); if (!open) setOpen(true); }} icon="🗺" label={showMap ? 'Masquer carte' : 'Carte parcelles'} color={C.purple} />
             {soc.lien_geoportail && <Btn onClick={() => window.open(soc.lien_geoportail, '_blank')} icon="🌍" label="Géoportail" color={C.orange} />}
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
-              <Btn
-                onClick={() => {
-                  onConvertir(soc.id);
-                  alert('✅ Lead marqué "Converti en dossier".\n\nPensez à créer le dossier dans le CRM (menu Dossiers → Nouveau dossier).');
-                }}
-                icon="📁" label="Convertir en dossier" color={C.green}
-                disabled={soc.statut_qualification === 'Converti en dossier'}
-              />
               {confirmDelete ? (
                 <>
                   <span style={{ fontSize: 11, color: C.red, fontWeight: 600 }}>Supprimer ?</span>
@@ -1708,8 +1701,17 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
             </div>
           </div>
 
-          {/* 5 — Prochaine étape (tout en bas) */}
-          <SuiviBar soc={soc} onNextAction={onNextAction} />
+          {/* 5 — Prochaine étape + Convertir (tout en bas) */}
+          <SuiviBar soc={soc} onNextAction={onNextAction}>
+            <Btn
+              onClick={() => {
+                onConvertir(soc.id);
+                alert('✅ Lead marqué "Converti en dossier".\n\nPensez à créer le dossier dans le CRM (menu Dossiers → Nouveau dossier).');
+              }}
+              icon="📁" label="Convertir en dossier" color={C.green}
+              disabled={soc.statut_qualification === 'Converti en dossier'}
+            />
+          </SuiviBar>
         </div>
       )}
     </div>
