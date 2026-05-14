@@ -69,7 +69,6 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
   const [lightbox,    setLightbox]    = useState(null)
   const [dragOverCat, setDragOverCat] = useState(null)
 
-  const inputs      = useRef({})
   const pendingRef  = useRef({})  // { tempId: { catId, file, localUrl } }
   const photosRef   = useRef(photos)
 
@@ -170,7 +169,6 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
       url: localUrl, nom: file.name,
       taken_at: new Date().toISOString(), _status: 'pending',
     }])
-    if (inputs.current[catId]) inputs.current[catId].value = ''
     doUpload(tempId, catId, file, localUrl)
   }
 
@@ -280,43 +278,42 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
                   </div>
                 )}
 
-                {/* ── Zone upload ───────────────────────────────────────────
-                    iOS  : capture="environment" + display:none + button.click()
-                          (la seule combinaison qui fonctionne sur Safari iOS)
-                    Desktop : div avec handlers drag-and-drop + input multiple ── */}
-                <input
-                  ref={el => inputs.current[cat.id] = el}
-                  type="file"
-                  accept="image/*"
-                  {...(IS_IOS ? { capture: 'environment' } : { multiple: true })}
-                  onChange={e => {
-                    Array.from(e.target.files || []).forEach(f => handleFile(cat.id, f))
-                    e.target.value = ''
-                  }}
-                  style={{ display: 'none' }}
-                />
+                {/* Zone upload — label enveloppe l'input (déclenche iOS sans JS)
+                    input opacity:0 positionné dans le label → jamais display:none
+                    div wrapper gère le drag-and-drop desktop */}
                 <div
-                  onDragOver={!IS_IOS ? e => { e.preventDefault(); e.stopPropagation(); setDragOverCat(cat.id) } : undefined}
-                  onDragLeave={!IS_IOS ? e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverCat(null) } : undefined}
-                  onDrop={!IS_IOS ? e => { e.preventDefault(); e.stopPropagation(); handleDrop(cat.id, e) } : undefined}
+                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (!uploading) setDragOverCat(cat.id) }}
+                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverCat(null) }}
+                  onDrop={e => {
+                    e.preventDefault(); e.stopPropagation()
+                    setDragOverCat(null)
+                    if (!uploading) handleDrop(cat.id, e)
+                  }}
                   style={{ marginTop: catPhotos.length > 0 ? 0 : 12 }}
                 >
-                  <button
-                    onClick={() => { if (visiteId && !uploading) inputs.current[cat.id]?.click() }}
-                    disabled={!visiteId || uploading}
-                    style={{
-                      display: 'block', width: '100%', textAlign: 'center',
-                      cursor: visiteId && !uploading ? 'pointer' : 'default',
-                      background: uploading ? C.bg : dragOverCat === cat.id ? '#DBEAFE' : '#EFF6FF',
-                      border: `1.5px dashed ${uploading ? C.border : dragOverCat === cat.id ? C.accent : '#93C5FD'}`,
-                      borderRadius: 8, padding: '12px 0', boxSizing: 'border-box',
-                      color: uploading || !visiteId ? C.textSoft : C.accent,
-                      fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
-                      outline: 'none', userSelect: 'none',
-                    }}
-                  >
+                  <label style={{
+                    position: 'relative', display: 'block', textAlign: 'center',
+                    cursor: uploading ? 'default' : 'pointer',
+                    background: uploading ? C.bg : dragOverCat === cat.id ? '#DBEAFE' : '#EFF6FF',
+                    border: `1.5px dashed ${uploading ? C.border : dragOverCat === cat.id ? C.accent : '#93C5FD'}`,
+                    borderRadius: 8, padding: '12px 0', boxSizing: 'border-box',
+                    color: uploading ? C.textSoft : C.accent,
+                    fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                    userSelect: 'none',
+                  }}>
                     {uploading ? '⏳ Upload en cours…' : IS_IOS ? '📷 Ajouter une photo' : '📁 Glisser-déposer ou cliquer'}
-                  </button>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      disabled={uploading}
+                      onChange={e => {
+                        Array.from(e.target.files || []).forEach(f => handleFile(cat.id, f))
+                        e.target.value = ''
+                      }}
+                      style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
+                    />
+                  </label>
                 </div>
               </div>
             )}
