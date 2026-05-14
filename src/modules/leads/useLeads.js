@@ -635,13 +635,30 @@ export function useLeads() {
       if (!contact) throw new Error('Contact non trouvé');
       const soc = societes.find(s => s.id === contact.import_id);
       const result = await fetchLusha({ prenom: contact.prenom, nom: contact.nom, societe: soc?.raison_sociale ?? '', linkedinUrl: contact.linkedin_url ?? null });
-      const patch = { lusha_fetched: true, lusha_fetched_at: new Date().toISOString(), lusha_email: result.emails?.[0] ?? null, lusha_phone: result.phones?.[0] ?? null, lusha_mobile: result.phones?.[1] ?? null, lusha_raw: result, lusha_credits_used: result.credits_used ?? 1 };
+      const creditsUsed = 1 + (result.emails?.length ?? 0) * 1 + (result.phones?.length ?? 0) * 5;
+      const patch = { lusha_fetched: true, lusha_fetched_at: new Date().toISOString(), lusha_email: result.emails?.[0] ?? null, lusha_phone: result.phones?.[0] ?? null, lusha_mobile: result.phones?.[1] ?? null, lusha_raw: result, lusha_credits_used: creditsUsed };
       const { error: eUp } = await supabase.from('leads_contacts').update(patch).eq('id', contactId);
       if (eUp) throw eUp;
+      // Logger dans lusha_reveals pour le suivi crédits équipe
+      await supabase.from('lusha_reveals').insert({
+        user_id: profile.id,
+        linkedin_url: contact.linkedin_url ?? null,
+        first_name: result.firstName ?? contact.prenom ?? null,
+        last_name:  result.lastName  ?? contact.nom  ?? null,
+        company:    soc?.raison_sociale ?? null,
+        emails:     result.emails ?? [],
+        phones:     result.phones ?? [],
+        credits_used: creditsUsed,
+        raw_data:   result,
+      });
+      setLushaCredits(prev => ({
+        ...prev, used: prev.used + creditsUsed,
+        reveals: [{ credits_used: creditsUsed, created_at: new Date().toISOString(), first_name: result.firstName, last_name: result.lastName }, ...prev.reveals],
+      }));
       setSocietes(prev => prev.map(s => ({ ...s, contacts: s.contacts.map(c => c.id === contactId ? { ...c, ...patch } : c) })));
     } catch (e) { setError(`Lusha : ${e.message}`); }
     setLushaLoading(prev => ({ ...prev, [contactId]: false }));
-  }, [societes]);
+  }, [societes, profile]);
 
   // ── Google My Business (Overpass OSM + ouverture Maps) ─────────
   const enrichirGMB = useCallback(async (importId) => {

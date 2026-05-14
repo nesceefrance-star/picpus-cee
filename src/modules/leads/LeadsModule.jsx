@@ -183,7 +183,7 @@ function ImportModal({ onClose, onAnalyser, analyseEnCours, profiles, isAdmin })
               <div style={{ fontSize: 11, fontWeight: 600, color: C.textSub, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em' }}>Assigné à</div>
               <select value={assigneA} onChange={e => setAssigneA(e.target.value)} style={{ ...inpStyle, cursor: 'pointer' }}>
                 <option value="">— Moi-même —</option>
-                {profiles.filter(p => p.role !== 'admin' || p.id).map(p => (
+                {profiles.map(p => (
                   <option key={p.id} value={p.id}>{p.prenom} {p.nom} {p.role === 'admin' ? '(admin)' : ''}</option>
                 ))}
               </select>
@@ -1174,6 +1174,7 @@ function SuiviBar({ soc, onNextAction }) {
   const cur = soc.next_action;
 
   const handleAction = (key) => {
+    setPickingDate(false); setDateVal('');
     if (key === 'rappeler') { setPickingDate(true); return; }
     onNextAction(soc.id, key, null);
   };
@@ -1279,6 +1280,7 @@ function ManuelModal({ onClose, onAnnuler, onCreer, saving, form, setForm }) {
     setError('');
     try {
       await onCreer({ societe: form.societe, prenom: form.prenom, nom: form.nom, email: form.email, tel: form.tel, type: form.type, commentaire: form.commentaire, dernier_echange: form.dernEch || null, next_action: form.nextAction || null, next_action_date: form.nextDate || null });
+      onClose(); // fermer après succès
     } catch (e) { setError(e.message); }
   };
 
@@ -1429,7 +1431,14 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
             {soc.lien_geoportail && <Btn onClick={() => window.open(soc.lien_geoportail, '_blank')} icon="🌍" label="Géoportail" color={C.orange} />}
             {soc.lien_googlemaps && <Btn onClick={() => window.open(soc.lien_googlemaps, '_blank')} icon="🛰" label="Satellite" color={C.accent} />}
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
-              <Btn onClick={() => onConvertir(soc.id)} icon="📁" label="Convertir en dossier" color={C.green} disabled={soc.statut_qualification === 'Converti en dossier'} />
+              <Btn
+                onClick={() => {
+                  onConvertir(soc.id);
+                  alert('✅ Lead marqué "Converti en dossier".\n\nPensez à créer le dossier dans le CRM (menu Dossiers → Nouveau dossier).');
+                }}
+                icon="📁" label="Convertir en dossier" color={C.green}
+                disabled={soc.statut_qualification === 'Converti en dossier'}
+              />
               {confirmDelete ? (
                 <>
                   <span style={{ fontSize: 11, color: C.red, fontWeight: 600 }}>Supprimer ?</span>
@@ -1503,6 +1512,8 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
   );
 }
 
+const MANUEL_INIT = { societe:'', prenom:'', nom:'', email:'', tel:'', type:'', commentaire:'', dernEch:'', nextAction:'', nextDate:'' };
+
 // ─── MODULE PRINCIPAL ─────────────────────────────────────────────
 export default function LeadsModule() {
   const theme = useStore(s => s.theme);
@@ -1530,9 +1541,8 @@ export default function LeadsModule() {
   const [importMsg,        setImportMsg]        = useState(null);
 
   // État formulaire lead manuel — persisté au niveau parent pour survivre fermeture/réouverture
-  const MANUEL_INIT = { societe:'', prenom:'', nom:'', email:'', tel:'', type:'', commentaire:'', dernEch:'', nextAction:'', nextDate:'' };
   const [manuelForm, setManuelForm] = useState(MANUEL_INIT);
-  const resetManuelForm = () => setManuelForm(MANUEL_INIT);
+  const resetManuelForm = useCallback(() => setManuelForm(MANUEL_INIT), []);
 
   const handleChoixEntree = useCallback((choix) => {
     setShowEntreeModal(false);
@@ -1542,16 +1552,21 @@ export default function LeadsModule() {
     if (choix === 'manuel')   setShowManuelModal(true);
   }, []);
 
+  const showMsg = useCallback((msg) => {
+    setImportMsg(msg);
+    if (msg?.type === 'ok') setTimeout(() => setImportMsg(null), 5000);
+  }, []);
+
   const handleImporterSIRENE = useCallback(async (sireneResults, opts) => {
     setImportMsg(null);
     try {
       const { imported, batch } = await creerBatchDepuisSIRENE(sireneResults, opts);
-      setImportMsg({ type: 'ok', text: `✅ ${imported} entreprise(s) importée(s) dans "${batch.nom}"` });
+      showMsg({ type: 'ok', text: `✅ ${imported} entreprise(s) importée(s) dans "${batch.nom}"` });
       setShowCriteresModal(false);
     } catch (e) {
-      setImportMsg({ type: 'err', text: `❌ Import échoué : ${e.message}` });
+      showMsg({ type: 'err', text: `❌ Import échoué : ${e.message}` });
     }
-  }, [creerBatchDepuisSIRENE]);
+  }, [creerBatchDepuisSIRENE, showMsg]);
 
   const handleAnalyser = useCallback(async (file, opts) => {
     setShowImportModal(false);
@@ -1566,11 +1581,11 @@ export default function LeadsModule() {
     setImportMsg(null);
     try {
       const { imported, batch } = await importerExcel(mapping);
-      setImportMsg({ type: 'ok', text: `✅ ${imported} société(s) importée(s) dans "${batch.nom}"` });
+      showMsg({ type: 'ok', text: `✅ ${imported} société(s) importée(s) dans "${batch.nom}"` });
     } catch (e) {
-      setImportMsg({ type: 'err', text: `❌ Import échoué : ${e.message}` });
+      showMsg({ type: 'err', text: `❌ Import échoué : ${e.message}` });
     }
-  }, [importerExcel]);
+  }, [importerExcel, showMsg]);
 
   const selectedBatch = batches.find(b => b.id === selectedBatchId);
   const stats = {
