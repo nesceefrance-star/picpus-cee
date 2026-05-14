@@ -41,8 +41,41 @@ const FICHE_LABELS = {
   'IND-BA-110': 'Destrat Industrie', 'BAT-TH-125': 'VMC Simple', 'BAT-TH-126': 'VMC Double',
 }
 
+const TRANSPORT_MODES = [
+  { id: 'driving', label: 'Voiture',     icon: '🚗', osrm: 'driving',  gmaps: 'driving'   },
+  { id: 'transit', label: 'Transports',  icon: '🚇', osrm: null,       gmaps: 'transit'   },
+  { id: 'foot',    label: 'À pied',      icon: '🚶', osrm: 'foot',     gmaps: 'walking'   },
+  { id: 'bike',    label: 'Vélo',        icon: '🚲', osrm: 'bike',     gmaps: 'bicycling' },
+]
+
 // Cache module-level : clé = "dossierId:adresse" pour invalider si l'adresse change
 const geoCache = new Map()
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtDuration(seconds) {
+  if (!seconds) return '—'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h > 0) return `${h}h${m.toString().padStart(2, '0')}`
+  return `${m} min`
+}
+
+function fmtDist(meters) {
+  if (!meters) return '—'
+  if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`
+  return `${Math.round(meters)} m`
+}
+
+async function getOsrmRoute(profile, olat, olng, dlat, dlng) {
+  try {
+    const r = await fetch(
+      `https://router.project-osrm.org/route/v1/${profile}/${olng},${olat};${dlng},${dlat}?overview=false`
+    )
+    const d = await r.json()
+    if (d.code !== 'Ok' || !d.routes?.[0]) return null
+    return { duration: d.routes[0].duration, distance: d.routes[0].distance }
+  } catch { return null }
+}
 
 // ── Icône colorée custom ──────────────────────────────────────────────────────
 function createColoredIcon(color, size = 22) {
@@ -72,7 +105,6 @@ function FlyTo({ target }) {
 }
 
 // ── Géocodage BAN ─────────────────────────────────────────────────────────────
-// Clé cache = "dossierId:adresse" — si l'adresse change, le cache est invalidé
 async function geocodeDossier(dossierId, addr) {
   if (!addr?.trim()) return null
   const cacheKey = `${dossierId}:${addr.trim().toLowerCase()}`
@@ -101,19 +133,324 @@ async function geocodeBatch(dossiers) {
   return results
 }
 
+// ── Panneau Itinéraire ────────────────────────────────────────────────────────
+function ItinerairePanel({ dossier, destCoords, onClose, isMobile }) {
+  const now = new Date()
+  const [origin,        setOrigin]       = useState('')
+  const [suggestions,   setSuggestions]  = useState([])
+  const [showSugg,      setShowSugg]     = useState(false)
+  const [originCoords,  setOriginCoords] = useState(null)
+  const [date,          setDate]         = useState(now.toISOString().slice(0, 10))
+  const [time,          setTime]         = useState(
+    `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+  )
+  const [timeType,      setTimeType]     = useState('depart')
+  const [routes,        setRoutes]       = useState({})
+  const [loading,       setLoading]      = useState(false)
+  const suggTimeout = useRef(null)
+
+  const handleOriginInput = (val) => {
+    setOrigin(val)
+    setOriginCoords(null)
+    setRoutes({})
+    clearTimeout(suggTimeout.current)
+    if (val.length < 3) { setSuggestions([]); setShowSugg(false); return }
+    suggTimeout.current = setTimeout(async () => {
+      try {
+        const r = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(val)}&limit=5`)
+        const d = await r.json()
+        setSuggestions(d.features || [])
+        setShowSugg(true)
+      } catch {}
+    }, 300)
+  }
+
+  const selectSuggestion = (feat) => {
+    const label = feat.properties.label
+    const coords = { lat: feat.geometry.coordinates[1], lng: feat.geometry.coordinates[0] }
+    setOrigin(label)
+    setOriginCoords(coords)
+    setSuggestions([])
+    setShowSugg(false)
+  }
+
+  const calculate = async (oc = originCoords) => {
+    if (!oc || !destCoords) return
+    setLoading(true)
+    const results = {}
+    await Promise.all(
+      TRANSPORT_MODES.filter(m => m.osrm).map(async m => {
+        const r = await getOsrmRoute(m.osrm, oc.lat, oc.lng, destCoords[0], destCoords[1])
+        if (r) results[m.id] = r
+      })
+    )
+    setRoutes(results)
+    setLoading(false)
+  }
+
+  // Calcule automatiquement quand l'origine est sélectionnée
+  useEffect(() => {
+    if (originCoords && destCoords) calculate(originCoords)
+  }, [originCoords])
+
+  const gmapsUrl = (gmapsMode) => {
+    const orig = origin ? encodeURIComponent(origin) : ''
+    const dest = dossier.adresse_site ? encodeURIComponent(dossier.adresse_site) : ''
+    return `https://www.google.com/maps/dir/?api=1&origin=${orig}&destination=${dest}&travelmode=${gmapsMode}`
+  }
+
+  const statut = STATUTS.find(s => s.id === dossier.statut) || { label: dossier.statut, color: C.textSoft }
+
+  return (
+    <div style={{
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      width: isMobile ? '100%' : 340,
+      height: '100%',
+      background: C.surface,
+      borderLeft: `1px solid ${C.border}`,
+      zIndex: 1000,
+      display: 'flex',
+      flexDirection: 'column',
+      boxShadow: '-6px 0 24px rgba(0,0,0,.13)',
+      fontFamily: "system-ui,'Segoe UI',Arial,sans-serif",
+    }}>
+
+      {/* Header */}
+      <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}`, flexShrink: 0, background: '#F8FAFC' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.text, display: 'flex', alignItems: 'center', gap: 6 }}>
+              🧭 Itinéraire
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {dossier.prospects?.raison_sociale || dossier.ref}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18, color: C.textSoft, padding: '0 0 0 10px', lineHeight: 1, flexShrink: 0 }}
+          >✕</button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: statut.color, background: statut.color + '18', border: `1px solid ${statut.color}44`, borderRadius: 10, padding: '2px 7px', flexShrink: 0 }}>
+            {statut.label}
+          </span>
+          <div style={{ fontSize: 10, color: C.textSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            📍 {dossier.adresse_site || '—'}
+          </div>
+        </div>
+      </div>
+
+      {/* Corps */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+
+        {/* ── Origine ── */}
+        <div style={{ marginBottom: 14, position: 'relative' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+            Départ depuis
+          </div>
+          <input
+            value={origin}
+            onChange={e => handleOriginInput(e.target.value)}
+            onFocus={() => suggestions.length > 0 && setShowSugg(true)}
+            onBlur={() => setTimeout(() => setShowSugg(false), 200)}
+            placeholder="Votre adresse de départ…"
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              background: C.bg, border: `1.5px solid ${C.border}`,
+              borderRadius: 8, padding: '9px 11px', fontSize: 12,
+              color: C.text, fontFamily: 'inherit', outline: 'none',
+              transition: 'border-color .15s',
+            }}
+            onFocusCapture={e => { e.target.style.borderColor = C.accent }}
+            onBlurCapture={e => { e.target.style.borderColor = C.border }}
+          />
+          {showSugg && suggestions.length > 0 && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0,
+              background: C.surface, border: `1px solid ${C.border}`,
+              borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,.12)',
+              zIndex: 20, overflow: 'hidden',
+            }}>
+              {suggestions.map((s, i) => (
+                <div
+                  key={i}
+                  onMouseDown={() => selectSuggestion(s)}
+                  style={{
+                    padding: '9px 12px', fontSize: 12, color: C.text, cursor: 'pointer',
+                    borderBottom: i < suggestions.length - 1 ? `1px solid ${C.border}` : 'none',
+                    transition: 'background .1s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = C.bg }}
+                  onMouseLeave={e => { e.currentTarget.style.background = C.surface }}
+                >
+                  <div style={{ fontWeight: 600 }}>{s.properties.name}</div>
+                  <div style={{ fontSize: 10, color: C.textSoft }}>{s.properties.postcode} {s.properties.city}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Date & Heure ── */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+            Date & heure
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+            <input
+              type="date" value={date} onChange={e => setDate(e.target.value)}
+              style={{ flex: 1, background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', fontSize: 12, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+            />
+            <input
+              type="time" value={time} onChange={e => setTime(e.target.value)}
+              style={{ flex: '0 0 100px', background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: '8px 10px', fontSize: 12, color: C.text, fontFamily: 'inherit', outline: 'none' }}
+            />
+          </div>
+          {/* Toggle départ / arrivée */}
+          <div style={{ display: 'flex', background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: 8, padding: 3, gap: 3 }}>
+            {[['depart', '↗ Départ'], ['arrivee', '↙ Arrivée']].map(([val, lbl]) => (
+              <button
+                key={val}
+                onClick={() => setTimeType(val)}
+                style={{
+                  flex: 1, background: timeType === val ? C.accent : 'transparent',
+                  color: timeType === val ? '#fff' : C.textMid,
+                  border: 'none', borderRadius: 6, padding: '6px 0',
+                  fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                  fontFamily: 'inherit', transition: 'all .15s',
+                }}
+              >{lbl}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Modes de transport ── */}
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.textMid, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+          Modes de transport
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+          {TRANSPORT_MODES.map(m => {
+            const r = routes[m.id]
+            const isTransit = m.id === 'transit'
+            return (
+              <div
+                key={m.id}
+                style={{
+                  background: C.bg,
+                  border: `1.5px solid ${r && !isTransit ? C.accent + '55' : C.border}`,
+                  borderRadius: 10,
+                  padding: '12px 10px 10px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 3,
+                  transition: 'border-color .2s',
+                }}
+              >
+                <div style={{ fontSize: 24, lineHeight: 1 }}>{m.icon}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.text }}>{m.label}</div>
+
+                {/* Durée / info */}
+                <div style={{ minHeight: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                  {loading && m.osrm ? (
+                    <div style={{ fontSize: 10, color: C.textSoft }}>Calcul…</div>
+                  ) : isTransit ? (
+                    <div style={{ fontSize: 10, color: C.textSoft, textAlign: 'center', lineHeight: 1.3 }}>
+                      Durée via<br/>Google Maps
+                    </div>
+                  ) : r ? (
+                    <>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: C.accent, lineHeight: 1 }}>
+                        {fmtDuration(r.duration)}
+                      </div>
+                      <div style={{ fontSize: 10, color: C.textSoft }}>{fmtDist(r.distance)}</div>
+                    </>
+                  ) : originCoords && !loading ? (
+                    <div style={{ fontSize: 10, color: '#DC2626' }}>Indisponible</div>
+                  ) : (
+                    <div style={{ fontSize: 10, color: C.textSoft }}>—</div>
+                  )}
+                </div>
+
+                {/* Bouton Google Maps */}
+                <a
+                  href={gmapsUrl(m.gmaps)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    marginTop: 4,
+                    display: 'block', width: '100%', boxSizing: 'border-box',
+                    background: origin ? C.accent : C.textSoft,
+                    color: '#fff', borderRadius: 6,
+                    padding: '5px 0', fontSize: 10, fontWeight: 700,
+                    textDecoration: 'none', textAlign: 'center',
+                    fontFamily: 'inherit',
+                    pointerEvents: origin ? 'auto' : 'none',
+                    opacity: origin ? 1 : 0.45,
+                  }}
+                >
+                  Ouvrir Maps →
+                </a>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Recalculer */}
+        {originCoords && (
+          <button
+            onClick={() => calculate()}
+            disabled={loading}
+            style={{
+              width: '100%',
+              background: C.surface, border: `1.5px solid ${C.border}`,
+              borderRadius: 8, padding: '9px 0', fontSize: 12,
+              fontWeight: 600, color: C.textMid,
+              cursor: loading ? 'default' : 'pointer',
+              fontFamily: 'inherit', transition: 'background .1s',
+            }}
+            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = C.bg }}
+            onMouseLeave={e => { e.currentTarget.style.background = C.surface }}
+          >
+            {loading ? '⏳ Calcul en cours…' : '↺ Recalculer'}
+          </button>
+        )}
+
+        {/* Hint si pas d'adresse */}
+        {!origin && (
+          <div style={{ marginTop: 12, padding: '10px 12px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, fontSize: 11, color: '#1D4ED8', lineHeight: 1.5 }}>
+            💡 Saisissez votre adresse de départ pour calculer la durée par mode de transport.
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{ padding: '10px 16px', borderTop: `1px solid ${C.border}`, flexShrink: 0, background: '#F8FAFC' }}>
+        <div style={{ fontSize: 10, color: C.textSoft, textAlign: 'center' }}>
+          Durées calculées via OSRM · Transit via Google Maps
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Page principale ───────────────────────────────────────────────────────────
 export default function Carte() {
   const navigate = useNavigate()
   const { isMobile } = useBreakpoint()
   const { dossiers, fetchDossiers, profile, user, profiles, fetchProfiles } = useStore()
 
-  const [coordsMap, setCoordsMap]   = useState({})
-  const [geocoding, setGeocoding]   = useState(false)
-  const [flyTarget, setFlyTarget]   = useState(null)
-  const [filterStatut, setFilterStatut] = useState('all')
-  const [filterFiche,  setFilterFiche]  = useState('all')
-  const [panelOpen,    setPanelOpen]    = useState(!isMobile)
-  const [hoveredId,    setHoveredId]    = useState(null)
+  const [coordsMap,      setCoordsMap]      = useState({})
+  const [geocoding,      setGeocoding]      = useState(false)
+  const [flyTarget,      setFlyTarget]      = useState(null)
+  const [filterStatut,   setFilterStatut]   = useState('all')
+  const [filterFiche,    setFilterFiche]    = useState('all')
+  const [panelOpen,      setPanelOpen]      = useState(!isMobile)
+  const [hoveredId,      setHoveredId]      = useState(null)
+  const [selectedDossier, setSelectedDossier] = useState(null)
 
   const isAdmin = profile?.role === 'admin'
 
@@ -141,7 +478,6 @@ export default function Carte() {
     if (!toGeocode.length) return
     setGeocoding(true)
     geocodeBatch(toGeocode).then(results => {
-      // Remplace complètement la map pour ne pas garder d'anciennes coordonnées
       setCoordsMap(results)
       setGeocoding(false)
     })
@@ -159,10 +495,16 @@ export default function Carte() {
     return true
   })
 
-  const mapped = filtered.filter(d => coordsMap[d.id])
+  const mapped   = filtered.filter(d => coordsMap[d.id])
   const unmapped = filtered.length - mapped.length
 
   const getStatut = (id) => STATUTS.find(s => s.id === id) || { label: id, color: C.textSoft }
+
+  const openItineraire = (d) => {
+    setSelectedDossier(d)
+    setFlyTarget(coordsMap[d.id])
+    if (isMobile) setPanelOpen(false)
+  }
 
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 52px)', fontFamily: "system-ui,'Segoe UI',Arial,sans-serif", overflow: 'hidden' }}>
@@ -227,9 +569,10 @@ export default function Carte() {
               <div style={{ textAlign: 'center', padding: '40px 16px', color: C.textSoft, fontSize: 13 }}>Aucun dossier</div>
             ) : (
               filtered.map(d => {
-                const statut  = getStatut(d.statut)
+                const statut    = getStatut(d.statut)
                 const hasCoords = !!coordsMap[d.id]
                 const isHovered = hoveredId === d.id
+                const isSelected = selectedDossier?.id === d.id
                 return (
                   <div
                     key={d.id}
@@ -240,8 +583,8 @@ export default function Carte() {
                     onMouseEnter={() => setHoveredId(d.id)}
                     onMouseLeave={() => setHoveredId(null)}
                     style={{
-                      background: isHovered ? C.bg : C.surface,
-                      border: `1px solid ${isHovered ? C.accent : C.border}`,
+                      background: isSelected ? '#EFF6FF' : isHovered ? C.bg : C.surface,
+                      border: `1px solid ${isSelected ? C.accent : isHovered ? C.accent : C.border}`,
                       borderLeft: `3px solid ${statut.color}`,
                       borderRadius: 8,
                       padding: '9px 11px',
@@ -274,6 +617,24 @@ export default function Carte() {
                         {d.fiche_cee}
                       </span>
                     )}
+                    {/* Bouton itinéraire rapide */}
+                    {hasCoords && (
+                      <button
+                        onClick={e => { e.stopPropagation(); openItineraire(d) }}
+                        style={{
+                          marginTop: 6, width: '100%',
+                          background: isSelected ? C.accent : C.bg,
+                          color: isSelected ? '#fff' : C.textMid,
+                          border: `1px solid ${isSelected ? C.accent : C.border}`,
+                          borderRadius: 5, padding: '4px 0',
+                          fontSize: 10, fontWeight: 700,
+                          cursor: 'pointer', fontFamily: 'inherit',
+                          transition: 'all .15s',
+                        }}
+                      >
+                        🧭 Itinéraire
+                      </button>
+                    )}
                   </div>
                 )
               })
@@ -289,10 +650,10 @@ export default function Carte() {
         </div>
       )}
 
-      {/* ── Carte Leaflet ── */}
-      <div style={{ flex: 1, position: 'relative' }}>
+      {/* ── Carte Leaflet + panneau itinéraire ── */}
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         {/* Bouton mobile ouvrir panneau */}
-        {isMobile && !panelOpen && (
+        {isMobile && !panelOpen && !selectedDossier && (
           <button
             onClick={() => setPanelOpen(true)}
             style={{ position: 'absolute', top: 12, left: 12, zIndex: 999, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, color: C.text, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 2px 8px rgba(0,0,0,.15)' }}>
@@ -302,7 +663,7 @@ export default function Carte() {
 
         {/* Indicateur géocodage */}
         {geocoding && (
-          <div style={{ position: 'absolute', top: isMobile ? 12 : 12, right: 12, zIndex: 999, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 12px', fontSize: 11, color: C.textMid, boxShadow: '0 2px 8px rgba(0,0,0,.1)' }}>
+          <div style={{ position: 'absolute', top: 12, right: selectedDossier && !isMobile ? 352 : 12, zIndex: 999, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 12px', fontSize: 11, color: C.textMid, boxShadow: '0 2px 8px rgba(0,0,0,.1)' }}>
             Géolocalisation…
           </div>
         )}
@@ -323,20 +684,22 @@ export default function Carte() {
           {filtered.map(d => {
             const coords = coordsMap[d.id]
             if (!coords) return null
-            const statut = getStatut(d.statut)
-            const isHov  = hoveredId === d.id
+            const statut   = getStatut(d.statut)
+            const isHov    = hoveredId === d.id
+            const isSel    = selectedDossier?.id === d.id
             return (
               <Marker
                 key={d.id}
                 position={coords}
-                icon={createColoredIcon(statut.color, isHov ? 28 : 22)}
+                icon={createColoredIcon(statut.color, isSel ? 30 : isHov ? 28 : 22)}
                 eventHandlers={{
                   mouseover: () => setHoveredId(d.id),
                   mouseout:  () => setHoveredId(null),
+                  click:     () => openItineraire(d),
                 }}
               >
                 <Popup>
-                  <div style={{ fontFamily: "system-ui,'Segoe UI',Arial,sans-serif", minWidth: 180 }}>
+                  <div style={{ fontFamily: "system-ui,'Segoe UI',Arial,sans-serif", minWidth: 190 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>
                       {d.prospects?.raison_sociale || '—'}
                     </div>
@@ -355,17 +718,34 @@ export default function Carte() {
                         {d.prime_estimee >= 1000 ? Math.round(d.prime_estimee / 1000) + ' k€' : Math.round(d.prime_estimee) + ' €'}
                       </div>
                     )}
-                    <button
-                      onClick={() => navigate(`/dossier/${d.id}`)}
-                      style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', width: '100%' }}>
-                      Ouvrir le dossier →
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        onClick={() => openItineraire(d)}
+                        style={{ flex: 1, background: '#F0FDF4', color: '#16A34A', border: '1.5px solid #86EFAC', borderRadius: 6, padding: '5px 0', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        🧭 Itinéraire
+                      </button>
+                      <button
+                        onClick={() => navigate(`/dossier/${d.id}`)}
+                        style={{ flex: 1, background: C.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '5px 0', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        Ouvrir →
+                      </button>
+                    </div>
                   </div>
                 </Popup>
               </Marker>
             )
           })}
         </MapContainer>
+
+        {/* ── Panneau itinéraire ── */}
+        {selectedDossier && coordsMap[selectedDossier.id] && (
+          <ItinerairePanel
+            dossier={selectedDossier}
+            destCoords={coordsMap[selectedDossier.id]}
+            onClose={() => setSelectedDossier(null)}
+            isMobile={isMobile}
+          />
+        )}
       </div>
     </div>
   )
