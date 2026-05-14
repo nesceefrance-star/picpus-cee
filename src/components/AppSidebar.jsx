@@ -229,7 +229,6 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
               onToggle={() => setAdminOpen(o => !o)}
             />
             <Collapse in={open ? adminOpen : true} timeout="auto" unmountOnExit>
-              <Item icon={<ForwardToInboxIcon fontSize="small" />} label="Suivi équipe" path="/suivi-equipe" indent />
               <Item icon={<PeopleIcon fontSize="small" />} label="Utilisateurs" path="/admin/users" indent />
             </Collapse>
           </>}

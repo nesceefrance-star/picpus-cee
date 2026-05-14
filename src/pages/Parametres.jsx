@@ -12,6 +12,9 @@ import Chip from '@mui/material/Chip'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
+import TextField from '@mui/material/TextField'
+import CheckIcon from '@mui/icons-material/Check'
+import SaveIcon from '@mui/icons-material/Save'
 
 const DARK = {
   bg:       '#0F172A',
@@ -76,8 +79,93 @@ function IntegrationCard({ icon, name, description, status, onConnect, onDisconn
   )
 }
 
+// ── Onglet Style & Exemples ───────────────────────────────────────────────────
+const EMAIL_TYPES_STYLE = [
+  { key: 'visio_creneaux', label: 'Créneaux visio' },
+  { key: 'visio_confirm',  label: 'Confirmation visio' },
+  { key: 'post_visio',     label: 'Post-visio' },
+  { key: 'visite_confirm', label: 'Confirmation visite' },
+  { key: 'envoi_devis',    label: 'Envoi de devis' },
+  { key: 'relance',        label: 'Relance devis' },
+]
+
+function StyleExemplesTab({ session }) {
+  const [loading,  setLoading]  = useState(true)
+  const [saving,   setSaving]   = useState(false)
+  const [guide,    setGuide]    = useState('')
+  const [exemples, setExemples] = useState({})
+  const [saved,    setSaved]    = useState(false)
+  const [error,    setError]    = useState(null)
+
+  useEffect(() => {
+    if (!session) return
+    fetch('/api/style-guide', { headers: { Authorization: `Bearer ${session.access_token}` } })
+      .then(r => { if (!r.ok) throw new Error(`Erreur API ${r.status}`); return r.json() })
+      .then(d => { setGuide(d.guide || ''); setExemples(d.exemples || {}); setLoading(false) })
+      .catch(e => { setError('Impossible de charger le guide : ' + e.message); setLoading(false) })
+  }, [session])
+
+  const handleSave = async () => {
+    setSaving(true); setError(null); setSaved(false)
+    try {
+      const r = await fetch('/api/style-guide', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guide, exemples }),
+      })
+      const d = await r.json()
+      if (d.error) throw new Error(d.error)
+      setSaved(true); setTimeout(() => setSaved(false), 3000)
+    } catch (e) { setError(e.message) }
+    setSaving(false)
+  }
+
+  if (loading) return <Box sx={{ p: 4, textAlign: 'center' }}><CircularProgress size={24} /></Box>
+
+  return (
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography sx={{ fontSize: 13, color: DARK.textMid }}>
+          Guide et exemples partagés avec tous les commerciaux. Injectés dans le prompt Claude.
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          {saved && <Chip icon={<CheckIcon />} label="Sauvegardé" size="small" color="success" />}
+          <Button variant="contained" size="small" onClick={handleSave} disabled={saving}
+            startIcon={saving ? <CircularProgress size={14} /> : <SaveIcon fontSize="small" />}
+            sx={{ textTransform: 'none', fontWeight: 600 }}>
+            Sauvegarder
+          </Button>
+        </Box>
+      </Box>
+      {error && <Typography sx={{ fontSize: 12, color: '#DC2626', mb: 2 }}>{error}</Typography>}
+
+      <Paper elevation={0} sx={{ background: DARK.surface, border: `1px solid ${DARK.border}`, p: 2.5, mb: 3, borderRadius: 2 }}>
+        <Typography sx={{ fontSize: 13, fontWeight: 700, color: DARK.text, mb: 1.5 }}>Guide rédactionnel global</Typography>
+        <TextField fullWidth multiline minRows={6} value={guide} onChange={e => setGuide(e.target.value)}
+          placeholder="Ton, formules clés, ce qu'il faut éviter…"
+          sx={{ '& textarea': { fontSize: 13, lineHeight: 1.6, color: DARK.text }, '& .MuiInputBase-root': { background: DARK.surface } }} />
+      </Paper>
+
+      <Typography sx={{ fontSize: 10, fontWeight: 700, color: DARK.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', mb: 1.5 }}>
+        Exemples par type d'email
+      </Typography>
+      {EMAIL_TYPES_STYLE.map(t => (
+        <Paper key={t.key} elevation={0} sx={{ background: DARK.surface, border: `1px solid ${DARK.border}`, p: 2.5, mb: 2, borderRadius: 2 }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 700, color: DARK.text, mb: 1 }}>{t.label}</Typography>
+          <TextField fullWidth multiline minRows={4} value={exemples[t.key] || ''}
+            onChange={e => setExemples(prev => ({ ...prev, [t.key]: e.target.value }))}
+            placeholder={`Exemple d'email "${t.label}"…`}
+            sx={{ '& textarea': { fontSize: 13, lineHeight: 1.6, color: DARK.text }, '& .MuiInputBase-root': { background: DARK.surface } }} />
+        </Paper>
+      ))}
+    </Box>
+  )
+}
+
+// ── Page Paramètres ───────────────────────────────────────────────────────────
 export default function Parametres() {
   const { session, user, profile } = useStore()
+  const isAdmin = profile?.role === 'admin'
   const [activeTab, setActiveTab] = useState('integrations')
 
   const [googleStatus,   setGoogleStatus]   = useState({ connected: false, email: null, loaded: false })
@@ -149,12 +237,17 @@ export default function Parametres() {
 
       {/* Onglets */}
       <div style={{ display: 'flex', gap: 0, borderBottom: `2px solid ${DARK.border}`, marginBottom: 24 }}>
-        {[['integrations', '⚡ Intégrations'], ['prestataires', '🏗 Prestataires']].map(([t, l]) => (
+        {[
+          ['integrations', '⚡ Intégrations'],
+          ['prestataires', '🏗 Prestataires'],
+          ...(isAdmin ? [['style', '✍️ Style & Exemples']] : []),
+        ].map(([t, l]) => (
           <button key={t} onClick={() => setActiveTab(t)} style={{
             padding: '9px 20px', fontSize: 13, fontWeight: activeTab === t ? 700 : 500,
             cursor: 'pointer', fontFamily: 'inherit', background: 'transparent', border: 'none',
             borderBottom: `2px solid ${activeTab === t ? DARK.accent : 'transparent'}`,
             marginBottom: -2, color: activeTab === t ? DARK.accent : DARK.textMid, transition: 'all .15s',
+            whiteSpace: 'nowrap',
           }}>
             {l}
           </button>
@@ -163,6 +256,9 @@ export default function Parametres() {
 
       {/* ── Onglet Prestataires ── */}
       {activeTab === 'prestataires' && <PrestatairesSettings />}
+
+      {/* ── Onglet Style & Exemples ── */}
+      {activeTab === 'style' && isAdmin && <StyleExemplesTab session={session} />}
 
       {/* ── Onglet Intégrations ── */}
       {activeTab === 'integrations' && <>
