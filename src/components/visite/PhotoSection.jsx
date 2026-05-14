@@ -279,53 +279,38 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
                   </div>
                 )}
 
-                {uploading ? (
-                  <div style={{
-                    background: C.bg, border: `1.5px dashed ${C.border}`,
-                    borderRadius: 8, padding: '12px 0', width: '100%',
-                    color: C.textSoft, fontSize: 13, fontWeight: 600, textAlign: 'center',
+                {/* position:fixed sur l'input = bypass total de overflow:hidden des parents */}
+                <label
+                  onDragOver={e => { e.preventDefault(); setDragOverCat(cat.id) }}
+                  onDragLeave={() => setDragOverCat(null)}
+                  onDrop={e => handleDrop(cat.id, e)}
+                  style={{
+                    display: 'block', textAlign: 'center',
+                    cursor: visiteId && !uploading ? 'pointer' : 'not-allowed',
+                    background: uploading ? C.bg : dragOverCat === cat.id ? '#DBEAFE' : '#EFF6FF',
+                    border: `1.5px dashed ${uploading ? C.border : dragOverCat === cat.id ? C.accent : '#93C5FD'}`,
+                    borderRadius: 8, padding: '12px 0', width: '100%', boxSizing: 'border-box',
+                    color: uploading || !visiteId ? C.textSoft : C.accent,
+                    fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
                     marginTop: catPhotos.length > 0 ? 0 : 12,
-                  }}>
-                    ⏳ Upload en cours…
-                  </div>
-                ) : (
-                  // Label enveloppant l'input : pas de .click() programmatique,
-                  // iOS Safari déclenche le picker nativement via le label.
-                  // Input "visually hidden" (pas display:none — bloqué par iOS).
-                  // capture="environment" = seul moyen fiable d'ouvrir appareil photo + photothèque iOS.
-                  // Desktop : drag-and-drop géré sur le label, multiple activé.
-                  <label
-                    onDragOver={e => { e.preventDefault(); setDragOverCat(cat.id) }}
-                    onDragLeave={() => setDragOverCat(null)}
-                    onDrop={e => { handleDrop(cat.id, e) }}
-                    style={{
-                      display: 'block', textAlign: 'center', cursor: visiteId ? 'pointer' : 'not-allowed',
-                      background: dragOverCat === cat.id ? '#DBEAFE' : '#EFF6FF',
-                      border: `1.5px dashed ${dragOverCat === cat.id ? C.accent : '#93C5FD'}`,
-                      borderRadius: 8, padding: '12px 0', width: '100%', boxSizing: 'border-box',
-                      color: visiteId ? C.accent : C.textSoft,
-                      fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
-                      marginTop: catPhotos.length > 0 ? 0 : 12,
-                      pointerEvents: visiteId ? 'auto' : 'none',
+                    pointerEvents: visiteId && !uploading ? 'auto' : 'none',
+                  }}
+                >
+                  {uploading ? '⏳ Upload en cours…' : isMobile ? '📷 Ajouter une photo' : '📁 Glisser-déposer ou cliquer'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={e => {
+                      Array.from(e.target.files).forEach(f => handleFile(cat.id, f))
+                      e.target.value = ''
                     }}
-                  >
-                    {isMobile ? '📷 Ajouter une photo' : '📁 Glisser-déposer ou cliquer'}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      multiple
-                      onChange={e => {
-                        Array.from(e.target.files).forEach(f => handleFile(cat.id, f))
-                        e.target.value = ''
-                      }}
-                      style={{
-                        position: 'absolute', width: 1, height: 1,
-                        padding: 0, margin: -1, overflow: 'hidden', opacity: 0,
-                      }}
-                    />
-                  </label>
-                )}
+                    style={{
+                      position: 'fixed', top: 0, left: 0,
+                      width: 1, height: 1, opacity: 0,
+                    }}
+                  />
+                </label>
               </div>
             )}
           </div>
