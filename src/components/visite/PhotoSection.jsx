@@ -279,68 +279,52 @@ export default function PhotoSection({ visiteId, photos = [], onPhotosChange, sh
                   </div>
                 )}
 
-                {isMobile ? (
-                  // ── iOS / Android : capture="environment" indispensable pour que
-                  //   input.click() soit autorisé par iOS Safari (sécurité navigateur)
-                  <>
+                {uploading ? (
+                  <div style={{
+                    background: C.bg, border: `1.5px dashed ${C.border}`,
+                    borderRadius: 8, padding: '12px 0', width: '100%',
+                    color: C.textSoft, fontSize: 13, fontWeight: 600, textAlign: 'center',
+                    marginTop: catPhotos.length > 0 ? 0 : 12,
+                  }}>
+                    ⏳ Upload en cours…
+                  </div>
+                ) : (
+                  // Label enveloppant l'input : pas de .click() programmatique,
+                  // iOS Safari déclenche le picker nativement via le label.
+                  // Input "visually hidden" (pas display:none — bloqué par iOS).
+                  // capture="environment" = seul moyen fiable d'ouvrir appareil photo + photothèque iOS.
+                  // Desktop : drag-and-drop géré sur le label, multiple activé.
+                  <label
+                    onDragOver={e => { e.preventDefault(); setDragOverCat(cat.id) }}
+                    onDragLeave={() => setDragOverCat(null)}
+                    onDrop={e => { handleDrop(cat.id, e) }}
+                    style={{
+                      display: 'block', textAlign: 'center', cursor: visiteId ? 'pointer' : 'not-allowed',
+                      background: dragOverCat === cat.id ? '#DBEAFE' : '#EFF6FF',
+                      border: `1.5px dashed ${dragOverCat === cat.id ? C.accent : '#93C5FD'}`,
+                      borderRadius: 8, padding: '12px 0', width: '100%', boxSizing: 'border-box',
+                      color: visiteId ? C.accent : C.textSoft,
+                      fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                      marginTop: catPhotos.length > 0 ? 0 : 12,
+                      pointerEvents: visiteId ? 'auto' : 'none',
+                    }}
+                  >
+                    {isMobile ? '📷 Ajouter une photo' : '📁 Glisser-déposer ou cliquer'}
                     <input
-                      ref={el => inputs.current[cat.id] = el}
                       type="file"
                       accept="image/*"
                       capture="environment"
-                      style={{ display: 'none' }}
-                      onChange={e => {
-                        if (e.target.files[0]) handleFile(cat.id, e.target.files[0])
-                        if (inputs.current[cat.id]) inputs.current[cat.id].value = ''
-                      }}
-                    />
-                    <button
-                      onClick={() => inputs.current[cat.id]?.click()}
-                      disabled={uploading || !visiteId}
-                      style={{
-                        background: uploading ? C.bg : '#EFF6FF',
-                        border: `1.5px dashed ${uploading ? C.border : '#93C5FD'}`,
-                        borderRadius: 8, padding: '12px 0', width: '100%',
-                        color: uploading ? C.textSoft : !visiteId ? C.textSoft : C.accent,
-                        fontSize: 13, fontWeight: 600, cursor: uploading || !visiteId ? 'not-allowed' : 'pointer',
-                        fontFamily: 'inherit', marginTop: catPhotos.length > 0 ? 0 : 12,
-                      }}
-                    >
-                      {uploading ? '⏳ Upload en cours…' : '📷 Ajouter une photo'}
-                    </button>
-                  </>
-                ) : (
-                  // ── Desktop : drag-and-drop + clic classique, multi-fichiers
-                  <>
-                    <input
-                      ref={el => inputs.current[cat.id] = el}
-                      type="file"
-                      accept="image/*"
                       multiple
-                      style={{ display: 'none' }}
                       onChange={e => {
-                        Array.from(e.target.files).forEach(file => handleFile(cat.id, file))
-                        if (inputs.current[cat.id]) inputs.current[cat.id].value = ''
+                        Array.from(e.target.files).forEach(f => handleFile(cat.id, f))
+                        e.target.value = ''
+                      }}
+                      style={{
+                        position: 'absolute', width: 1, height: 1,
+                        padding: 0, margin: -1, overflow: 'hidden', opacity: 0,
                       }}
                     />
-                    <button
-                      onClick={() => inputs.current[cat.id]?.click()}
-                      disabled={uploading || !visiteId}
-                      onDragOver={e => { e.preventDefault(); setDragOverCat(cat.id) }}
-                      onDragLeave={() => setDragOverCat(null)}
-                      onDrop={e => handleDrop(cat.id, e)}
-                      style={{
-                        background: dragOverCat === cat.id ? '#DBEAFE' : uploading ? C.bg : '#EFF6FF',
-                        border: `1.5px dashed ${dragOverCat === cat.id ? C.accent : uploading ? C.border : '#93C5FD'}`,
-                        borderRadius: 8, padding: '12px 0', width: '100%',
-                        color: uploading ? C.textSoft : !visiteId ? C.textSoft : C.accent,
-                        fontSize: 13, fontWeight: 600, cursor: uploading || !visiteId ? 'not-allowed' : 'pointer',
-                        fontFamily: 'inherit', marginTop: catPhotos.length > 0 ? 0 : 12,
-                      }}
-                    >
-                      {uploading ? '⏳ Upload en cours…' : '📁 Glisser-déposer ou cliquer pour sélectionner'}
-                    </button>
-                  </>
+                  </label>
                 )}
               </div>
             )}
