@@ -1,15 +1,24 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
 import MenuIcon from '@mui/icons-material/Menu'
 import AppSidebar from './AppSidebar'
 import AppPageHeader from './AppPageHeader'
 import { useAppTheme } from '../lib/theme'
+import useStore from '../store/useStore'
 
 export default function AppLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mobileOpen,  setMobileOpen]  = useState(false)
   const C = useAppTheme()
+  const { user, fetchDossiers, fetchTaches } = useStore()
+
+  // Charge dossiers + tâches dès que l'utilisateur est connu
+  useEffect(() => {
+    if (!user?.id) return
+    fetchDossiers()
+    fetchTaches()
+  }, [user?.id])
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" }}>

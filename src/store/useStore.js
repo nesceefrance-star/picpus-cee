@@ -193,6 +193,24 @@ const useStore = create((set, get) => ({
     await supabase.from('activites').insert([{ dossier_id: dossierId, user_id: user?.id, type, contenu }])
   },
 
+  // ─── TÂCHES (global — pour notifications) ────────────────
+  taches: [],
+
+  fetchTaches: async () => {
+    const { user } = get()
+    if (!user?.id) return
+    const { data } = await supabase
+      .from('taches')
+      .select('*, dossiers(ref, prospects(raison_sociale))')
+      .or(`user_id.eq.${user.id},shared_with.cs.{${user.id}}`)
+      .order('echeance', { ascending: true, nullsFirst: false })
+    if (!data) return
+    // Exclure celles terminées depuis plus de 24h
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000
+    const visible = data.filter(t => !(t.done && t.done_at && new Date(t.done_at).getTime() < cutoff))
+    set({ taches: visible })
+  },
+
 }))
 
 export default useStore

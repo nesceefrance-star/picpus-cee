@@ -21,14 +21,24 @@ const PAGE_TITLES = {
   '/admin/users':  'Utilisateurs',
 }
 
-const STATUTS_STAGNANT = ['visio_planifiee','visio_effectuee','visite_planifiee','visite_effectuee','devis','ah']
+// Statuts actifs — excluent perdu, facture, archive
+const STATUTS_STAGNANT = [
+  'simulation','prospect','contacte',
+  'visio_planifiee','visio_effectuee',
+  'visite_planifiee','visite_effectuee',
+  'devis','ah','conforme',
+]
 const STATUT_LABELS = {
+  simulation:       'Simulation',
+  prospect:         'Prospect',
+  contacte:         'Contacté',
   visio_planifiee:  'Visio planifiée',
   visio_effectuee:  'Visio effectuée',
   visite_planifiee: 'Visite planifiée',
   visite_effectuee: 'Visite effectuée',
-  devis:            'Devis',
-  ah:               'AH',
+  devis:            'Devis envoyé',
+  ah:               'AH signé',
+  conforme:         'Conforme',
 }
 
 // ── Icônes SVG discrètes ─────────────────────────────────────────────────────
@@ -64,7 +74,7 @@ export default function AppPageHeader() {
   const navigate   = useNavigate()
   const location   = useLocation()
   const C          = useAppTheme()
-  const { profile, user, theme, toggleTheme, signOut, dossiers } = useStore()
+  const { profile, user, theme, toggleTheme, signOut, dossiers, taches } = useStore()
   const { isMobile } = useBreakpoint()
 
   const profileRef = useRef(null)
@@ -87,17 +97,31 @@ export default function AppPageHeader() {
   const fullName = [profile?.prenom, profile?.nom].filter(Boolean).join(' ') || user?.email || '—'
   const role     = isAdmin ? 'Administrateur' : 'Commercial'
 
-  // ── Alertes stagnantes ──────────────────────────────────────────────────────
-  const myDossiers     = isAdmin ? dossiers : dossiers.filter(d => d.assigne_a === user?.id)
-  const stagnantList   = myDossiers.filter(d =>
+  // ── Alertes dossiers stagnants (+14j) ──────────────────────────────────────
+  const myDossiers   = isAdmin ? dossiers : dossiers.filter(d => d.assigne_a === user?.id)
+  const stagnantList = myDossiers.filter(d =>
     STATUTS_STAGNANT.includes(d.statut) &&
     Math.floor((Date.now() - new Date(d.updated_at)) / 86400000) > 14
   ).map(d => ({
     ...d,
+    _type: 'dossier',
     jours: Math.floor((Date.now() - new Date(d.updated_at)) / 86400000),
+    _label: d.prospects?.raison_sociale || d.ref || '—',
   })).sort((a, b) => b.jours - a.jours)
 
-  const notifCount = stagnantList.length
+  // ── Tâches en retard (échéance dépassée, non terminées) ────────────────────
+  const now = new Date()
+  const overdueList = (taches || []).filter(t =>
+    !t.done && t.echeance && new Date(t.echeance) < now
+  ).map(t => ({
+    ...t,
+    _type: 'tache',
+    jours: Math.floor((now - new Date(t.echeance)) / 86400000),
+    _label: t.titre,
+    _sub:   t.dossiers?.ref ? `${t.dossiers.ref}${t.dossiers.prospects?.raison_sociale ? ' — ' + t.dossiers.prospects.raison_sociale : ''}` : null,
+  })).sort((a, b) => b.jours - a.jours)
+
+  const notifCount = stagnantList.length + overdueList.length
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleLogout = async () => {
@@ -202,54 +226,96 @@ export default function AppPageHeader() {
               <div style={{ padding: '12px 14px', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#F8FAFC' }}>Alertes</span>
                 {notifCount > 0 && (
-                  <span style={{ fontSize: 11, color: '#64748B' }}>{notifCount} dossier{notifCount > 1 ? 's' : ''} sans activité (+14j)</span>
+                  <span style={{ fontSize: 11, color: '#64748B' }}>{notifCount} alerte{notifCount > 1 ? 's' : ''}</span>
                 )}
               </div>
 
               {/* Corps */}
               <div style={{ overflowY: 'auto', flex: 1 }}>
-                {stagnantList.length === 0 ? (
+                {notifCount === 0 ? (
                   <div style={{ padding: '20px 14px', textAlign: 'center' }}>
                     <div style={{ fontSize: 22, marginBottom: 6 }}>✅</div>
                     <div style={{ fontSize: 13, color: '#64748B' }}>Aucune alerte — tout est à jour.</div>
                   </div>
                 ) : (
-                  stagnantList.map(d => (
-                    <button
-                      key={d.id}
-                      onClick={() => { setNotifOpen(false); navigate(`/dossier/${d.id}`) }}
-                      style={{
-                        display: 'flex', alignItems: 'flex-start', gap: 10,
-                        width: '100%', padding: '10px 14px', background: 'transparent',
-                        border: 'none', borderBottom: '1px solid #1E3A5F',
-                        cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-                      }}
-                      onMouseEnter={e => { e.currentTarget.style.background = '#273549' }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                    >
-                      {/* Icône alerte */}
-                      <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>⚠️</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: '#F8FAFC', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {d.ref || d.id.slice(0, 8)}
-                          </span>
-                          <span style={{
-                            fontSize: 10, fontWeight: 700, color: '#FCA5A5',
-                            background: '#3f1515', borderRadius: 4, padding: '2px 6px', flexShrink: 0,
-                          }}>
-                            {d.jours}j
-                          </span>
+                  <>
+                    {/* ── Tâches en retard ── */}
+                    {overdueList.length > 0 && (
+                      <>
+                        <div style={{ padding: '7px 14px 4px', fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                          Tâches en retard ({overdueList.length})
                         </div>
-                        <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {d.prospect_nom || d.adresse_site || '—'}
+                        {overdueList.map(t => (
+                          <button
+                            key={t.id}
+                            onClick={() => { setNotifOpen(false); navigate('/') }}
+                            style={{
+                              display: 'flex', alignItems: 'flex-start', gap: 10,
+                              width: '100%', padding: '8px 14px', background: 'transparent',
+                              border: 'none', borderBottom: '1px solid #1E3A5F',
+                              cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#273549' }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                          >
+                            <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>🔴</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: '#F8FAFC', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {t._label}
+                                </span>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: '#FCA5A5', background: '#3f1515', borderRadius: 4, padding: '2px 6px', flexShrink: 0 }}>
+                                  {t.jours === 0 ? 'Auj.' : `+${t.jours}j`}
+                                </span>
+                              </div>
+                              {t._sub && <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t._sub}</div>}
+                            </div>
+                          </button>
+                        ))}
+                      </>
+                    )}
+
+                    {/* ── Dossiers stagnants ── */}
+                    {stagnantList.length > 0 && (
+                      <>
+                        <div style={{ padding: '7px 14px 4px', fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                          Dossiers stagnants ({stagnantList.length})
                         </div>
-                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
-                          {STATUT_LABELS[d.statut] || d.statut}
-                        </div>
-                      </div>
-                    </button>
-                  ))
+                        {stagnantList.map(d => (
+                          <button
+                            key={d.id}
+                            onClick={() => { setNotifOpen(false); navigate(`/dossier/${d.id}`) }}
+                            style={{
+                              display: 'flex', alignItems: 'flex-start', gap: 10,
+                              width: '100%', padding: '8px 14px', background: 'transparent',
+                              border: 'none', borderBottom: '1px solid #1E3A5F',
+                              cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#273549' }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                          >
+                            <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>⚠️</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#F8FAFC', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {d.ref || d.id.slice(0, 8)}
+                                </span>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: '#FCA5A5', background: '#3f1515', borderRadius: 4, padding: '2px 6px', flexShrink: 0 }}>
+                                  {d.jours}j
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {d._label}
+                              </div>
+                              <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                                {STATUT_LABELS[d.statut] || d.statut}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </>
                 )}
               </div>
 
