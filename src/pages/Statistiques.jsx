@@ -68,8 +68,30 @@ function KpiCard({ label, value, color, sub, C }) {
 }
 
 function FicheCard({ fiche, stats, C, isMobile }) {
-  const label = FICHE_LABELS[fiche] || fiche
-  const color = FICHE_COLORS[fiche] || '#2563EB'
+  const label      = FICHE_LABELS[fiche] || fiche
+  const color      = FICHE_COLORS[fiche] || '#2563EB'
+  const commission = Math.round((stats.margeEnc || 0) * 0.5 * 100) / 100
+
+  const metrics = isMobile
+    ? [
+        { lbl: 'En cours',       val: stats.enCours,            c: '#0369A1' },
+        { lbl: 'CA prévis.',     val: fmtK(stats.primePrev),    c: '#7C3AED' },
+        { lbl: 'CA encaissé',    val: fmtK(stats.primeEnc),     c: '#16A34A' },
+        { lbl: 'Marge encaissée',val: fmtK(stats.margeEnc),     c: stats.margeEnc >= 0 ? '#0D9488' : '#DC2626' },
+        { lbl: 'Commission 50%', val: fmtK(commission),         c: '#F59E0B' },
+        { lbl: 'CUMAC',          val: fmtGwh(stats.mwh),        c: '#0891B2' },
+      ]
+    : [
+        { lbl: 'En cours',           val: stats.enCours,            c: '#0369A1' },
+        { lbl: 'CA prévisionnel',    val: fmtK(stats.primePrev),    c: '#7C3AED' },
+        { lbl: 'CA encaissé',        val: fmtK(stats.primeEnc),     c: '#16A34A' },
+        { lbl: 'Marge nette totale', val: fmtK(stats.marge),        c: stats.marge >= 0 ? '#059669' : '#DC2626' },
+        { lbl: 'Marge encaissée',    val: fmtK(stats.margeEnc),     c: stats.margeEnc >= 0 ? '#0D9488' : '#DC2626' },
+        { lbl: 'Commission 50%',     val: fmtK(commission),         c: '#F59E0B' },
+        { lbl: 'Volume CUMAC',       val: fmtGwh(stats.mwh),        c: '#0891B2' },
+      ]
+
+  const cols = metrics.length
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
       <div style={{ background: color + '15', borderBottom: `1px solid ${color}33`, padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -77,21 +99,15 @@ function FicheCard({ fiche, stats, C, isMobile }) {
         <span style={{ fontSize: 14, fontWeight: 700, color }}>{label}</span>
         <span style={{ marginLeft: 'auto', fontSize: 12, color, fontWeight: 700 }}>{stats.total} dossier{stats.total > 1 ? 's' : ''}</span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 0 }}>
-        {[
-          { lbl: 'En cours',        val: stats.enCours,             c: '#0369A1' },
-          { lbl: 'CA prévisionnel', val: fmtK(stats.primePrev),     c: '#7C3AED' },
-          { lbl: 'CA encaissé',     val: fmtK(stats.primeEnc),      c: '#16A34A' },
-          { lbl: 'Marges nettes',   val: fmtK(stats.marge),         c: stats.marge >= 0 ? '#059669' : '#DC2626' },
-          { lbl: 'Volume CUMAC',    val: fmtGwh(stats.mwh),         c: '#0891B2' },
-        ].map((m, i) => (
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : `repeat(${cols}, 1fr)`, gap: 0 }}>
+        {metrics.map((m, i) => (
           <div key={m.lbl} style={{
-            padding: '12px 14px',
-            borderRight: i < 4 && !isMobile ? `1px solid ${C.border}` : 'none',
-            borderTop: isMobile && i >= 2 ? `1px solid ${C.border}` : 'none',
+            padding: isMobile ? '10px 10px' : '12px 14px',
+            borderRight: i < cols - 1 && !isMobile ? `1px solid ${C.border}` : 'none',
+            borderTop: isMobile && i >= 3 ? `1px solid ${C.border}` : 'none',
           }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>{m.lbl}</div>
-            <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 800, color: m.c }}>{m.val}</div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>{m.lbl}</div>
+            <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: m.c }}>{m.val}</div>
           </div>
         ))}
       </div>
@@ -128,31 +144,34 @@ function CommercialSection({ dossiers, simuMap, profiles, C, isMobile }) {
         primePrev: acc.primePrev + (prime > 0 && !isFacture ? prime : 0),
         primeEnc:  acc.primeEnc  + (prime > 0 && isFacture  ? prime : 0),
         marge:     acc.marge     + marge,
+        margeEnc:  acc.margeEnc  + (isFacture && prime > 0 ? marge : 0),
         mwh:       acc.mwh       + mwh,
       }
-    }, { total: 0, enCours: 0, signe: 0, travaux: 0, primePrev: 0, primeEnc: 0, marge: 0, mwh: 0 })
+    }, { total: 0, enCours: 0, signe: 0, travaux: 0, primePrev: 0, primeEnc: 0, marge: 0, margeEnc: 0, mwh: 0 })
 
-    return { uid, nom, ...stats, perdu, taux: pct(stats.signe, stats.total + perdu) }
+    const commission = Math.round(stats.margeEnc * 0.5 * 100) / 100
+    return { uid, nom, ...stats, commission, perdu, taux: pct(stats.signe, stats.total + perdu) }
   })
 
   const COLS = isMobile
     ? [
-        { lbl: 'Commercial', key: 'nom',       align: 'left',  fmt: v => v,          color: C.text },
-        { lbl: 'En cours',   key: 'enCours',   align: 'right', fmt: v => v,          color: '#0369A1' },
-        { lbl: 'CA prévis',  key: 'primePrev', align: 'right', fmt: fmtK,             color: '#7C3AED' },
-        { lbl: 'Taux conv.', key: 'taux',      align: 'right', fmt: v => v,          color: '#0D9488' },
+        { lbl: 'Commercial',    key: 'nom',        align: 'left',  fmt: v => v, color: C.text },
+        { lbl: 'En cours',      key: 'enCours',    align: 'right', fmt: v => v, color: '#0369A1' },
+        { lbl: 'CA prévis',     key: 'primePrev',  align: 'right', fmt: fmtK,   color: '#7C3AED' },
+        { lbl: 'Commission',    key: 'commission', align: 'right', fmt: fmtK,   color: '#F59E0B' },
       ]
     : [
-        { lbl: 'Commercial',    key: 'nom',       align: 'left',  fmt: v => v,    color: C.text },
-        { lbl: 'Actifs',        key: 'total',     align: 'right', fmt: v => v,    color: C.textMid },
-        { lbl: 'En cours',      key: 'enCours',   align: 'right', fmt: v => v,    color: '#0369A1' },
-        { lbl: 'Signés',        key: 'signe',     align: 'right', fmt: v => v,    color: '#15803D' },
-        { lbl: 'Perdus',        key: 'perdu',     align: 'right', fmt: v => v,    color: '#DC2626' },
-        { lbl: 'CA prévisionnel', key: 'primePrev', align: 'right', fmt: fmtK,    color: '#7C3AED' },
-        { lbl: 'CA encaissé',   key: 'primeEnc',  align: 'right', fmt: fmtK,     color: '#16A34A' },
-        { lbl: 'Marges',        key: 'marge',     align: 'right', fmt: fmtK,     color: '#059669' },
-        { lbl: 'CUMAC',         key: 'mwh',       align: 'right', fmt: fmtGwh,   color: '#0891B2' },
-        { lbl: 'Taux conv.',    key: 'taux',      align: 'right', fmt: v => v,   color: '#0D9488' },
+        { lbl: 'Commercial',      key: 'nom',        align: 'left',  fmt: v => v, color: C.text },
+        { lbl: 'Actifs',          key: 'total',      align: 'right', fmt: v => v, color: C.textMid },
+        { lbl: 'En cours',        key: 'enCours',    align: 'right', fmt: v => v, color: '#0369A1' },
+        { lbl: 'Signés',          key: 'signe',      align: 'right', fmt: v => v, color: '#15803D' },
+        { lbl: 'Perdus',          key: 'perdu',      align: 'right', fmt: v => v, color: '#DC2626' },
+        { lbl: 'CA prévisionnel', key: 'primePrev',  align: 'right', fmt: fmtK,   color: '#7C3AED' },
+        { lbl: 'CA encaissé',     key: 'primeEnc',   align: 'right', fmt: fmtK,   color: '#16A34A' },
+        { lbl: 'Marge encaissée', key: 'margeEnc',   align: 'right', fmt: fmtK,   color: '#0D9488' },
+        { lbl: 'Commission 50%',  key: 'commission', align: 'right', fmt: fmtK,   color: '#F59E0B' },
+        { lbl: 'CUMAC',           key: 'mwh',        align: 'right', fmt: fmtGwh, color: '#0891B2' },
+        { lbl: 'Taux conv.',      key: 'taux',       align: 'right', fmt: v => v, color: '#0D9488' },
       ]
 
   const sorted = [...rows].sort((a, b) => {
@@ -324,19 +343,21 @@ export default function Statistiques() {
       primePrev:  acc.primePrev  + (prime > 0 && !isFacture ? prime : 0),
       primeEnc:   acc.primeEnc   + (prime > 0 && isFacture  ? prime : 0),
       marge:      acc.marge      + marge,
+      margeEnc:   acc.margeEnc   + (isFacture && prime > 0 ? marge : 0),
       mwh:        acc.mwh        + mwh,
     }
-  }, { total: 0, enCours: 0, travaux: 0, signe: 0, primePrev: 0, primeEnc: 0, marge: 0, mwh: 0 })
+  }, { total: 0, enCours: 0, travaux: 0, signe: 0, primePrev: 0, primeEnc: 0, marge: 0, margeEnc: 0, mwh: 0 })
 
   const tauxConversion = pct(globalStats.signe, globalStats.total + perdu)
-  const kpiCols = isMobile ? 'repeat(2, 1fr)' : isCompact ? 'repeat(3, 1fr)' : 'repeat(6, 1fr)'
+  const commissionGlobal = Math.round(globalStats.margeEnc * 0.5 * 100) / 100
+  const kpiCols = isMobile ? 'repeat(2, 1fr)' : isCompact ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)'
 
   // Par fiche
   const ficheStats = {}
   for (const d of activeDossiers) {
     const f = d.fiche_cee
     if (!f) continue
-    if (!ficheStats[f]) ficheStats[f] = { total: 0, enCours: 0, primePrev: 0, primeEnc: 0, marge: 0, mwh: 0 }
+    if (!ficheStats[f]) ficheStats[f] = { total: 0, enCours: 0, primePrev: 0, primeEnc: 0, marge: 0, margeEnc: 0, mwh: 0 }
     const prime = d.prime_estimee || 0
     const cout  = d.montant_devis || 0
     const marge = prime > 0 ? Math.round((prime * 0.9 - cout) * 100) / 100 : 0
@@ -347,6 +368,7 @@ export default function Statistiques() {
     ficheStats[f].primePrev += prime > 0 && !isFacture ? prime : 0
     ficheStats[f].primeEnc  += prime > 0 && isFacture  ? prime : 0
     ficheStats[f].marge     += marge
+    ficheStats[f].margeEnc  += isFacture && prime > 0 ? marge : 0
     ficheStats[f].mwh       += mwh
   }
 
@@ -375,14 +397,21 @@ export default function Statistiques() {
           {/* ── KPIs globaux ── */}
           <div>
             <SectionTitle C={C}>Vue globale</SectionTitle>
-            <div style={{ display: 'grid', gridTemplateColumns: kpiCols, gap: isMobile ? 8 : 10, marginBottom: isMobile ? 8 : 12 }}>
-              <KpiCard label="Dossiers en cours"     value={globalStats.enCours}          color={C.accent}    sub="visio planifiée → facturé" C={C} />
+            {/* Ligne 1 — Pipeline */}
+            <div style={{ display: 'grid', gridTemplateColumns: kpiCols, gap: isMobile ? 8 : 10, marginBottom: isMobile ? 8 : 10 }}>
+              <KpiCard label="Dossiers en cours"     value={globalStats.enCours}          color={C.accent}    sub="Visio planifiée → facturé" C={C} />
               <KpiCard label="CA prévisionnel"        value={fmtK(globalStats.primePrev)}  color="#7C3AED"     sub="Primes brutes hors facturé" C={C} />
               <KpiCard label="CA encaissé"            value={fmtK(globalStats.primeEnc)}   color="#16A34A"     sub="Primes brutes facturées" C={C} />
-              <KpiCard label="Marges nettes"          value={fmtK(globalStats.marge)}      color={globalStats.marge >= 0 ? '#059669' : '#DC2626'} sub="Prime nette − coût install." C={C} />
-              <KpiCard label="Travaux en cours"       value={globalStats.travaux}          color="#C2410C"     sub="Travaux → conforme" C={C} />
               <KpiCard label="Volume CUMAC total"     value={fmtGwh(globalStats.mwh)}     color="#0891B2"     sub="Volume CEE tous dossiers" C={C} />
             </div>
+            {/* Ligne 2 — Financier encaissé */}
+            <div style={{ display: 'grid', gridTemplateColumns: kpiCols, gap: isMobile ? 8 : 10, marginBottom: isMobile ? 8 : 10 }}>
+              <KpiCard label="Marge nette totale"     value={fmtK(globalStats.marge)}     color={globalStats.marge >= 0 ? '#059669' : '#DC2626'} sub="Prime nette − coût install." C={C} />
+              <KpiCard label="Marge nette encaissée"  value={fmtK(globalStats.margeEnc)}  color={globalStats.margeEnc >= 0 ? '#0D9488' : '#DC2626'} sub="Sur dossiers facturés uniquement" C={C} />
+              <KpiCard label="Commission commercial"  value={fmtK(commissionGlobal)}      color="#F59E0B"     sub="50 % de la marge encaissée" C={C} />
+              <KpiCard label="Travaux en cours"       value={globalStats.travaux}          color="#C2410C"     sub="Travaux → conforme" C={C} />
+            </div>
+            {/* Ligne 3 — Conversions */}
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: isMobile ? 8 : 10 }}>
               <KpiCard label="Total actifs"    value={globalStats.total}   color={C.text}   sub="Hors dossiers perdus" C={C} />
               <KpiCard label="Dossiers signés" value={globalStats.signe}   color="#15803D"  sub="AH signé → facturé" C={C} />
