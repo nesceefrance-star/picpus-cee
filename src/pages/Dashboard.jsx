@@ -22,6 +22,15 @@ const STATUTS = [
   { id: 'perdu',            label: 'Marché perdu',       color: '#DC2626', bg: '#FEF2F2' },
 ]
 
+const FICHE_META = {
+  'BAT-TH-116': { label: 'GTB',              color: '#7C3AED' },
+  'BAT-TH-163': { label: 'PAC Tertiaire',    color: '#0891B2' },
+  'BAT-TH-142': { label: 'Destrat Tertiaire',color: '#D97706' },
+  'IND-BA-110': { label: 'Destrat Industrie',color: '#EA580C' },
+  'BAT-TH-125': { label: 'VMC Simple flux',  color: '#16A34A' },
+  'BAT-TH-126': { label: 'VMC Double flux',  color: '#0369A1' },
+}
+
 const TACHES = [
   { icon: '📞', label: 'À contacter',        color: '#0369A1', bg: '#EFF6FF', border: '#BFDBFE', statuts: ['prospect'] },
   { icon: '✉️', label: 'Créneaux à envoyer', color: '#0891B2', bg: '#ECFEFF', border: '#A5F3FC', statuts: ['contacte'] },
@@ -948,7 +957,7 @@ export default function Dashboard() {
         </div>
 
         {/* ── Filtres + recherche ── */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder={isMobile ? 'Rechercher…' : 'Rechercher référence, prospect, contact…'}
             style={{ ...INP, flex: 1, minWidth: isMobile ? 0 : 200, fontSize: 14, padding: '10px 16px', borderRadius: 9, width: isMobile ? '100%' : 'auto' }}/>
@@ -962,11 +971,6 @@ export default function Dashboard() {
                 ))}
               </select>
             )}
-            <select value={filtreFiche} onChange={e => setFiltreFiche(e.target.value)}
-              style={{ ...INP, flex: isMobile ? 1 : 'none', width: isMobile ? 'auto' : 160, padding: '10px 12px', borderRadius: 9, cursor: 'pointer' }}>
-              <option value="all">Toutes les fiches</option>
-              {fiches.map(f => <option key={f} value={f}>{f}</option>)}
-            </select>
             <select value={filtreStatut} onChange={e => setFiltreStatut(e.target.value)}
               style={{ ...INP, flex: isMobile ? 1 : 'none', width: isMobile ? 'auto' : 160, padding: '10px 12px', borderRadius: 9, cursor: 'pointer' }}>
               <option value="all">Tous les statuts</option>
@@ -974,6 +978,38 @@ export default function Dashboard() {
             </select>
           </div>
         </div>
+
+        {/* ── Tags fiches CEE ── */}
+        {fiches.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            {['all', ...fiches].map(f => {
+              const meta   = FICHE_META[f]
+              const color  = meta?.color || C.accent
+              const label  = f === 'all' ? 'Toutes' : (meta?.label || f)
+              const active = filtreFiche === f
+              const count  = f === 'all' ? myDossiers.length : myDossiers.filter(d => d.fiche_cee === f).length
+              return (
+                <button key={f} onClick={() => setFiltreFiche(f)} style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  background: active ? color : C.surface,
+                  color: active ? '#fff' : (f === 'all' ? C.textSoft : color),
+                  border: `1px solid ${active ? 'transparent' : (f === 'all' ? C.border : color + '66')}`,
+                  borderRadius: 20, padding: '5px 12px',
+                  fontSize: 12, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  transition: 'all .12s',
+                }}>
+                  {label}
+                  <span style={{ fontSize: 10, fontWeight: 700, opacity: active ? 0.85 : 0.6,
+                    background: active ? 'rgba(255,255,255,.2)' : (f === 'all' ? C.bg : color + '22'),
+                    color: active ? '#fff' : color,
+                    borderRadius: 10, padding: '1px 6px', minWidth: 18, textAlign: 'center',
+                  }}>{count}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         {/* Toolbar sélection groupée */}
         {selected.size > 0 && (
