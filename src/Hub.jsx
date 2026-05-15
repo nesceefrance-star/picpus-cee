@@ -2750,9 +2750,11 @@ function MargesDevis({ prefill }) {
 // ════════════════════════════════════════════════════════════════════════════
 
 const MODULES = [
-  {id:"verificateur",icon:"🔍",titre:"Vérificateur CEE",   sousTitre:"Analyse IA de dossier",   desc:"Uploadez l'AH et le devis, Claude détecte automatiquement toutes les incohérences et génère un rapport de conformité.",tags:["AH","Devis","IA","Rapport"],couleur:"#6366F1",actif:true},
-  {id:"marges",      icon:"📊",titre:"Générateur de devis",sousTitre:"Marges + export PDF",      desc:"Calculez vos marges sur le devis prestataire et générez le devis client AF2E (3 pages) en temps réel.",tags:["Marge","Devis AF2E","3 pages","PDF"],couleur:"#2563EB",actif:true},
-  {id:"visites",     icon:"🔧",titre:"Visites techniques", sousTitre:"Rapports terrain",         desc:"Gérez vos visites techniques terrain, photos, rapport PDF et suivi des dossiers IND-BA-110.",tags:["Visite","Photos","PDF","Terrain"],couleur:"#D97706",actif:true,href:"/visites"},
+  {id:"verificateur",icon:"🔍",titre:"Vérificateur CEE",    sousTitre:"Analyse IA de dossier",  desc:"Uploadez l'AH et le devis, Claude détecte automatiquement toutes les incohérences et génère un rapport de conformité.",tags:["AH","Devis","IA","Rapport"],   couleur:"#6366F1",actif:true},
+  {id:"marges",      icon:"📊",titre:"Générateur de devis", sousTitre:"Marges + export PDF",     desc:"Calculez vos marges sur le devis prestataire et générez le devis client AF2E (3 pages) en temps réel.",               tags:["Marge","Devis","PDF"],         couleur:"#2563EB",actif:true},
+  {id:"simulateur",  icon:"⚡",titre:"Simulateur rapide",   sousTitre:"Calcul CEE instantané",   desc:"Calculez instantanément la prime et la rentabilité d'une opération CEE sans créer de dossier client.",                  tags:["Calcul","Prime","CUMAC"],      couleur:"#7C3AED",actif:true,href:"/simulateur"},
+  {id:"emails",      icon:"✉️",titre:"Générateur d'emails", sousTitre:"Rédaction automatisée",   desc:"Générez des emails professionnels adaptés à chaque étape du suivi commercial : relance, visite, devis, AH.",           tags:["Email","IA","Commercial"],     couleur:"#0891B2",actif:true,href:"/emails"},
+  {id:"visites",     icon:"🔧",titre:"Visites techniques",  sousTitre:"Rapports terrain",        desc:"Gérez vos visites techniques terrain, photos, rapport PDF et suivi des dossiers IND-BA-110.",                           tags:["Visite","Photos","PDF"],       couleur:"#D97706",actif:true,href:"/visites"},
 ];
 
 const renderModule = (page, prefill) => {
@@ -2779,28 +2781,28 @@ export default function AppHub() {
 
   // Vue module
   if (page && renderModule(page, prefill)) return (
-    <div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"system-ui,'Segoe UI',Arial,sans-serif",background:C.bg}}>
-      {/* Barre nav */}
-      <div style={{background:C.nav,padding:"0 16px",height:48,display:"flex",alignItems:"center",gap:12,flexShrink:0,borderBottom:"3px solid "+C.accent}}>
+    <div style={{display:"flex",flexDirection:"column",height:"100%",fontFamily:"system-ui,'Segoe UI',Arial,sans-serif",background:C.bg}}>
+      {/* Barre nav — uniforme avec le reste de l'app */}
+      <div style={{background:C.surface,padding:"0 16px",height:46,display:"flex",alignItems:"center",gap:10,flexShrink:0,borderBottom:`1px solid ${C.border}`}}>
         <button onClick={()=>setPage(null)}
-          style={{background:"transparent",border:"1px solid #475569",color:"#CBD5E1",borderRadius:7,padding:"5px 13px",fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
-          ← Accueil
+          style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textMid,borderRadius:7,padding:"4px 12px",fontSize:12,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,fontWeight:600}}>
+          ← Outils CEE
         </button>
-        <div style={{width:1,height:20,background:"#334155"}}/>
-        <span style={{fontSize:17}}>{current.icon}</span>
-        <span style={{color:"#F8FAFC",fontWeight:700,fontSize:15}}>{current.titre}</span>
-        <span style={{color:"#64748B",fontSize:13}}>— {current.sousTitre}</span>
-        {/* Raccourcis */}
-        <div style={{marginLeft:"auto",display:"flex",gap:6}}>
-          {MODULES.filter(m=>m.actif).map(m=>(
-            <button key={m.id} onClick={()=>m.href?navigate(m.href):setPage(m.id)}
-              style={{background:page===m.id?"#334155":"transparent",color:page===m.id?"#F1F5F9":"#64748B",border:`1px solid ${page===m.id?"#475569":"#334155"}`,borderRadius:7,padding:"4px 11px",fontSize:12,fontWeight:page===m.id?600:400,cursor:"pointer"}}>
+        <div style={{width:1,height:18,background:C.border}}/>
+        <span style={{fontSize:16}}>{current.icon}</span>
+        <span style={{color:C.text,fontWeight:700,fontSize:14}}>{current.titre}</span>
+        <span style={{color:C.textSoft,fontSize:12}}>— {current.sousTitre}</span>
+        {/* Raccourcis modules inline */}
+        <div style={{marginLeft:"auto",display:"flex",gap:5}}>
+          {MODULES.filter(m=>m.actif&&!m.href).map(m=>(
+            <button key={m.id} onClick={()=>setPage(m.id)}
+              style={{background:page===m.id?C.accent:"transparent",color:page===m.id?"#fff":C.textSoft,border:`1px solid ${page===m.id?C.accent:C.border}`,borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:page===m.id?700:400,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
               {m.icon} {m.titre}
             </button>
           ))}
         </div>
       </div>
-      {/* Contenu module — overflow géré dans chaque module */}
+      {/* Contenu module */}
       <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
         {renderModule(page, prefill)}
       </div>
@@ -2809,34 +2811,24 @@ export default function AppHub() {
 
   // Vue Hub
   return (
-    <div style={{fontFamily:"system-ui,'Segoe UI',Arial,sans-serif",background:C.bg,minHeight:"100vh"}}>
-      {/* Header */}
-      <div style={{background:C.nav,borderBottom:"3px solid "+C.accent,padding:"24px 32px 20px"}}>
+    <div style={{fontFamily:"system-ui,'Segoe UI',Arial,sans-serif",background:C.bg,minHeight:"100%"}}>
+      {/* Header — sobre, cohérent avec AppLayout */}
+      <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"20px 28px 16px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",maxWidth:1100,margin:"0 auto"}}>
           <div>
-            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:6}}>
-              <span style={{fontSize:28,fontWeight:900,color:"#60A5FA",letterSpacing:2,lineHeight:1}}>PICPUS</span>
-              <div style={{width:2,height:26,background:"#475569"}}/>
-              <div>
-                <div style={{fontSize:14,fontWeight:600,color:"#CBD5E1",lineHeight:1.2}}>SOFT.IA</div>
-              </div>
-            </div>
-            <div style={{fontSize:22,fontWeight:800,color:"#F8FAFC",marginBottom:4}}>Plateforme CEE — Outils internes</div>
-            <div style={{fontSize:13,color:"#94A3B8"}}>Certificats d'Économies d'Énergie · Automatisation des processus</div>
+            <div style={{fontSize:20,fontWeight:800,color:C.text,marginBottom:3}}>🛠 Outils CEE</div>
+            <div style={{fontSize:13,color:C.textSoft}}>Vérificateur · Devis · Simulateur · Emails · Visites techniques</div>
           </div>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:12}}>
-            <button onClick={()=>window.location.href="/"}
-              style={{background:"transparent",border:"1px solid #475569",color:"#94A3B8",borderRadius:7,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}}>
-              ← Dashboard
-            </button>
-            <div style={{display:"flex",gap:12}}>
-            {[{n:MODULES.filter(m=>m.actif).length,l:"Disponibles",c:"#4ADE80"},{n:MODULES.filter(m=>!m.actif).length,l:"En développement",c:"#FCD34D"},{n:MODULES.length,l:"Total",c:"#94A3B8"}].map(s=>(
-              <div key={s.l} style={{textAlign:"center",padding:"10px 18px",background:"#0F172A",borderRadius:10,border:"1px solid #334155"}}>
-                <div style={{fontSize:22,fontWeight:800,color:s.c,lineHeight:1}}>{s.n}</div>
-                <div style={{fontSize:11,color:"#64748B",marginTop:3,whiteSpace:"nowrap"}}>{s.l}</div>
+          <div style={{display:"flex",gap:10}}>
+            {[
+              {n:MODULES.filter(m=>m.actif).length, l:"Disponibles", c:"#16A34A"},
+              {n:MODULES.length,                    l:"Total",        c:C.textSoft},
+            ].map(s=>(
+              <div key={s.l} style={{textAlign:"center",padding:"8px 16px",background:C.bg,borderRadius:10,border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:20,fontWeight:800,color:s.c,lineHeight:1}}>{s.n}</div>
+                <div style={{fontSize:11,color:C.textSoft,marginTop:3}}>{s.l}</div>
               </div>
             ))}
-            </div>
           </div>
         </div>
       </div>

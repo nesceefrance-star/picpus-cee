@@ -877,6 +877,7 @@ export default function SimulateurRapide() {
                   onChange={v => setF('resistance_r_103', v)}
                   placeholder="ex : 3.5"
                   suffix="m².K/W"
+                  C={C}
                 />
                 {parseFloat(form.resistance_r_103) > 0 && parseFloat(form.resistance_r_103) < 3 && (
                   <div style={{ fontSize: 11, color: '#DC2626', marginTop: -8, marginBottom: 8 }}>⚠️ R doit être ≥ 3 m².K/W pour l'éligibilité CEE</div>
