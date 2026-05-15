@@ -4,12 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useStore from '../store/useStore'
 import { supabase } from '../lib/supabase'
-
-const C = {
-  bg: '#F1F5F9', surface: '#FFFFFF', border: '#E2E8F0',
-  text: '#0F172A', textMid: '#475569', textSoft: '#94A3B8',
-  accent: '#2563EB', today: '#EFF6FF',
-}
+import { useAppTheme } from '../lib/theme'
 
 const TYPE_CONFIG = {
   VT:    { label: 'Visite technique', color: '#D97706', bg: '#FEF3C7', icon: '🏠' },
@@ -101,7 +96,7 @@ function TypeBadge({ type }) {
   )
 }
 
-function EventCard({ event, dossiersMap, navigate }) {
+function EventCard({ event, dossiersMap, navigate, C }) {
   const cfg = TYPE_CONFIG[event.type] || TYPE_CONFIG.Autre
   // Detect dossier ref in summary or description
   REF_REGEX.lastIndex = 0
@@ -198,7 +193,7 @@ function EventCard({ event, dossiersMap, navigate }) {
 
 // ── Vue Liste ─────────────────────────────────────────────────────────────────
 
-function ListView({ events, dossiersMap, navigate }) {
+function ListView({ events, dossiersMap, navigate, C }) {
   const groups = events.reduce((acc, e) => {
     if (!acc[e.dayKey]) acc[e.dayKey] = { label: e.dayLabel, events: [] }
     acc[e.dayKey].events.push(e)
@@ -234,7 +229,7 @@ function ListView({ events, dossiersMap, navigate }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {group.events.map(ev => (
-              <EventCard key={ev.id} event={ev} dossiersMap={dossiersMap} navigate={navigate} />
+              <EventCard key={ev.id} event={ev} dossiersMap={dossiersMap} navigate={navigate} C={C} />
             ))}
           </div>
         </div>
@@ -245,7 +240,7 @@ function ListView({ events, dossiersMap, navigate }) {
 
 // ── Vue Semaine ────────────────────────────────────────────────────────────────
 
-function WeekView({ events, viewDate, dossiersMap, navigate }) {
+function WeekView({ events, viewDate, dossiersMap, navigate, C }) {
   const [expandedDay, setExpandedDay] = useState(null)
   const days = getWeekDays(viewDate)
   const todayKey = toDayKey(new Date())
@@ -267,7 +262,7 @@ function WeekView({ events, viewDate, dossiersMap, navigate }) {
             <div
               key={key}
               style={{
-                background: today ? C.today : C.surface,
+                background: today ? C.accentSoft : C.surface,
                 border: today ? `2px solid ${C.accent}` : `1px solid ${C.border}`,
                 borderRadius: 10, padding: '10px 10px',
                 minHeight: 120, cursor: dayEvents.length > 0 ? 'pointer' : 'default',
@@ -350,7 +345,7 @@ function WeekView({ events, viewDate, dossiersMap, navigate }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {group.map(ev => (
-                <EventCard key={ev.id} event={ev} dossiersMap={dossiersMap} navigate={navigate} />
+                <EventCard key={ev.id} event={ev} dossiersMap={dossiersMap} navigate={navigate} C={C} />
               ))}
             </div>
           </div>
@@ -362,7 +357,7 @@ function WeekView({ events, viewDate, dossiersMap, navigate }) {
 
 // ── Vue Mois ──────────────────────────────────────────────────────────────────
 
-function MonthView({ events, viewDate, dossiersMap, navigate }) {
+function MonthView({ events, viewDate, dossiersMap, navigate, C }) {
   const [selectedDay, setSelectedDay] = useState(null)
   const year  = viewDate.getFullYear()
   const month = viewDate.getMonth() + 1
@@ -398,7 +393,7 @@ function MonthView({ events, viewDate, dossiersMap, navigate }) {
                   key={key}
                   onClick={() => setSelectedDay(selected ? null : key)}
                   style={{
-                    background: today ? C.today : selected ? '#EFF6FF' : inMonth ? C.surface : '#F8FAFC',
+                    background: today ? C.accentSoft : selected ? C.accentSoft : inMonth ? C.surface : C.bg,
                     border: today ? `2px solid ${C.accent}` : selected ? `2px solid ${C.accent}` : `1px solid ${C.border}`,
                     borderRadius: 8, padding: '6px 8px',
                     minHeight: 72, cursor: 'pointer',
@@ -451,7 +446,7 @@ function MonthView({ events, viewDate, dossiersMap, navigate }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {selectedEvents.map(ev => (
-              <EventCard key={ev.id} event={ev} dossiersMap={dossiersMap} navigate={navigate} />
+              <EventCard key={ev.id} event={ev} dossiersMap={dossiersMap} navigate={navigate} C={C} />
             ))}
           </div>
         </div>
@@ -462,13 +457,13 @@ function MonthView({ events, viewDate, dossiersMap, navigate }) {
 
 // ── Composant principal ───────────────────────────────────────────────────────
 
-const INP = {
-  background: C.surface, border: `1px solid ${C.border}`,
-  borderRadius: 7, padding: '6px 10px',
-  color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit', cursor: 'pointer',
-}
-
 export default function Planning() {
+  const C = useAppTheme()
+  const INP = {
+    background: C.bg, border: `1px solid ${C.border}`,
+    borderRadius: 7, padding: '6px 10px',
+    color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit', cursor: 'pointer',
+  }
   const { session, profile } = useStore()
   const isAdmin = profile?.role === 'admin'
   const navigate = useNavigate()
@@ -600,7 +595,7 @@ export default function Planning() {
 
   // ── Écrans non connecté / chargement ─────────────────────────────────────
   if (googleConnected === null) {
-    return <div style={{ padding: 32, color: C.textSoft, fontSize: 14 }}>Vérification connexion Google…</div>
+    return <div style={{ padding: 32, background: C.bg, color: C.textSoft, fontSize: 14 }}>Vérification connexion Google…</div>
   }
 
   if (googleConnected === false) {
@@ -849,9 +844,9 @@ export default function Planning() {
         </div>
       ) : (
         <>
-          {view === 'list'  && <ListView  events={displayed} dossiersMap={dossiersMap} navigate={navigate} />}
-          {view === 'week'  && <WeekView  events={displayed} viewDate={viewDate} dossiersMap={dossiersMap} navigate={navigate} />}
-          {view === 'month' && <MonthView events={displayed} viewDate={viewDate} dossiersMap={dossiersMap} navigate={navigate} />}
+          {view === 'list'  && <ListView  events={displayed} dossiersMap={dossiersMap} navigate={navigate} C={C} />}
+          {view === 'week'  && <WeekView  events={displayed} viewDate={viewDate} dossiersMap={dossiersMap} navigate={navigate} C={C} />}
+          {view === 'month' && <MonthView events={displayed} viewDate={viewDate} dossiersMap={dossiersMap} navigate={navigate} C={C} />}
         </>
       )}
     </div>

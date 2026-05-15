@@ -5,18 +5,7 @@ import useStore from '../store/useStore'
 import { pdf } from '@react-pdf/renderer'
 import PhotoSection from '../components/visite/PhotoSection'
 import VisiteRapportPDF from '../components/visite/VisiteRapportPDF'
-
-const C = {
-  bg: '#F1F5F9', surface: '#FFFFFF', border: '#E2E8F0',
-  text: '#0F172A', textMid: '#475569', textSoft: '#94A3B8',
-  accent: '#2563EB',
-}
-const INP = {
-  width: '100%', boxSizing: 'border-box', background: C.bg,
-  border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px',
-  color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit',
-}
-const SEL = { ...INP, cursor: 'pointer' }
+import { useAppTheme } from '../lib/theme'
 
 // ── Fiches CEE ───────────────────────────────────────────────────────────────
 export const FICHES_CEE = {
@@ -64,6 +53,8 @@ const ISOLATION_TYPES = [
 // ── Autocomplete adresse ─────────────────────────────────────────────────────
 // ── Autocomplete raison sociale (API Entreprises / SIRENE) ──────────────────
 function RaisonSocialeAutocomplete({ value, onChange, onSelect }) {
+  const C = useAppTheme()
+  const INP = { width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }
   const [sugg, setSugg] = useState([])
   const [open, setOpen] = useState(false)
   const timer = useRef(null)
@@ -122,6 +113,8 @@ function RaisonSocialeAutocomplete({ value, onChange, onSelect }) {
 }
 
 function AdresseAutocomplete({ value, onChange }) {
+  const C = useAppTheme()
+  const INP = { width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }
   const [sugg, setSugg]   = useState([])
   const [open, setOpen]   = useState(false)
   const timer             = useRef(null)
@@ -175,6 +168,7 @@ function AdresseAutocomplete({ value, onChange }) {
 
 // ── Champ générique ──────────────────────────────────────────────────────────
 function Field({ label, hint, children, full }) {
+  const C = useAppTheme()
   return (
     <div style={{ gridColumn: full ? '1 / -1' : undefined, display: 'flex', flexDirection: 'column', gap: 4 }}>
       <label style={{ fontSize: 12, fontWeight: 600, color: C.textMid }}>
@@ -188,6 +182,7 @@ function Field({ label, hint, children, full }) {
 
 // ── Sous-section ─────────────────────────────────────────────────────────────
 function SubSection({ title, children }) {
+  const C = useAppTheme()
   return (
     <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
       <div style={{ background: C.bg, padding: '8px 14px', fontSize: 12, fontWeight: 700, color: C.textMid, borderBottom: `1px solid ${C.border}` }}>
@@ -202,6 +197,7 @@ function SubSection({ title, children }) {
 
 // ── En-tête de zone ──────────────────────────────────────────────────────────
 function ZoneHeader({ zone, photoCount, active, onClick }) {
+  const C = useAppTheme()
   return (
     <div onClick={onClick}
       style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px', cursor: 'pointer', borderBottom: active ? `2px solid ${C.accent}` : '2px solid transparent', userSelect: 'none' }}>
@@ -216,6 +212,9 @@ function ZoneHeader({ zone, photoCount, active, onClick }) {
 }
 
 export default function VisiteTechniqueDetail() {
+  const C = useAppTheme()
+  const INP = { width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }
+  const SEL = { ...INP, cursor: 'pointer' }
   const { id }               = useParams()
   const navigate             = useNavigate()
   const { profile, session, dossiers: storeDossiers, fetchDossiers } = useStore()
@@ -504,7 +503,7 @@ export default function VisiteTechniqueDetail() {
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
                 {selectedFiches.length > 0
                   ? selectedFiches.map(f => (
-                    <span key={f} style={{ fontSize: 11, fontWeight: 700, color: '#1D4ED8', background: '#EFF6FF', padding: '1px 7px', borderRadius: 5 }}>{f}</span>
+                    <span key={f} style={{ fontSize: 11, fontWeight: 700, color: C.accent, background: C.accentSoft, padding: '1px 7px', borderRadius: 5 }}>{f}</span>
                   ))
                   : <span style={{ fontSize: 11, color: C.textSoft }}>Aucune fiche sélectionnée</span>
                 }
@@ -581,7 +580,7 @@ export default function VisiteTechniqueDetail() {
                                     padding: '6px 12px', borderRadius: 7, fontSize: 12, cursor: isLocked ? 'default' : 'pointer',
                                     fontFamily: 'inherit', fontWeight: isSel ? 700 : 400,
                                     border: `1px solid ${isSel ? C.accent : C.border}`,
-                                    background: isSel ? '#EFF6FF' : C.bg,
+                                    background: isSel ? C.accentSoft : C.bg,
                                     color: isSel ? C.accent : C.textMid,
                                     opacity: isLocked ? .85 : 1,
                                     position: 'relative',
@@ -601,8 +600,8 @@ export default function VisiteTechniqueDetail() {
                             📁 Dossier lié <span style={{ fontWeight: 400, color: C.textSoft }}>(optionnel)</span>
                           </label>
                           {dossier ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 8, padding: '10px 14px' }}>
-                              <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#1D4ED8' }}>📁 {dossier.ref} — {dossier.prospects?.raison_sociale}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.accentSoft, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px' }}>
+                              <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.accent }}>📁 {dossier.ref} — {dossier.prospects?.raison_sociale}</span>
                               <button onClick={unlinkDossier} style={{ background: 'none', border: 'none', color: C.textSoft, cursor: 'pointer', fontSize: 16 }}>✕</button>
                             </div>
                           ) : (
@@ -893,11 +892,11 @@ export default function VisiteTechniqueDetail() {
                                 const zc = v('zone_climatique')
                                 const kwh = Math.round((COEF.convectif[zc] || 0) * (parseFloat(getCh('puissance_convectif_kw')) || 0) + (COEF.radiatif[zc] || 0) * (parseFloat(getCh('puissance_radiatif_kw')) || 0))
                                 return (
-                                  <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '12px 16px', margin: '0 14px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                  <div style={{ background: C.accentSoft, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px', margin: '0 14px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
                                     <span style={{ fontSize: 24 }}>⚡</span>
                                     <div>
-                                      <div style={{ fontSize: 11, color: '#1D4ED8', fontWeight: 700 }}>Estimation IND-BA-110 — Installation {idx + 1}</div>
-                                      <div style={{ fontSize: 20, fontWeight: 800, color: '#1D4ED8' }}>{kwh.toLocaleString('fr-FR')} kWh cumac</div>
+                                      <div style={{ fontSize: 11, color: C.accent, fontWeight: 700 }}>Estimation IND-BA-110 — Installation {idx + 1}</div>
+                                      <div style={{ fontSize: 20, fontWeight: 800, color: C.accent }}>{kwh.toLocaleString('fr-FR')} kWh cumac</div>
                                     </div>
                                   </div>
                                 )
@@ -1007,7 +1006,7 @@ export default function VisiteTechniqueDetail() {
                           {ISOLATION_TYPES.map(type => {
                             const checked = !!v(`isol_${type.id}`)
                             return (
-                              <div key={type.id} style={{ border: `1px solid ${checked ? C.accent : C.border}`, borderRadius: 8, padding: '12px 14px', background: checked ? '#EFF6FF' : C.surface, transition: 'all .15s' }}>
+                              <div key={type.id} style={{ border: `1px solid ${checked ? C.accent : C.border}`, borderRadius: 8, padding: '12px 14px', background: checked ? C.accentSoft : C.surface, transition: 'all .15s' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                   <input type="checkbox" id={`isol_${type.id}`}
                                     checked={checked}

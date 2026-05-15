@@ -1,12 +1,7 @@
 // EmailGenerateur.jsx — Module standalone de génération d'emails CEE
 import { useState } from 'react'
 import useStore from '../store/useStore'
-
-const C = {
-  bg: '#F1F5F9', surface: '#FFFFFF', border: '#E2E8F0',
-  text: '#0F172A', textMid: '#475569', textSoft: '#94A3B8',
-  accent: '#2563EB',
-}
+import { useAppTheme } from '../lib/theme'
 
 const EMAIL_TYPES = [
   { key: 'visio_creneaux',  label: 'Créneaux visio',      icon: '📅', desc: 'Proposer des créneaux de visioconférence',     needsSlots: true,  slotType: 'visio'   },
@@ -19,6 +14,7 @@ const EMAIL_TYPES = [
 ]
 
 export default function EmailGenerateur() {
+  const C = useAppTheme()
   const { session } = useStore()
 
   // ── Contact libre ─────────────────────────────────────────────────────────
@@ -156,10 +152,10 @@ export default function EmailGenerateur() {
               {EMAIL_TYPES.map(t => (
                 <button key={t.key} type="button" onClick={() => handleTypeChange(t.key)}
                   style={{ padding: '12px 10px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
-                    background: selectedType === t.key ? '#EFF6FF' : C.bg,
+                    background: selectedType === t.key ? C.accentSoft : C.bg,
                     border: `2px solid ${selectedType === t.key ? C.accent : C.border}` }}>
                   <div style={{ fontSize: 18, marginBottom: 4 }}>{t.icon}</div>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: selectedType === t.key ? '#2563EB' : C.text, lineHeight: 1.2 }}>{t.label}</div>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: selectedType === t.key ? C.accent : C.text, lineHeight: 1.2 }}>{t.label}</div>
                   <div style={{ fontSize: 9, color: C.textSoft, marginTop: 3, lineHeight: 1.3 }}>{t.desc}</div>
                 </button>
               ))}
@@ -175,7 +171,7 @@ export default function EmailGenerateur() {
 
               {!slotsLoaded ? (
                 <button onClick={() => loadSlots(0)} disabled={loadingSlots}
-                  style={{ background: loadingSlots ? C.bg : '#EFF6FF', border: `1px solid ${loadingSlots ? C.border : '#93C5FD'}`, borderRadius: 8, padding: '10px 18px', fontSize: 13, fontWeight: 600, color: loadingSlots ? C.textSoft : C.accent, cursor: loadingSlots ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                  style={{ background: loadingSlots ? C.bg : C.accentSoft, border: `1px solid ${loadingSlots ? C.border : C.accent}`, borderRadius: 8, padding: '10px 18px', fontSize: 13, fontWeight: 600, color: loadingSlots ? C.textSoft : C.accent, cursor: loadingSlots ? 'default' : 'pointer', fontFamily: 'inherit' }}>
                   {loadingSlots ? '⏳ Chargement…' : '📅 Charger les créneaux disponibles'}
                 </button>
               ) : (
@@ -202,7 +198,7 @@ export default function EmailGenerateur() {
                           <button key={slot.start} type="button"
                             onClick={() => setSelectedSlots(prev => sel ? prev.filter(s => s.start !== slot.start) : [...prev, slot])}
                             style={{ padding: '5px 11px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: sel ? 700 : 400,
-                              background: sel ? '#BFDBFE' : C.bg, border: `1px solid ${sel ? C.accent : C.border}`, color: sel ? '#1D4ED8' : C.textMid }}>
+                              background: sel ? C.accentSoft : C.bg, border: `1px solid ${sel ? C.accent : C.border}`, color: sel ? C.accent : C.textMid }}>
                             {slot.label}
                           </button>
                         )

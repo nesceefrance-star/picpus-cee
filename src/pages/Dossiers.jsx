@@ -4,6 +4,7 @@ import useStore from '../store/useStore'
 import NouveauDossierWizard from '../components/NouveauDossierWizard'
 import KanbanView from '../components/KanbanView'
 import { supabase } from '../lib/supabase'
+import { useAppTheme } from '../lib/theme'
 
 const STATUTS = [
   { id: 'simulation',       label: 'Simulation',        color: '#7C3AED', bg: '#EDE9FE' },
@@ -20,18 +21,6 @@ const STATUTS = [
   { id: 'perdu',            label: 'Marché perdu',       color: '#DC2626', bg: '#FEF2F2' },
 ]
 
-const C = {
-  bg: '#F1F5F9', surface: '#FFFFFF', border: '#E2E8F0',
-  text: '#0F172A', textMid: '#475569', textSoft: '#94A3B8',
-  accent: '#2563EB',
-}
-
-const INP = {
-  width: '100%', boxSizing: 'border-box',
-  background: C.bg, border: `1px solid ${C.border}`,
-  borderRadius: 7, padding: '9px 12px',
-  color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit',
-}
 
 const fmtK = (n) => {
   if (n == null || isNaN(n) || n === 0) return '—'
@@ -53,6 +42,7 @@ function daysSince(dateStr) {
 }
 
 function StatutBadge({ statut }) {
+  const C = useAppTheme()
   const s = STATUTS.find(x => x.id === statut) || { label: statut, color: C.textSoft, bg: C.bg }
   return (
     <span style={{ background: s.bg, color: s.color, border: `1px solid ${s.color}44`, borderRadius: 20, padding: '2px 9px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
@@ -62,6 +52,13 @@ function StatutBadge({ statut }) {
 }
 
 export default function Dossiers() {
+  const C = useAppTheme()
+  const INP = {
+    width: '100%', boxSizing: 'border-box',
+    background: C.bg, border: `1px solid ${C.border}`,
+    borderRadius: 7, padding: '9px 12px',
+    color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit',
+  }
   const navigate = useNavigate()
   const location = useLocation()
   const { dossiers, fetchDossiers, setCurrentDossier, deleteDossier, deleteDossiers, user, profile, profiles, fetchProfiles } = useStore()
@@ -285,7 +282,7 @@ export default function Dossiers() {
               const jPlus   = daysSince(d.created_at)
               return (
                 <div key={d.id} onClick={() => !deletingIds.has(d.id) && openDossier(d)}
-                  style={{ background: isPerdu ? '#FFF5F5' : C.surface, border: `1px solid ${isPerdu ? '#FCA5A5' : C.border}`, borderRadius: 10, padding: '14px 16px', cursor: 'pointer', opacity: isPerdu ? 0.8 : 1 }}>
+                  style={{ background: isPerdu ? 'rgba(220,38,38,0.07)' : C.surface, border: `1px solid ${isPerdu ? '#FCA5A5' : C.border}`, borderRadius: 10, padding: '14px 16px', cursor: 'pointer', opacity: isPerdu ? 0.8 : 1 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.prospects?.raison_sociale || '—'}</div>
@@ -313,7 +310,7 @@ export default function Dossiers() {
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflowX: 'auto' }}>
           <div style={{ minWidth: 820 }}>
             {/* En-tête */}
-            <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '9px 14px', background: '#F8FAFC', borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .4, alignItems: 'center' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '9px 14px', background: C.bg, borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .4, alignItems: 'center' }}>
               <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} style={{ width: 14, height: 14, cursor: 'pointer', accentColor: C.accent }}/>
               <span>Réf.</span>
               <span>Prospect</span>
@@ -341,9 +338,9 @@ export default function Dossiers() {
               return (
                 <div key={d.id}
                   onClick={() => !isDeleting && openDossier(d)}
-                  style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '12px 16px', alignItems: 'center', background: isSelected ? '#EFF6FF' : isPerdu ? '#FFF5F5' : idx % 2 === 0 ? C.surface : '#FAFBFC', borderBottom: `1px solid ${C.border}`, cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? .5 : isPerdu ? 0.7 : 1, transition: 'background .1s' }}
-                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = isPerdu ? '#FEE2E2' : '#F0F7FF' }}
-                  onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = isPerdu ? '#FFF5F5' : idx % 2 === 0 ? C.surface : '#FAFBFC' }}>
+                  style={{ display: 'grid', gridTemplateColumns: COLS, gap: 8, padding: '12px 16px', alignItems: 'center', background: isSelected ? C.accentSoft : isPerdu ? 'rgba(220,38,38,0.07)' : idx % 2 === 0 ? C.surface : C.bg, borderBottom: `1px solid ${C.border}`, cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? .5 : isPerdu ? 0.7 : 1, transition: 'background .1s' }}
+                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = isPerdu ? 'rgba(220,38,38,0.12)' : C.accentSoft }}
+                  onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = isPerdu ? 'rgba(220,38,38,0.07)' : idx % 2 === 0 ? C.surface : C.bg }}>
 
                   <input type="checkbox" checked={isSelected} onClick={e => toggleSelect(d.id, e)} onChange={() => {}} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: C.accent }}/>
 
@@ -390,7 +387,7 @@ export default function Dossiers() {
             })}
 
             {/* Footer */}
-            <div style={{ padding: '10px 16px', background: '#F8FAFC', borderTop: `1px solid ${C.border}`, fontSize: 12, color: C.textSoft }}>
+            <div style={{ padding: '10px 16px', background: C.bg, borderTop: `1px solid ${C.border}`, fontSize: 12, color: C.textSoft }}>
               {filtered.length} dossier{filtered.length > 1 ? 's' : ''}{filtered.length < myDossiers.length ? ` sur ${myDossiers.length}` : ''}
             </div>
           </div>

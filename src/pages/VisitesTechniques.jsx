@@ -2,12 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import useStore from '../store/useStore'
-
-const C = {
-  bg: '#F1F5F9', surface: '#FFFFFF', border: '#E2E8F0',
-  text: '#0F172A', textMid: '#475569', textSoft: '#94A3B8',
-  accent: '#2563EB',
-}
+import { useAppTheme } from '../lib/theme'
 
 import { FICHES_CEE } from './VisiteTechniqueDetail'
 
@@ -23,6 +18,7 @@ function StatutBadge({ statut }) {
 }
 
 export default function VisitesTechniques() {
+  const C = useAppTheme()
   const navigate   = useNavigate()
   const { profile } = useStore()
   const [visites,      setVisites]      = useState([])
@@ -161,7 +157,7 @@ export default function VisitesTechniques() {
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                   {fiches.map(f => (
-                    <span key={f} style={{ fontSize: 11, fontWeight: 700, color: '#1D4ED8', background: '#EFF6FF', padding: '2px 7px', borderRadius: 5 }}>{f}</span>
+                    <span key={f} style={{ fontSize: 11, fontWeight: 700, color: C.accent, background: C.accentSoft, padding: '2px 7px', borderRadius: 5 }}>{f}</span>
                   ))}
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -211,7 +207,7 @@ export default function VisitesTechniques() {
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                   {(v.donnees?.fiches?.length ? v.donnees.fiches : [v.type_fiche].filter(Boolean)).map(f => (
-                    <span key={f} style={{ fontSize: 11, fontWeight: 700, color: '#1D4ED8', background: '#EFF6FF', padding: '2px 7px', borderRadius: 5, whiteSpace: 'nowrap' }}>{f}</span>
+                    <span key={f} style={{ fontSize: 11, fontWeight: 700, color: C.accent, background: C.accentSoft, padding: '2px 7px', borderRadius: 5, whiteSpace: 'nowrap' }}>{f}</span>
                   ))}
                 </div>
                 <StatutBadge statut={v.statut} />

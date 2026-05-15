@@ -588,7 +588,7 @@ export default function Dashboard() {
                             <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{d.ref}</span>
                             <span style={{ fontSize: 12, color: C.textMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.prospects?.raison_sociale}</span>
                             {isAdmin && filtreCommercial === 'all' && (
-                              <span style={{ fontSize: 10, background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE', borderRadius: 10, padding: '1px 7px', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              <span style={{ fontSize: 10, background: C.accentSoft, color: C.accent, border: `1px solid ${C.border}`, borderRadius: 10, padding: '1px 7px', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0 }}>
                                 {profileName(d.assigne_a)}
                               </span>
                             )}
@@ -629,14 +629,14 @@ export default function Dashboard() {
               <span style={{ fontSize: 15 }}>✅</span>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Mes tâches</span>
               {taches.filter(t => !t.done).length > 0 && (
-                <span style={{ background: '#EFF6FF', color: C.accent, border: `1px solid #BFDBFE`, borderRadius: 20, padding: '1px 8px', fontSize: 11, fontWeight: 700, marginLeft: 'auto' }}>
+                <span style={{ background: C.accentSoft, color: C.accent, border: `1px solid ${C.border}`, borderRadius: 20, padding: '1px 8px', fontSize: 11, fontWeight: 700, marginLeft: 'auto' }}>
                   {taches.filter(t => !t.done).length} à faire
                 </span>
               )}
             </div>
 
             {/* Formulaire ajout */}
-            <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}`, background: '#FAFBFC' }}>
+            <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}`, background: C.bg }}>
               <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
                 <input
                   value={tacheInput}
@@ -815,7 +815,7 @@ export default function Dashboard() {
 
                           {/* Panneau partage */}
                           {isSharing && isMine && (
-                            <div style={{ padding: '8px 14px 10px 37px', background: '#F8FAFF', borderTop: `1px solid ${C.border}` }}>
+                            <div style={{ padding: '8px 14px 10px 37px', background: C.surface, borderTop: `1px solid ${C.border}` }}>
                               <div style={{ fontSize: 11, fontWeight: 700, color: C.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .4 }}>
                                 Partager avec…
                               </div>
@@ -846,7 +846,7 @@ export default function Dashboard() {
                     return (
                       <>
                         {urgent.length > 0 && (
-                          <div style={{ padding: '5px 14px 2px', fontSize: 10, fontWeight: 700, color: '#DC2626', textTransform: 'uppercase', letterSpacing: .4, background: '#FFF5F5' }}>
+                          <div style={{ padding: '5px 14px 2px', fontSize: 10, fontWeight: 700, color: '#DC2626', textTransform: 'uppercase', letterSpacing: .4, background: 'rgba(220,38,38,0.07)' }}>
                             ⚠️ À traiter
                           </div>
                         )}
@@ -953,7 +953,7 @@ export default function Dashboard() {
                     <>
                       {days.map(({ label, dateLabel, isToday, evs }) => (
                         <div key={dateLabel}>
-                          <div style={{ padding: '7px 16px 4px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .4, background: isToday ? '#EFF6FF' : '#F8FAFC', color: isToday ? C.accent : C.textMid }}>
+                          <div style={{ padding: '7px 16px 4px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .4, background: isToday ? C.accentSoft : C.bg, color: isToday ? C.accent : C.textMid }}>
                             {label} · {dateLabel}
                           </div>
                           {evs.map(renderEv)}
@@ -1017,7 +1017,7 @@ export default function Dashboard() {
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflowX: 'auto' }}>
           <div style={{ minWidth: 820 }}>
             {/* En-tête */}
-            <div style={{ display: 'grid', gridTemplateColumns: '28px 72px 1fr 90px 110px 72px 105px 105px 70px 62px 34px', gap: 8, padding: '9px 14px', background: '#F8FAFC', borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .4, alignItems: 'center' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '28px 72px 1fr 90px 110px 72px 105px 105px 70px 62px 34px', gap: 8, padding: '9px 14px', background: C.bg, borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .4, alignItems: 'center' }}>
               <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} style={{ width: 14, height: 14, cursor: 'pointer', accentColor: C.accent }}/>
               <span>Réf.</span>
               <span>Prospect</span>
@@ -1045,9 +1045,9 @@ export default function Dashboard() {
               return (
                 <div key={d.id}
                   onClick={() => !isDeleting && openDossier(d)}
-                  style={{ display: 'grid', gridTemplateColumns: '28px 72px 1fr 90px 110px 72px 105px 105px 70px 62px 34px', gap: 8, padding: '12px 16px', alignItems: 'center', background: isSelected ? '#EFF6FF' : isPerdu ? '#FFF5F5' : idx % 2 === 0 ? C.surface : '#FAFBFC', borderBottom: `1px solid ${C.border}`, cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? .5 : isPerdu ? 0.7 : 1, transition: 'background .1s' }}
-                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#F0F7FF' }}
-                  onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = idx % 2 === 0 ? C.surface : '#FAFBFC' }}>
+                  style={{ display: 'grid', gridTemplateColumns: '28px 72px 1fr 90px 110px 72px 105px 105px 70px 62px 34px', gap: 8, padding: '12px 16px', alignItems: 'center', background: isSelected ? C.accentSoft : isPerdu ? 'rgba(220,38,38,0.07)' : idx % 2 === 0 ? C.surface : C.bg, borderBottom: `1px solid ${C.border}`, cursor: isDeleting ? 'default' : 'pointer', opacity: isDeleting ? .5 : isPerdu ? 0.7 : 1, transition: 'background .1s' }}
+                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = C.accentSoft }}
+                  onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = idx % 2 === 0 ? C.surface : C.bg }}>
 
                   <input type="checkbox" checked={isSelected} onClick={e => toggleSelect(d.id, e)} onChange={() => {}} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: C.accent }}/>
 
@@ -1094,7 +1094,7 @@ export default function Dashboard() {
             })}
 
             {/* Footer count */}
-            <div style={{ padding: '10px 16px', background: '#F8FAFC', borderTop: `1px solid ${C.border}`, fontSize: 12, color: C.textSoft }}>
+            <div style={{ padding: '10px 16px', background: C.bg, borderTop: `1px solid ${C.border}`, fontSize: 12, color: C.textSoft }}>
               {filtered.length} dossier{filtered.length > 1 ? 's' : ''}{filtered.length < myDossiers.length ? ` sur ${myDossiers.length}` : ''}
             </div>
           </div>

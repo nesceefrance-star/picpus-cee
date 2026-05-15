@@ -1,12 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBreakpoint } from '../lib/useBreakpoint'
-
-const C = {
-  bg: '#F1F5F9', surface: '#FFFFFF', border: '#E2E8F0',
-  text: '#0F172A', textMid: '#475569', textSoft: '#94A3B8',
-  accent: '#2563EB',
-}
+import { useAppTheme } from '../lib/theme'
 
 // ── Fiches ──────────────────────────────────────────────────────────────────
 const FICHES = [
@@ -277,7 +272,7 @@ const RESET_PER_FICHE = {
 }
 
 // ── Sous-composants ──────────────────────────────────────────────────────────
-function Label({ children }) {
+function Label({ children, C }) {
   return (
     <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: .4 }}>
       {children}
@@ -285,7 +280,7 @@ function Label({ children }) {
   )
 }
 
-function NumInput({ value, onChange, placeholder, suffix }) {
+function NumInput({ value, onChange, placeholder, suffix, C }) {
   return (
     <div style={{ position: 'relative', marginBottom: 14 }}>
       <input type="number" value={value ?? ''} onChange={e => onChange(e.target.value)} placeholder={placeholder}
@@ -295,16 +290,16 @@ function NumInput({ value, onChange, placeholder, suffix }) {
   )
 }
 
-function BtnGroup({ options, value, onChange }) {
+function BtnGroup({ options, value, onChange, C }) {
   return (
     <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
       {options.map(o => (
         <button key={o.id} type="button" onClick={() => onChange(o.id)}
           style={{ flex: 1, minWidth: 0, padding: '8px 6px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
-            background: value === o.id ? '#EFF6FF' : C.bg,
+            background: value === o.id ? C.accentSoft : C.bg,
             border: `1px solid ${value === o.id ? C.accent : C.border}` }}>
           {o.icon && <div style={{ fontSize: 14, marginBottom: 2 }}>{o.icon}</div>}
-          <div style={{ fontSize: 11, fontWeight: 700, color: value === o.id ? '#2563EB' : C.text }}>{o.label}</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: value === o.id ? C.accent : C.text }}>{o.label}</div>
           {o.sub && <div style={{ fontSize: 10, color: C.textSoft, marginTop: 1 }}>{o.sub}</div>}
         </button>
       ))}
@@ -312,7 +307,7 @@ function BtnGroup({ options, value, onChange }) {
   )
 }
 
-function LigneEquip({ eq, onChange, onRemove, canRemove }) {
+function LigneEquip({ eq, onChange, onRemove, canRemove, C }) {
   const total = (parseInt(eq.quantite) || 0) * (parseFloat(eq.puissance_unitaire_kw) || 0)
   const sm = window.innerWidth < 640
   return (
@@ -326,7 +321,7 @@ function LigneEquip({ eq, onChange, onRemove, canRemove }) {
           style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 26px 7px 8px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit' }} />
         <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: C.textMid }}>kW</span>
       </div>
-      {!sm && <div style={{ width: 60, flexShrink: 0, textAlign: 'right', fontSize: 12, fontWeight: 700, color: total > 0 ? '#2563EB' : C.textSoft }}>
+      {!sm && <div style={{ width: 60, flexShrink: 0, textAlign: 'right', fontSize: 12, fontWeight: 700, color: total > 0 ? C.accent : C.textSoft }}>
         {total > 0 ? `${total} kW` : '—'}
       </div>}
       {canRemove
@@ -337,10 +332,10 @@ function LigneEquip({ eq, onChange, onRemove, canRemove }) {
   )
 }
 
-function Card({ title, children }) {
+function Card({ title, children, C }) {
   return (
-    <div style={{ background: '#F8FAFC', border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 14 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: '#2563EB', marginBottom: 12 }}>{title}</div>
+    <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 16px', marginBottom: 14 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: C.accent, marginBottom: 12 }}>{title}</div>
       {children}
     </div>
   )
@@ -348,6 +343,7 @@ function Card({ title, children }) {
 
 // ── Page principale ──────────────────────────────────────────────────────────
 export default function SimulateurRapide() {
+  const C = useAppTheme()
   const navigate = useNavigate()
   const { isMobile, isCompact } = useBreakpoint()
   const [form, setForm] = useState(INIT_FORM)
@@ -466,16 +462,16 @@ export default function SimulateurRapide() {
                   style={{ padding: '14px 10px', borderRadius: 9, cursor: f.coming ? 'default' : 'pointer',
                     fontFamily: 'inherit', textAlign: 'center', position: 'relative',
                     opacity: f.coming ? 0.55 : 1,
-                    background: form.fiche_cee === f.id ? '#EFF6FF' : C.bg,
+                    background: form.fiche_cee === f.id ? C.accentSoft : C.bg,
                     border: `2px solid ${form.fiche_cee === f.id ? C.accent : C.border}` }}>
                   {f.coming && (
-                    <span style={{ position: 'absolute', top: 4, right: 4, background: '#E2E8F0', color: '#64748B',
+                    <span style={{ position: 'absolute', top: 4, right: 4, background: C.border, color: C.textMid,
                       borderRadius: 4, fontSize: 8, fontWeight: 700, padding: '1px 4px', textTransform: 'uppercase', letterSpacing: .3 }}>
                       Bientôt
                     </span>
                   )}
                   <div style={{ fontSize: 20, marginBottom: 5 }}>{f.icon}</div>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: form.fiche_cee === f.id ? '#2563EB' : f.coming ? C.textSoft : C.text }}>{f.label}</div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: form.fiche_cee === f.id ? C.accent : f.coming ? C.textSoft : C.text }}>{f.label}</div>
                   <div style={{ fontSize: 10, color: C.textSoft, marginTop: 2, lineHeight: 1.3 }}>{f.desc}</div>
                 </button>
               ))}
@@ -493,6 +489,7 @@ export default function SimulateurRapide() {
               ]}
               value={form.zone_climatique}
               onChange={v => setF('zone_climatique', v)}
+              C={C}
             />
           </div>
 
@@ -508,7 +505,7 @@ export default function SimulateurRapide() {
               {/* Type de local (142 uniquement) */}
               {form.fiche_cee === 'BAT-TH-142' && (
                 <div style={{ marginBottom: 14 }}>
-                  <Label>Type de local</Label>
+                  <Label C={C}>Type de local</Label>
                   <BtnGroup
                     options={[
                       { id: 'sport_transport',  label: '🏟️ Sport / Transport',    sub: 'Hall sportif, entrepôt, gare…' },
@@ -516,6 +513,7 @@ export default function SimulateurRapide() {
                     ]}
                     value={form.type_local}
                     onChange={v => setF('type_local', v)}
+                  C={C}
                   />
                 </div>
               )}
@@ -523,17 +521,17 @@ export default function SimulateurRapide() {
               {/* Surface + Hauteur */}
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 0 : '0 16px' }}>
                 <div>
-                  <Label>Surface du site</Label>
-                  <NumInput value={form.surface_m2} onChange={v => setF('surface_m2', v)} placeholder="ex : 2000" suffix="m²" />
+                  <Label C={C}>Surface du site</Label>
+                  <NumInput value={form.surface_m2} onChange={v => setF('surface_m2', v)} placeholder="ex : 2000" suffix="m²"  C={C}/>
                 </div>
                 <div>
-                  <Label>Hauteur sous plafond</Label>
-                  <NumInput value={form.hauteur_m} onChange={v => setF('hauteur_m', v)} placeholder="ex : 8" suffix="m" />
+                  <Label C={C}>Hauteur sous plafond</Label>
+                  <NumInput value={form.hauteur_m} onChange={v => setF('hauteur_m', v)} placeholder="ex : 8" suffix="m"  C={C}/>
                 </div>
               </div>
 
               {/* Équipements convectifs */}
-              <Card title="🌀 Chauffage convectif (chaudière, aérotherme, rooftop…)">
+              <Card C={C} title="🌀 Chauffage convectif (chaudière, aérotherme, rooftop…)">
                 {!isMobile && <div style={{ display: 'flex', gap: 5, marginBottom: 6, paddingLeft: 2 }}>
                   <span style={{ flex: 2, fontSize: 10, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .3 }}>Équipement</span>
                   <span style={{ width: 44, fontSize: 10, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .3, textAlign: 'center' }}>Qté</span>
@@ -542,7 +540,7 @@ export default function SimulateurRapide() {
                   <div style={{ width: 24 }} />
                 </div>}
                 {form.eqs_conv.map((eq, i) => (
-                  <LigneEquip key={i} eq={eq}
+                  <LigneEquip C={C} key={i} eq={eq}
                     onChange={eq => setForm(f => ({ ...f, eqs_conv: f.eqs_conv.map((e, j) => j === i ? eq : e) }))}
                     onRemove={() => setForm(f => ({ ...f, eqs_conv: f.eqs_conv.filter((_, j) => j !== i) }))}
                     canRemove={form.eqs_conv.length > 1} />
@@ -560,12 +558,12 @@ export default function SimulateurRapide() {
               </Card>
 
               {/* Équipements radiatifs */}
-              <Card title="☀️ Chauffage radiatif (cassettes, panneaux radiants…) — optionnel">
+              <Card C={C} title="☀️ Chauffage radiatif (cassettes, panneaux radiants…) — optionnel">
                 {form.eqs_rad.length === 0 && (
                   <div style={{ fontSize: 12, color: C.textSoft, fontStyle: 'italic', marginBottom: 6 }}>Aucun équipement radiatif</div>
                 )}
                 {form.eqs_rad.map((eq, i) => (
-                  <LigneEquip key={i} eq={eq}
+                  <LigneEquip C={C} key={i} eq={eq}
                     onChange={eq => setForm(f => ({ ...f, eqs_rad: f.eqs_rad.map((e, j) => j === i ? eq : e) }))}
                     onRemove={() => setForm(f => ({ ...f, eqs_rad: f.eqs_rad.filter((_, j) => j !== i) }))}
                     canRemove={true} />
@@ -583,10 +581,10 @@ export default function SimulateurRapide() {
               </Card>
 
               {/* Déstratificateurs */}
-              <Card title="🌀 Déstratificateurs">
+              <Card C={C} title="🌀 Déstratificateurs">
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 0 : '0 16px' }}>
                   <div>
-                    <Label>Débit unitaire</Label>
+                    <Label C={C}>Débit unitaire</Label>
                     <BtnGroup
                       options={[
                         { id: '14000', label: '14 000 m³/h' },
@@ -594,10 +592,11 @@ export default function SimulateurRapide() {
                       ]}
                       value={form.debit_unitaire}
                       onChange={v => setF('debit_unitaire', v)}
+                    C={C}
                     />
                   </div>
                   <div>
-                    <Label>Nb calculé auto</Label>
+                    <Label C={C}>Nb calculé auto</Label>
                     <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', fontSize: 13, fontWeight: 700, color: '#2563EB', minHeight: 38, marginBottom: 14 }}>
                       {nbDestratCalc > 0 ? (
                         <>{nbDestratCalc} <span style={{ fontSize: 10, color: C.textSoft, fontWeight: 400, marginLeft: 4 }}>= ⌈{form.surface_m2}×{form.hauteur_m}×0,7÷{parseInt(form.debit_unitaire).toLocaleString('fr')}⌉</span></>
@@ -605,13 +604,13 @@ export default function SimulateurRapide() {
                     </div>
                   </div>
                   <div>
-                    <Label>Nb destrats (manuel)</Label>
-                    <NumInput value={form.nb_destrat_manuel} onChange={v => setF('nb_destrat_manuel', v)} placeholder={nbDestratCalc || 'auto'} />
+                    <Label C={C}>Nb destrats (manuel)</Label>
+                    <NumInput value={form.nb_destrat_manuel} onChange={v => setF('nb_destrat_manuel', v)} placeholder={nbDestratCalc || 'auto'}  C={C}/>
                     <div style={{ fontSize: 10, color: C.textSoft, marginTop: -10, marginBottom: 14 }}>Laisser vide = calcul auto</div>
                   </div>
                   <div>
-                    <Label>Coût unitaire</Label>
-                    <NumInput value={form.cout_unitaire_destrat} onChange={v => setF('cout_unitaire_destrat', v)} placeholder="2750" suffix="€" />
+                    <Label C={C}>Coût unitaire</Label>
+                    <NumInput value={form.cout_unitaire_destrat} onChange={v => setF('cout_unitaire_destrat', v)} placeholder="2750" suffix="€"  C={C}/>
                   </div>
                 </div>
                 {nbDestrat > 0 && form.cout_unitaire_destrat && (
@@ -627,7 +626,7 @@ export default function SimulateurRapide() {
             {is163 && (<>
               {/* Puissance PAC */}
               <div style={{ marginBottom: 14 }}>
-                <Label>Puissance PAC</Label>
+                <Label C={C}>Puissance PAC</Label>
                 <BtnGroup
                   options={[
                     { id: 'small', label: '≤ 400 kW', sub: 'Bracket par Etas' },
@@ -635,13 +634,14 @@ export default function SimulateurRapide() {
                   ]}
                   value={form.puissance_pac}
                   onChange={v => setF('puissance_pac', v)}
+                C={C}
                 />
               </div>
 
               {/* Etas (small) */}
               {form.puissance_pac === 'small' && (
                 <div style={{ marginBottom: 14 }}>
-                  <Label>Etas de la PAC</Label>
+                  <Label C={C}>Etas de la PAC</Label>
                   <BtnGroup
                     options={[
                       { id: 'etas_111_126',  label: '111% ≤ Etas < 126%' },
@@ -650,6 +650,7 @@ export default function SimulateurRapide() {
                     ]}
                     value={form.etas_bracket}
                     onChange={v => setF('etas_bracket', v)}
+                  C={C}
                   />
                 </div>
               )}
@@ -657,7 +658,7 @@ export default function SimulateurRapide() {
               {/* COP (large) */}
               {form.puissance_pac === 'large' && (
                 <div style={{ marginBottom: 14 }}>
-                  <Label>COP de la PAC</Label>
+                  <Label C={C}>COP de la PAC</Label>
                   <BtnGroup
                     options={[
                       { id: 'cop_3_4_4_5',  label: '3,4 ≤ COP < 4,5' },
@@ -665,19 +666,20 @@ export default function SimulateurRapide() {
                     ]}
                     value={form.cop_bracket}
                     onChange={v => setF('cop_bracket', v)}
+                  C={C}
                   />
                 </div>
               )}
 
               {/* Surface */}
               <div style={{ marginBottom: 14 }}>
-                <Label>Surface du site</Label>
-                <NumInput value={form.surface_m2} onChange={v => setF('surface_m2', v)} placeholder="ex : 1200" suffix="m²" />
+                <Label C={C}>Surface du site</Label>
+                <NumInput value={form.surface_m2} onChange={v => setF('surface_m2', v)} placeholder="ex : 1200" suffix="m²"  C={C}/>
               </div>
 
               {/* Secteur */}
               <div style={{ marginBottom: 14 }}>
-                <Label>Secteur d'activité</Label>
+                <Label C={C}>Secteur d'activité</Label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
                   {[
                     { id: 'bureaux',               label: 'Bureaux',         facteur: '×1,2' },
@@ -689,7 +691,7 @@ export default function SimulateurRapide() {
                   ].map(s => (
                     <button key={s.id} type="button" onClick={() => setF('secteur_163', s.id)}
                       style={{ padding: '8px 6px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
-                        background: form.secteur_163 === s.id ? '#EFF6FF' : C.bg,
+                        background: form.secteur_163 === s.id ? C.accentSoft : C.bg,
                         border: `1px solid ${form.secteur_163 === s.id ? C.accent : C.border}` }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: form.secteur_163 === s.id ? '#2563EB' : C.text }}>{s.label}</div>
                       <div style={{ fontSize: 10, color: form.secteur_163 === s.id ? '#2563EB' : C.textSoft }}>{s.facteur}</div>
@@ -700,13 +702,13 @@ export default function SimulateurRapide() {
 
               {/* Coût installation */}
               <div style={{ marginBottom: 14 }}>
-                <Label>Coût installation PAC</Label>
-                <NumInput value={form.cout_installation_163} onChange={v => setF('cout_installation_163', v)} placeholder="ex : 45000" suffix="€" />
+                <Label C={C}>Coût installation PAC</Label>
+                <NumInput value={form.cout_installation_163} onChange={v => setF('cout_installation_163', v)} placeholder="ex : 45000" suffix="€"  C={C}/>
               </div>
 
               {/* Bonification ×3 */}
               <div onClick={() => setF('bonification_163', !form.bonification_163)}
-                style={{ display: 'flex', alignItems: 'center', gap: 12, background: form.bonification_163 ? '#F0FDF4' : '#F8FAFC', border: `1px solid ${form.bonification_163 ? '#86EFAC' : C.border}`, borderRadius: 8, padding: '11px 16px', cursor: 'pointer', userSelect: 'none' }}>
+                style={{ display: 'flex', alignItems: 'center', gap: 12, background: form.bonification_163 ? '#F0FDF4' : C.bg, border: `1px solid ${form.bonification_163 ? '#86EFAC' : C.border}`, borderRadius: 8, padding: '11px 16px', cursor: 'pointer', userSelect: 'none' }}>
                 <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${form.bonification_163 ? '#16A34A' : C.border}`, background: form.bonification_163 ? '#16A34A' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
                   {form.bonification_163 && <span style={{ color: '#fff', fontSize: 13, fontWeight: 900, lineHeight: 1 }}>✓</span>}
                 </div>
@@ -722,7 +724,7 @@ export default function SimulateurRapide() {
             {isVentil && (<>
               {/* Type ventilation */}
               <div style={{ marginBottom: 14 }}>
-                <Label>Type de ventilation</Label>
+                <Label C={C}>Type de ventilation</Label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {[
                     { id: 'modulee_proportionnelle', label: 'Modulée proportionnelle',        desc: 'Variable selon CO₂ ou nombre d\'occupants' },
@@ -732,7 +734,7 @@ export default function SimulateurRapide() {
                    .map(t => (
                     <button key={t.id} type="button" onClick={() => setF('type_ventil', t.id)}
                       style={{ padding: '9px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-                        background: form.type_ventil === t.id ? '#EFF6FF' : C.bg,
+                        background: form.type_ventil === t.id ? C.accentSoft : C.bg,
                         border: `1px solid ${form.type_ventil === t.id ? C.accent : C.border}` }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: form.type_ventil === t.id ? '#2563EB' : C.text }}>{t.label}</div>
                       <div style={{ fontSize: 10, color: C.textSoft, marginTop: 1 }}>{t.desc}</div>
@@ -743,7 +745,7 @@ export default function SimulateurRapide() {
 
               {/* Secteur */}
               <div style={{ marginBottom: 14 }}>
-                <Label>Secteur d'activité</Label>
+                <Label C={C}>Secteur d'activité</Label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                   {[
                     { id: 'bureaux',      label: 'Bureaux' },
@@ -758,7 +760,7 @@ export default function SimulateurRapide() {
                     <button key={s.id} type="button" disabled={s.disabled}
                       onClick={() => !s.disabled && setF('secteur_ventil', s.id)}
                       style={{ padding: '8px 10px', borderRadius: 7, cursor: s.disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit', textAlign: 'center', opacity: s.disabled ? .4 : 1,
-                        background: form.secteur_ventil === s.id ? '#EFF6FF' : C.bg,
+                        background: form.secteur_ventil === s.id ? C.accentSoft : C.bg,
                         border: `1px solid ${form.secteur_ventil === s.id ? C.accent : C.border}` }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: form.secteur_ventil === s.id ? '#2563EB' : C.text }}>{s.label}</div>
                       <div style={{ fontSize: 10, color: C.textSoft, marginTop: 1 }}>
@@ -772,12 +774,12 @@ export default function SimulateurRapide() {
               {/* Surface + coût */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
                 <div>
-                  <Label>Surface ventilée</Label>
-                  <NumInput value={form.surface_ventilee} onChange={v => setF('surface_ventilee', v)} placeholder="ex : 800" suffix="m²" />
+                  <Label C={C}>Surface ventilée</Label>
+                  <NumInput value={form.surface_ventilee} onChange={v => setF('surface_ventilee', v)} placeholder="ex : 800" suffix="m²"  C={C}/>
                 </div>
                 <div>
-                  <Label>Coût installation</Label>
-                  <NumInput value={form.cout_installation_ventil} onChange={v => setF('cout_installation_ventil', v)} placeholder="ex : 25000" suffix="€" />
+                  <Label C={C}>Coût installation</Label>
+                  <NumInput value={form.cout_installation_ventil} onChange={v => setF('cout_installation_ventil', v)} placeholder="ex : 25000" suffix="€"  C={C}/>
                 </div>
               </div>
             </>)}
@@ -786,12 +788,12 @@ export default function SimulateurRapide() {
             {is116 && (<>
               {/* Classe A / B */}
               <div style={{ marginBottom: 14 }}>
-                <Label>Classe GTB</Label>
+                <Label C={C}>Classe GTB</Label>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {['A', 'B'].map(c => (
                     <button key={c} type="button" onClick={() => setF('classe_116', c)}
                       style={{ flex: 1, padding: '9px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 700,
-                        background: form.classe_116 === c ? '#BFDBFE' : C.bg,
+                        background: form.classe_116 === c ? C.accentSoft : C.bg,
                         border: `1px solid ${form.classe_116 === c ? C.accent : C.border}`,
                         color: form.classe_116 === c ? '#2563EB' : C.textMid }}>
                       Classe {c}
@@ -802,12 +804,12 @@ export default function SimulateurRapide() {
 
               {/* Secteur */}
               <div style={{ marginBottom: 14 }}>
-                <Label>Secteur d'activité</Label>
+                <Label C={C}>Secteur d'activité</Label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                   {SECTEURS_116.map(s => (
                     <button key={s.id} type="button" onClick={() => setF('secteur_116', s.id)}
                       style={{ padding: '8px 10px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
-                        background: form.secteur_116 === s.id ? '#EFF6FF' : C.bg,
+                        background: form.secteur_116 === s.id ? C.accentSoft : C.bg,
                         border: `1px solid ${form.secteur_116 === s.id ? C.accent : C.border}` }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: form.secteur_116 === s.id ? '#2563EB' : C.text }}>{s.label}</div>
                     </button>
@@ -817,7 +819,7 @@ export default function SimulateurRapide() {
 
               {/* Surfaces par usage avec badges coefficients */}
               <div style={{ marginBottom: 14 }}>
-                <Label>Surfaces gérées par usage (m²) — au moins 1</Label>
+                <Label C={C}>Surfaces gérées par usage (m²) — au moins 1</Label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {USAGES_116.map(u => {
                     const coeff = COEFFICIENTS_116[form.classe_116]?.[form.secteur_116]?.[u.key]
@@ -826,7 +828,7 @@ export default function SimulateurRapide() {
                         <div>
                           <span style={{ fontSize: 12, color: C.text }}>{u.label}</span>
                           {coeff != null && (
-                            <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 700, color: '#2563EB', background: '#EFF6FF', borderRadius: 4, padding: '1px 5px' }}>
+                            <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 700, color: C.accent, background: C.accentSoft, borderRadius: 4, padding: '1px 5px' }}>
                               {coeff} kWh/m²
                             </span>
                           )}
@@ -845,7 +847,7 @@ export default function SimulateurRapide() {
 
               {/* Bonification */}
               <div style={{ marginBottom: 14 }}>
-                <Label>Bonification</Label>
+                <Label C={C}>Bonification</Label>
                 <BtnGroup
                   options={[
                     { id: 'none',        label: 'Aucune ×1' },
@@ -854,13 +856,14 @@ export default function SimulateurRapide() {
                   ]}
                   value={form.bonif_116}
                   onChange={v => setF('bonif_116', v)}
+                C={C}
                 />
               </div>
 
               {/* Coût installation */}
               <div>
-                <Label>Coût installation GTB</Label>
-                <NumInput value={form.cout_installation_116} onChange={v => setF('cout_installation_116', v)} placeholder="ex : 25000" suffix="€" />
+                <Label C={C}>Coût installation GTB</Label>
+                <NumInput value={form.cout_installation_116} onChange={v => setF('cout_installation_116', v)} placeholder="ex : 25000" suffix="€"  C={C}/>
               </div>
             </>)}
 
@@ -868,7 +871,7 @@ export default function SimulateurRapide() {
             {isIsolation && (<>
               {/* Résistance thermique R */}
               <div style={{ marginBottom: 14 }}>
-                <Label>Résistance thermique R (m².K/W)</Label>
+                <Label C={C}>Résistance thermique R (m².K/W)</Label>
                 <NumInput
                   value={form.resistance_r_103}
                   onChange={v => setF('resistance_r_103', v)}
@@ -885,12 +888,12 @@ export default function SimulateurRapide() {
 
               {/* Secteur */}
               <div style={{ marginBottom: 14 }}>
-                <Label>Secteur d'activité</Label>
+                <Label C={C}>Secteur d'activité</Label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                   {Object.entries(LABELS_SECTEUR_103).map(([id, label]) => (
                     <button key={id} type="button" onClick={() => setF('secteur_103', id)}
                       style={{ padding: '8px 10px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center',
-                        background: form.secteur_103 === id ? '#EFF6FF' : C.bg,
+                        background: form.secteur_103 === id ? C.accentSoft : C.bg,
                         border: `1px solid ${form.secteur_103 === id ? C.accent : C.border}` }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: form.secteur_103 === id ? '#2563EB' : C.text }}>{label}</div>
                       <div style={{ fontSize: 10, color: C.textSoft, marginTop: 1 }}>×{FACTEURS_SECTEUR_103[id]}</div>
@@ -902,12 +905,12 @@ export default function SimulateurRapide() {
               {/* Surface + coût */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
                 <div>
-                  <Label>Surface d'isolant</Label>
-                  <NumInput value={form.surface_isolant_103} onChange={v => setF('surface_isolant_103', v)} placeholder="ex : 500" suffix="m²" />
+                  <Label C={C}>Surface d'isolant</Label>
+                  <NumInput value={form.surface_isolant_103} onChange={v => setF('surface_isolant_103', v)} placeholder="ex : 500" suffix="m²"  C={C}/>
                 </div>
                 <div>
-                  <Label>Coût installation</Label>
-                  <NumInput value={form.cout_installation_103} onChange={v => setF('cout_installation_103', v)} placeholder="ex : 18000" suffix="€" />
+                  <Label C={C}>Coût installation</Label>
+                  <NumInput value={form.cout_installation_103} onChange={v => setF('cout_installation_103', v)} placeholder="ex : 18000" suffix="€"  C={C}/>
                 </div>
               </div>
             </>)}
@@ -984,12 +987,12 @@ export default function SimulateurRapide() {
               </div>
             )}
             {results.rentable === null && results.kwhCumac > 0 && (
-              <div style={{ textAlign: 'center', padding: '8px 12px', borderRadius: 8, background: '#F8FAFC', border: `1px solid ${C.border}` }}>
+              <div style={{ textAlign: 'center', padding: '8px 12px', borderRadius: 8, background: C.bg, border: `1px solid ${C.border}` }}>
                 <div style={{ fontSize: 12, color: C.textSoft }}>Saisir le coût d'installation pour voir la rentabilité</div>
               </div>
             )}
             {results.kwhCumac === 0 && (
-              <div style={{ textAlign: 'center', padding: '8px 12px', borderRadius: 8, background: '#F8FAFC', border: `1px solid ${C.border}` }}>
+              <div style={{ textAlign: 'center', padding: '8px 12px', borderRadius: 8, background: C.bg, border: `1px solid ${C.border}` }}>
                 <div style={{ fontSize: 12, color: C.textSoft }}>Renseignez les données techniques pour voir le résultat</div>
               </div>
             )}

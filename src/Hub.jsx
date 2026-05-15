@@ -5,40 +5,19 @@ import useStore from "./store/useStore";
 import { refDefault, nextRef } from "./lib/genRef";
 import { PDFViewer, pdf } from "@react-pdf/renderer";
 import { DevisPDFDoc } from "./components/DevisPDF";
+import { useAppTheme } from "./lib/theme";
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 const fmt  = n => Number(n||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtE = n => fmt(n)+" €";
 const BAT_QTE = 30;
 
-// ─── DESIGN TOKENS ──────────────────────────────────────────────────────────
-const C = {
-  bg:       "#F4F6F9",
-  surface:  "#FFFFFF",
-  border:   "#E2E8F0",
-  nav:      "#1E293B",
-  navText:  "#F8FAFC",
-  accent:   "#2563EB",
-  accentL:  "#EFF6FF",
-  text:     "#0F172A",
-  textMid:  "#475569",
-  textSoft: "#94A3B8",
-  green:    "#16A34A",
-  greenL:   "#DCFCE7",
-  orange:   "#D97706",
-  orangeL:  "#FEF3C7",
-  red:      "#DC2626",
-  redL:     "#FEE2E2",
-  yellow:   "#CA8A04",
-};
-
-const T = {
-  h1: { fontSize:22, fontWeight:800, color:C.text },
-  h2: { fontSize:17, fontWeight:700, color:C.text },
-  h3: { fontSize:14, fontWeight:700, color:C.text },
-  body: { fontSize:14, color:C.text },
-  sm:   { fontSize:12, color:C.textMid },
-  xs:   { fontSize:11, color:C.textSoft },
+// ─── SEMANTIC COLORS (statiques, non affectées par le thème) ────────────────
+const SEM = {
+  green:   "#16A34A", greenL:  "#DCFCE7",
+  orange:  "#D97706", orangeL: "#FEF3C7",
+  red:     "#DC2626", redL:    "#FEE2E2",
+  yellow:  "#CA8A04",
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -173,6 +152,7 @@ const AVIS = {
 };
 
 function UploadZone({ label, sublabel, file, onFile }) {
+  const C = useAppTheme();
   const ref = useRef();
   const [drag, setDrag] = useState(false);
   const onDrop = useCallback(e => {
@@ -182,7 +162,7 @@ function UploadZone({ label, sublabel, file, onFile }) {
   return (
     <div onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)} onDrop={onDrop}
       onClick={()=>ref.current.click()}
-      style={{border:`2px dashed ${drag?"#2563EB":file?"#16A34A":C.border}`,borderRadius:10,padding:"28px 16px",textAlign:"center",cursor:"pointer",background:drag?"#EFF6FF":file?"#F0FDF4":"#FAFBFC",transition:"all .2s"}}>
+      style={{border:`2px dashed ${drag?C.accent:file?"#16A34A":C.border}`,borderRadius:10,padding:"28px 16px",textAlign:"center",cursor:"pointer",background:drag?C.accentSoft:file?"#F0FDF4":C.bg,transition:"all .2s"}}>
       <input ref={ref} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{display:"none"}} onChange={e=>e.target.files[0]&&onFile(e.target.files[0])}/>
       <div style={{fontSize:28,marginBottom:8}}>{file?"✅":"📂"}</div>
       <div style={{fontSize:14,fontWeight:600,color:file?"#16A34A":C.text,marginBottom:4}}>{label}</div>
@@ -195,6 +175,7 @@ function UploadZone({ label, sublabel, file, onFile }) {
 }
 
 function Accordion({ title, count, countColor, children, collapsed=false }) {
+  const C = useAppTheme();
   const [open, setOpen] = useState(!collapsed);
   return (
     <div style={{border:`1px solid ${C.border}`,borderRadius:8,marginBottom:10,overflow:"hidden"}}>
@@ -211,6 +192,7 @@ function Accordion({ title, count, countColor, children, collapsed=false }) {
 }
 
 function PointCard({ item, cfg, val, note, onVal, onNote, openNote, toggleNote }) {
+  const C = useAppTheme();
   return (
     <div style={{background:cfg.bg,borderLeft:`4px solid ${cfg.border}`,borderBottom:`1px solid ${C.border}`,padding:"14px 18px"}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
@@ -223,8 +205,8 @@ function PointCard({ item, cfg, val, note, onVal, onNote, openNote, toggleNote }
           <div style={{fontSize:13,color:C.textMid,lineHeight:1.5}}>{item.description}</div>
           {(item.valeur_ah||item.valeur_devis) && (
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:10}}>
-              <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:6,padding:"7px 11px"}}>
-                <div style={{fontSize:10,color:"#2563EB",fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",marginBottom:2}}>AH</div>
+              <div style={{background:C.accentSoft,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 11px"}}>
+                <div style={{fontSize:10,color:C.accent,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",marginBottom:2}}>AH</div>
                 <div style={{fontSize:12,color:C.text}}>{item.valeur_ah||"—"}</div>
               </div>
               <div style={{background:"#FEF2F2",border:"1px solid #FCA5A5",borderRadius:6,padding:"7px 11px"}}>
@@ -241,11 +223,11 @@ function PointCard({ item, cfg, val, note, onVal, onNote, openNote, toggleNote }
               ✓ OK
             </button>
             <button onClick={()=>onVal(val==="dismissed"?"pending":"dismissed")}
-              style={{padding:"5px 11px",borderRadius:6,border:`1.5px solid ${val==="dismissed"?"#94A3B8":C.border}`,background:val==="dismissed"?"#F8FAFC":C.surface,color:val==="dismissed"?"#64748B":C.textSoft,fontSize:12,cursor:"pointer"}}>
+              style={{padding:"5px 11px",borderRadius:6,border:`1.5px solid ${val==="dismissed"?"#94A3B8":C.border}`,background:val==="dismissed"?C.bg:C.surface,color:val==="dismissed"?"#64748B":C.textSoft,fontSize:12,cursor:"pointer"}}>
               ↷ Skip
             </button>
             <button onClick={toggleNote}
-              style={{padding:"5px 8px",borderRadius:6,border:`1.5px solid ${note?"#2563EB":C.border}`,background:note?"#EFF6FF":C.surface,color:note?"#2563EB":C.textSoft,fontSize:12,cursor:"pointer"}}>📝</button>
+              style={{padding:"5px 8px",borderRadius:6,border:`1.5px solid ${note?C.accent:C.border}`,background:note?C.accentSoft:C.surface,color:note?C.accent:C.textSoft,fontSize:12,cursor:"pointer"}}>📝</button>
           </div>
           <div style={{fontSize:11,color:val==="confirmed"?"#16A34A":val==="dismissed"?"#94A3B8":C.textSoft}}>{val==="confirmed"?"✓ Confirmé":val==="dismissed"?"Ignoré":"En attente"}</div>
         </div>
@@ -258,6 +240,8 @@ function PointCard({ item, cfg, val, note, onVal, onNote, openNote, toggleNote }
 }
 
 function VerificateurCEE({ prefill }) {
+  const C = useAppTheme();
+  const T = { h2: { fontSize:17, fontWeight:700, color:C.text }, sm: { fontSize:12, color:C.textMid } };
   const { session } = useStore();
   const [fiche,setFiche]   = useState(prefill?.fiche || "BAT-TH-142");
   const [ref_,setRef_]     = useState(prefill?.ref || "");
@@ -374,7 +358,7 @@ Expert CEE. Titres/descriptions max 80 caractères.
               <h2 style={{...T.h2,marginBottom:4}}>Analyse de dossier CEE par IA</h2>
               <p style={{...T.sm,margin:0}}>Uploadez l'AH et le devis — Claude détecte automatiquement les incohérences entre les deux documents.</p>
               {prefill && (
-                <div style={{marginTop:8,background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:7,padding:"7px 12px",fontSize:12,color:"#1D4ED8",display:"flex",alignItems:"center",gap:6}}>
+                <div style={{marginTop:8,background:C.accentSoft,border:`1px solid ${C.border}`,borderRadius:7,padding:"7px 12px",fontSize:12,color:C.accent,display:"flex",alignItems:"center",gap:6}}>
                   📁 Documents pré-chargés depuis le dossier {prefill.ref}
                   {prefillLoading && <span style={{color:"#60A5FA"}}>— ⏳ chargement des fichiers…</span>}
                 </div>
@@ -391,7 +375,7 @@ Expert CEE. Titres/descriptions max 80 caractères.
                     const done = allItems.filter(i => (a.valid_state||{})[i.id] !== 'pending').length;
                     return (
                       <div key={a.id} onClick={() => loadAnalysis(a)} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:7,border:`1px solid ${C.border}`,cursor:"pointer",background:C.bg,transition:"background .1s"}}
-                        onMouseEnter={e=>e.currentTarget.style.background="#EFF6FF"} onMouseLeave={e=>e.currentTarget.style.background=C.bg}>
+                        onMouseEnter={e=>e.currentTarget.style.background=C.accentSoft} onMouseLeave={e=>e.currentTarget.style.background=C.bg}>
                         <span style={{fontSize:18}}>{avis==="CONFORME"?"✅":avis==="BLOQUANT"?"🚫":"⚠️"}</span>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:12,fontWeight:700,color:C.text}}>{a.ref || "(sans référence)"} <span style={{fontWeight:400,color:C.textMid}}>— {a.fiche}</span></div>
@@ -535,6 +519,8 @@ const DTC = {padding:"5px 6px",borderBottom:"1px solid #F1F5F9",verticalAlign:"m
 
 // ── Écran liste des devis ──────────────────────────────────────────────────
 function ListeDevis({ devis, onCreate, onOpen, onDelete, confirmDeleteId, onCancelDelete }) {
+  const C = useAppTheme();
+  const T = { h2: { fontSize:17, fontWeight:700, color:C.text }, sm: { fontSize:12, color:C.textMid } };
   return (
     <div style={{padding:"24px",height:"100%",overflowY:"auto"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
@@ -608,7 +594,7 @@ function ListeDevis({ devis, onCreate, onOpen, onDelete, confirmDeleteId, onCanc
 
                   {/* ── Tags : Fiche + Prestataire ── */}
                   <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-                    <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,background:"#EFF6FF",color:"#1E40AF",border:"1px solid #BFDBFE"}}>
+                    <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,background:C.accentSoft,color:C.accent,border:`1px solid ${C.border}`}}>
                       {fiche}
                     </span>
                     {presta && (
@@ -658,6 +644,7 @@ function ListeDevis({ devis, onCreate, onOpen, onDelete, confirmDeleteId, onCanc
 
 // ── Autocomplete client (SIRENE) ──────────────────────────────────────────
 function ClientAutocomplete({ value, onChange, onSelect, style }) {
+  const C = useAppTheme();
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
   const timer = useRef(null);
@@ -713,6 +700,7 @@ function ClientAutocomplete({ value, onChange, onSelect, style }) {
 
 // ── Étape 1 — Infos client ────────────────────────────────────────────────
 function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
+  const C = useAppTheme();
   const [ficheDevis, setFicheDevis]   = useState("BAT-TH-142");
   const [nomClient, setNomClient]     = useState("");
   const [siret, setSiret]             = useState("");
@@ -882,7 +870,7 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
         </div>
 
         {/* Fiche CEE */}
-        <div style={{marginBottom:18,padding:"12px 14px",background:C.accentL,borderRadius:8,border:`1px solid #BFDBFE`}}>
+        <div style={{marginBottom:18,padding:"12px 14px",background:C.accentSoft,borderRadius:8,border:`1px solid #BFDBFE`}}>
           <label style={L}>Fiche CEE</label>
           <select value={ficheDevis} onChange={e=>setFicheDevis(e.target.value)} style={{...INP,background:C.surface,fontWeight:600}}>
             {Object.entries(FICHES_DEVIS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
@@ -921,16 +909,16 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
 
         {/* Config destratificateur — uniquement BAT-TH-142 / IND-BA-110 */}
         {needsDestrat && (
-          <div style={{marginBottom:16,padding:"12px 14px",background:"#EFF6FF",borderRadius:8,border:"1px solid #BFDBFE"}}>
-            <div style={{fontSize:12,fontWeight:700,color:"#1D4ED8",marginBottom:10}}>⚙️ Destratificateur TECH (ajouté automatiquement)</div>
+          <div style={{marginBottom:16,padding:"12px 14px",background:C.accentSoft,borderRadius:8,border:`1px solid ${C.border}`}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:10}}>⚙️ Destratificateur TECH (ajouté automatiquement)</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10}}>
               <div>
-                <label style={{...L,color:"#1D4ED8"}}>Désignation</label>
-                <input value={destratDesignation} onChange={e=>setDestratDesignation(e.target.value)} style={{...INP,background:"#F8FAFF"}}/>
+                <label style={{...L,color:C.accent}}>Désignation</label>
+                <input value={destratDesignation} onChange={e=>setDestratDesignation(e.target.value)} style={{...INP,background:C.bg}}/>
               </div>
               <div>
-                <label style={{...L,color:"#1D4ED8"}}>Prix achat (€/U)</label>
-                <input type="number" value={destratPrix} onChange={e=>setDestratPrix(Number(e.target.value)||0)} style={{...INP,width:90,background:"#F8FAFF"}}/>
+                <label style={{...L,color:C.accent}}>Prix achat (€/U)</label>
+                <input type="number" value={destratPrix} onChange={e=>setDestratPrix(Number(e.target.value)||0)} style={{...INP,width:90,background:C.bg}}/>
               </div>
             </div>
           </div>
@@ -948,7 +936,7 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
                 {["A","B"].map(c=>(
                   <button key={c} type="button" onClick={()=>setClasse116(c)}
                     style={{flex:1,padding:"7px",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700,
-                      background:classe116===c?"#BFDBFE":C.bg,border:`1px solid ${classe116===c?"#2563EB":C.border}`,color:classe116===c?"#2563EB":C.textMid}}>
+                      background:classe116===c?C.accentSoft:C.bg,border:`1px solid ${classe116===c?C.accent:C.border}`,color:classe116===c?C.accent:C.textMid}}>
                     Classe {c}
                   </button>
                 ))}
@@ -962,8 +950,8 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
                 {SECTEURS_116.map(s=>(
                   <button key={s.id} type="button" onClick={()=>setSecteur116(s.id)}
                     style={{padding:"6px 8px",borderRadius:7,cursor:"pointer",fontFamily:"inherit",textAlign:"center",
-                      background:secteur116===s.id?"#EFF6FF":C.bg,border:`1px solid ${secteur116===s.id?"#2563EB":C.border}`}}>
-                    <div style={{fontSize:11,fontWeight:700,color:secteur116===s.id?"#2563EB":C.text}}>{s.label}</div>
+                      background:secteur116===s.id?C.accentSoft:C.bg,border:`1px solid ${secteur116===s.id?C.accent:C.border}`}}>
+                    <div style={{fontSize:11,fontWeight:700,color:secteur116===s.id?C.accent:C.text}}>{s.label}</div>
                   </button>
                 ))}
               </div>
@@ -976,7 +964,7 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
                 {["H1","H2","H3"].map(z=>(
                   <button key={z} type="button" onClick={()=>setZone116(z)}
                     style={{flex:1,padding:"7px",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700,
-                      background:zone116===z?"#BFDBFE":C.bg,border:`1px solid ${zone116===z?"#2563EB":C.border}`,color:zone116===z?"#2563EB":C.textMid}}>
+                      background:zone116===z?C.accentSoft:C.bg,border:`1px solid ${zone116===z?C.accent:C.border}`,color:zone116===z?C.accent:C.textMid}}>
                     {z}
                   </button>
                 ))}
@@ -1017,7 +1005,7 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
                 {[{v:"none",l:"Aucune ×1"},{v:"creation",l:"Création ×2"},{v:"amelioration",l:"Amélioration ×1,5"}].map(b=>(
                   <button key={b.v} type="button" onClick={()=>setBonif116(b.v)}
                     style={{flex:1,padding:"6px 4px",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700,textAlign:"center",
-                      background:bonif116===b.v?"#BFDBFE":C.bg,border:`1px solid ${bonif116===b.v?"#2563EB":C.border}`,color:bonif116===b.v?"#2563EB":C.textMid}}>
+                      background:bonif116===b.v?C.accentSoft:C.bg,border:`1px solid ${bonif116===b.v?C.accent:C.border}`,color:bonif116===b.v?C.accent:C.textMid}}>
                     {b.l}
                   </button>
                 ))}
@@ -1052,6 +1040,7 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
 
 // ── Étape 2 — Upload devis prestataire + extraction IA ────────────────────
 function UploadPrestaDevis({ infosClient, onLignesExtracted, onSkip, onBack }) {
+  const C = useAppTheme();
   const ficheCEE  = infosClient.ficheDevis || "BAT-TH-142";
   const avecCat   = FICHES_DESTRAT.includes(ficheCEE); // BAT-TH-142 / IND-BA-110 → catégorisation MATÉRIEL/MO/DIVERS
 
@@ -1245,7 +1234,7 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
         {/* Steps */}
         <div style={{display:"flex",gap:0,marginBottom:24,borderRadius:8,overflow:"hidden",border:`1px solid ${C.border}`}}>
           {["1 · Infos client","2 · Devis prestataire","3 · Marges & export"].map((s,i)=>(
-            <div key={i} style={{flex:1,padding:"8px 6px",textAlign:"center",fontSize:11,fontWeight:i===1?700:500,background:i===1?C.accent:i===0?"#E2E8F0":C.bg,color:i===1?"#fff":i===0?C.textSoft:C.textSoft,borderRight:i<2?`1px solid ${C.border}`:"none"}}>
+            <div key={i} style={{flex:1,padding:"8px 6px",textAlign:"center",fontSize:11,fontWeight:i===1?700:500,background:i===1?C.accent:i===0?C.border:C.bg,color:i===1?"#fff":i===0?C.textSoft:C.textSoft,borderRight:i<2?`1px solid ${C.border}`:"none"}}>
               {i===0?"✓ "+s:s}
             </div>
           ))}
@@ -1254,7 +1243,7 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
         <div style={{fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>📎 Devis prestataire</div>
         <div style={{fontSize:13,color:C.textMid,marginBottom:14}}>
           Client : <strong>{infosClient.nomClient}</strong> — {infosClient.refDevis}
-          <span style={{marginLeft:10,background:C.accentL,color:C.accent,borderRadius:5,padding:"2px 8px",fontSize:11,fontWeight:700}}>{FICHES_DEVIS[ficheCEE] || ficheCEE}</span>
+          <span style={{marginLeft:10,background:C.accentSoft,color:C.accent,borderRadius:5,padding:"2px 8px",fontSize:11,fontWeight:700}}>{FICHES_DEVIS[ficheCEE] || ficheCEE}</span>
         </div>
 
         {/* Prestataire */}
@@ -1277,7 +1266,7 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
                 {selectedPrestaId && (() => {
                   const p = prestaList.find(x => x.id === selectedPrestaId);
                   return p ? (
-                    <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:7,padding:"8px 12px",fontSize:12,color:"#1E3A8A"}}>
+                    <div style={{background:C.accentSoft,border:`1px solid ${C.border}`,borderRadius:7,padding:"8px 12px",fontSize:12,color:C.accent}}>
                       <strong>{p.nom}</strong>
                       {p.info_legal && <> — {p.info_legal}</>}
                       {p.rge_num && <> · RGE {p.rge_num}</>}
@@ -1306,7 +1295,7 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
               onClick={() => fileRef.current?.click()}
               onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if(f?.type==="application/pdf") setFile(f); }}
               onDragOver={e => e.preventDefault()}
-              style={{border:`2px dashed ${file?C.accent:C.border}`,borderRadius:10,padding:"32px 20px",textAlign:"center",cursor:"pointer",background:file?C.accentL:C.bg,marginBottom:16,transition:"all .2s"}}>
+              style={{border:`2px dashed ${file?C.accent:C.border}`,borderRadius:10,padding:"32px 20px",textAlign:"center",cursor:"pointer",background:file?C.accentSoft:C.bg,marginBottom:16,transition:"all .2s"}}>
               <div style={{fontSize:36,marginBottom:8}}>{file?"📄":"⬆️"}</div>
               <div style={{fontSize:14,fontWeight:700,color:file?C.accent:C.text}}>{file ? file.name : "Glissez le PDF ou cliquez pour sélectionner"}</div>
               <div style={{fontSize:12,color:C.textSoft,marginTop:4}}>{file ? `${(file.size/1024).toFixed(0)} Ko` : "Devis PDF du prestataire (DC LINK, sous-traitant...)"}</div>
@@ -1335,7 +1324,7 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
             </div>
             <div style={{maxHeight:280,overflowY:"auto",marginBottom:16,border:`1px solid ${C.border}`,borderRadius:8}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                <thead><tr style={{background:C.nav,color:C.navText}}>
+                <thead><tr style={{background:C.nav,color:"#F8FAFC"}}>
                   <th style={{padding:"7px 10px",textAlign:"left"}}>Désignation</th>
                   <th style={{padding:"7px 8px",textAlign:"center"}}>Qté</th>
                   <th style={{padding:"7px 8px",textAlign:"right"}}>P.U. achat</th>
@@ -1356,7 +1345,7 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
                 </tbody>
               </table>
             </div>
-            <div style={{fontSize:12,color:C.textMid,marginBottom:14,background:C.accentL,padding:"8px 12px",borderRadius:7,border:`1px solid #BFDBFE`}}>
+            <div style={{fontSize:12,color:C.textMid,marginBottom:14,background:C.accentSoft,padding:"8px 12px",borderRadius:7,border:`1px solid ${C.border}`}}>
               💡 Les marges seront appliquées automatiquement (30% matériel, 25% MO, 10% divers). Tu pourras tout ajuster dans l'éditeur.
             </div>
             <div style={{display:"flex",gap:10}}>
@@ -1374,6 +1363,7 @@ Exemple : [{"designation":"Fourniture et pose isolation combles perdus laine de 
 
 // ── Éditeur d'un devis ─────────────────────────────────────────────────────
 function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = [] }) {
+  const C = useAppTheme();
   const [devis, setDevis] = useState(devisInit);
   const [tab, setTab]     = useState("marges");
   const [editConfig, setEditConfig] = useState(null);
@@ -1533,7 +1523,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
     setSavingToDossier(false);
   };
 
-  const TH  = {padding:"9px 8px",fontSize:12,fontWeight:700,textAlign:"right",color:C.navText,whiteSpace:"nowrap"};
+  const TH  = {padding:"9px 8px",fontSize:12,fontWeight:700,textAlign:"right",color:"#F8FAFC",whiteSpace:"nowrap"};
   const TD  = {padding:"6px 8px",borderBottom:`1px solid ${C.border}`,verticalAlign:"middle"};
   const INP = {border:`1px solid ${C.border}`,borderRadius:5,padding:"3px 6px",fontSize:12,background:C.surface,outline:"none",fontFamily:"inherit",color:C.text};
 
@@ -1565,7 +1555,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
           ))}
           {devis.dossierId && (
             <button onClick={saveToDossier} disabled={savingToDossier}
-              style={{background:savedToDossier?"#16A34A":savingToDossier?"#94A3B8":"#0F172A",color:"#fff",border:`1px solid ${savedToDossier?"#16A34A":"#334155"}`,borderRadius:7,padding:"6px 14px",fontSize:13,fontWeight:600,cursor:savingToDossier?"not-allowed":"pointer"}}>
+              style={{background:savedToDossier?"#16A34A":savingToDossier?"#94A3B8":C.nav,color:"#fff",border:`1px solid ${savedToDossier?"#16A34A":C.border}`,borderRadius:7,padding:"6px 14px",fontSize:13,fontWeight:600,cursor:savingToDossier?"not-allowed":"pointer"}}>
               {savedToDossier ? "✓ Enregistré" : savingToDossier ? "⏳…" : "💾 Dossier"}
             </button>
           )}
@@ -1626,12 +1616,12 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
                 placeholder="…"
                 onKeyDown={e => { if (e.key === "Enter") { const v = parseFloat(e.target.value); if (!isNaN(v)) { applyGlobal(v); e.target.blur(); } } }}
                 onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v) && e.target.value !== "") applyGlobal(v); }}
-                style={{width:60,border:`1px solid ${C.accent}`,borderRadius:5,padding:"3px 6px",fontSize:12,fontWeight:700,color:C.accent,outline:"none",fontFamily:"inherit",background:"#EFF6FF",textAlign:"center"}}
+                style={{width:60,border:`1px solid ${C.accent}`,borderRadius:5,padding:"3px 6px",fontSize:12,fontWeight:700,color:C.accent,outline:"none",fontFamily:"inherit",background:C.accentSoft,textAlign:"center"}}
               />
               <span style={{fontSize:11,color:C.textMid}}>%</span>
             </div>
             <button onClick={addSection}
-              style={{marginLeft:"auto",background:"#1E3A8A",color:"#fff",border:"none",borderRadius:6,padding:"4px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              style={{marginLeft:"auto",background:C.nav,color:"#fff",border:"none",borderRadius:6,padding:"4px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
               📁 Section
             </button>
             <button onClick={addLigne}
@@ -1661,16 +1651,16 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
                       return (
                         <tr key={l.id}>
                           <td style={{...TD,textAlign:"center",color:C.textSoft,fontSize:11}}>—</td>
-                          <td colSpan={6} style={{...TD,background:"#1E3A8A",color:"#fff",fontWeight:700,fontSize:11,letterSpacing:.3}}>
+                          <td colSpan={6} style={{...TD,background:C.nav,color:"#fff",fontWeight:700,fontSize:11,letterSpacing:.3}}>
                             <span style={{marginRight:6}}>📁</span>
                             <input
                               value={l.designation}
                               onChange={e => upd(l.id, "designation", e.target.value)}
-                              style={{background:"transparent",border:"none",borderBottom:"1px solid #93C5FD",color:"#fff",fontWeight:700,fontSize:11,letterSpacing:.3,outline:"none",fontFamily:"inherit",width:"calc(100% - 24px)",padding:"2px 0"}}
+                              style={{background:"transparent",border:"none",borderBottom:`1px solid ${C.accent}`,color:"#fff",fontWeight:700,fontSize:11,letterSpacing:.3,outline:"none",fontFamily:"inherit",width:"calc(100% - 24px)",padding:"2px 0"}}
                             />
                           </td>
-                          <td style={{...TD,textAlign:"center",background:"#1E3A8A"}}>
-                            <button onClick={()=>delLigne(l.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#93C5FD",fontSize:14,padding:"2px"}}>✕</button>
+                          <td style={{...TD,textAlign:"center",background:C.nav}}>
+                            <button onClick={()=>delLigne(l.id)} style={{background:"none",border:"none",cursor:"pointer",color:C.accent,fontSize:14,padding:"2px"}}>✕</button>
                           </td>
                         </tr>
                       );
@@ -1765,22 +1755,22 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
 
                 {/* BAT-TH ligne — rétro-compatibilité anciens devis uniquement */}
                 {batQte > 0 && <tr>
-                  <td colSpan={2} style={{background:"#EFF6FF",padding:"6px 10px",fontWeight:700,fontSize:11,color:"#1D4ED8",textTransform:"uppercase",borderTop:`2px solid ${C.border}`}}>
+                  <td colSpan={2} style={{background:C.accentSoft,padding:"6px 10px",fontWeight:700,fontSize:11,color:C.accent,textTransform:"uppercase",borderTop:`2px solid ${C.border}`}}>
                     BAT-TH-142
                   </td>
-                  <td style={{background:"#EFF6FF",padding:"6px 8px",borderTop:`2px solid ${C.border}`}}>
-                    <input type="number" value={batQte} onChange={e=>setBatQte(Number(e.target.value)||0)} style={{...INP,width:40,textAlign:"center",color:"#1D4ED8"}}/>
-                    <span style={{fontSize:10,color:"#1D4ED8",marginLeft:2}}>U</span>
+                  <td style={{background:C.accentSoft,padding:"6px 8px",borderTop:`2px solid ${C.border}`}}>
+                    <input type="number" value={batQte} onChange={e=>setBatQte(Number(e.target.value)||0)} style={{...INP,width:40,textAlign:"center",color:C.accent}}/>
+                    <span style={{fontSize:10,color:C.accent,marginLeft:2}}>U</span>
                   </td>
-                  <td colSpan={3} style={{background:"#EFF6FF",padding:"6px 8px",textAlign:"right",color:"#1D4ED8",borderTop:`2px solid ${C.border}`}}>
+                  <td colSpan={3} style={{background:C.accentSoft,padding:"6px 8px",textAlign:"right",color:C.accent,borderTop:`2px solid ${C.border}`}}>
                     <span style={{fontSize:11,marginRight:4}}>P.U. :</span>
-                    <input type="number" value={batPuVente} onChange={e=>setBatPuVente(Number(e.target.value)||0)} style={{...INP,width:70,textAlign:"right",color:"#1D4ED8",fontWeight:700}}/>
-                    <span style={{fontSize:11,marginLeft:2,color:"#1D4ED8"}}>€/U</span>
+                    <input type="number" value={batPuVente} onChange={e=>setBatPuVente(Number(e.target.value)||0)} style={{...INP,width:70,textAlign:"right",color:C.accent,fontWeight:700}}/>
+                    <span style={{fontSize:11,marginLeft:2,color:C.accent}}>€/U</span>
                   </td>
-                  <td style={{background:"#EFF6FF",padding:"6px 8px",textAlign:"right",fontWeight:700,color:"#1D4ED8",borderTop:`2px solid ${C.border}`}}>
+                  <td style={{background:C.accentSoft,padding:"6px 8px",textAlign:"right",fontWeight:700,color:C.accent,borderTop:`2px solid ${C.border}`}}>
                     {fmt(batQte*batPuVente)} €
                   </td>
-                  <td style={{background:"#EFF6FF",borderTop:`2px solid ${C.border}`}}/>
+                  <td style={{background:C.accentSoft,borderTop:`2px solid ${C.border}`}}/>
                 </tr>}
 
                 {/* Prime CEE simulateur — référence lecture seule */}
@@ -1818,7 +1808,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
 
                 {/* Total */}
                 <tr style={{background:C.nav}}>
-                  <td colSpan={6} style={{padding:"9px 10px",color:C.navText,fontWeight:700,fontSize:13}}>TOTAL HT / RESTE TTC</td>
+                  <td colSpan={6} style={{padding:"9px 10px",color:"#F8FAFC",fontWeight:700,fontSize:13}}>TOTAL HT / RESTE TTC</td>
                   <td colSpan={2} style={{padding:"9px 10px",textAlign:"right",color:"#93C5FD",fontWeight:800,fontSize:13}}>{fmtE(stats.totalHT)} / {fmtE(stats.resteTTC)}</td>
                 </tr>
               </tbody>
@@ -1827,7 +1817,7 @@ function EditeurDevis({ devisInit, onBack, onSave, onReupload, dossiersList = []
         </div>
 
         {/* APERÇU DEVIS — PDFViewer react-pdf */}
-        <div style={{flex:1,overflow:"hidden",background:"#E2E8F0",display:"flex",flexDirection:"column"}}>
+        <div style={{flex:1,overflow:"hidden",background:C.border,display:"flex",flexDirection:"column"}}>
           <PDFViewer width="100%" height="100%" style={{border:"none"}}>
             <DevisPDFDoc
               devis={devis}
@@ -1886,6 +1876,7 @@ function defaultConditions(sousTraitant, rgeNum, rgeValidite, societeNom, condPa
 }
 
 function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave, onCancel }) {
+  const C = useAppTheme();
   const p = devis.pdfParams || {};
   const [activeTab, setActiveTab] = useState(initTab);
   const [prestaList, setPrestaList] = useState([]);
@@ -2115,7 +2106,7 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
                         ? <span style={{fontSize:11,fontWeight:700,color:"#7C3AED",background:"#F5F3FF",border:"1px solid #DDD6FE",borderRadius:5,padding:"2px 8px"}}>
                             Prime CEE : {Number(d.prime_estimee).toLocaleString("fr-FR")} € → sera chargée dans le devis
                           </span>
-                        : <span style={{fontSize:11,color:"#94A3B8"}}>Aucune prime CEE enregistrée sur ce dossier.</span>
+                        : <span style={{fontSize:11,color:C.textSoft}}>Aucune prime CEE enregistrée sur ce dossier.</span>
                       }
                     </div>
                   );
@@ -2158,12 +2149,12 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
                   <label style={{...L,marginBottom:0}}>Relevé technique du site — Fiche CEE</label>
                   <button type="button"
                     onClick={() => set("mentionReleve", genereReleve({ ficheDevis: form.ficheDevis }))}
-                    style={{fontSize:11,padding:"3px 10px",background:"#EFF6FF",border:"1px solid #BFDBFE",color:"#2563EB",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontWeight:600,whiteSpace:"nowrap"}}>
+                    style={{fontSize:11,padding:"3px 10px",background:C.accentSoft,border:`1px solid ${C.border}`,color:C.accent,borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontWeight:600,whiteSpace:"nowrap"}}>
                     ✨ Auto-générer
                   </button>
                   {form.mentionReleve && (
                     <button type="button" onClick={() => set("mentionReleve", "")}
-                      style={{fontSize:11,padding:"3px 8px",background:"transparent",border:"1px solid #E2E8F0",color:"#94A3B8",borderRadius:6,cursor:"pointer",fontFamily:"inherit"}}>
+                      style={{fontSize:11,padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,color:C.textSoft,borderRadius:6,cursor:"pointer",fontFamily:"inherit"}}>
                       Effacer
                     </button>
                   )}
@@ -2178,7 +2169,7 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
           {/* ── Délégataire ── */}
           {activeTab === "delegataire" && (
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
-              <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#1E3A8A",lineHeight:1.6}}>
+              <div style={{background:C.accentSoft,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.accent,lineHeight:1.6}}>
                 Le <strong>délégataire</strong> est l'organisme qui finance la prime CEE (ex&nbsp;: SOFT.IA, Effy, Hellio…). Son nom et SIREN apparaissent dans la clause légale CEE du devis.
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
@@ -2204,12 +2195,12 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
                         `Les travaux objet du présent document donneront lieu à une contribution financière de ${nom} (SIREN ${siren}), sous réserve de la fourniture exclusive des documents CEE et de la validation du dossier. Montant estimé : [à compléter] €.`
                       );
                     }}
-                    style={{fontSize:11,padding:"3px 10px",background:"#EFF6FF",border:"1px solid #BFDBFE",color:"#2563EB",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontWeight:600,whiteSpace:"nowrap"}}>
+                    style={{fontSize:11,padding:"3px 10px",background:C.accentSoft,border:`1px solid ${C.border}`,color:C.accent,borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontWeight:600,whiteSpace:"nowrap"}}>
                     ✨ Générer
                   </button>
                   {form.mentionCEE && (
                     <button type="button" onClick={() => set("mentionCEE","")}
-                      style={{fontSize:11,padding:"3px 8px",background:"transparent",border:"1px solid #E2E8F0",color:"#94A3B8",borderRadius:6,cursor:"pointer",fontFamily:"inherit"}}>
+                      style={{fontSize:11,padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,color:C.textSoft,borderRadius:6,cursor:"pointer",fontFamily:"inherit"}}>
                       Effacer
                     </button>
                   )}
@@ -2227,7 +2218,7 @@ function ModalDevisConfig({ devis, initTab = "client", dossiersList = [], onSave
           {/* ── Mentions légales ── */}
           {activeTab === "mentions" && (
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
-              <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#1E3A8A",lineHeight:1.6}}>
+              <div style={{background:C.accentSoft,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.accent,lineHeight:1.6}}>
                 Ces clauses apparaissent dans la section <strong>«&nbsp;Réserves et conditions&nbsp;»</strong> du devis (page 2). Modifiez le texte librement — cliquez sur <strong>↺</strong> pour remettre le texte par défaut d'une clause.
               </div>
               {form.conditions.map((cond, idx) => {
@@ -2542,6 +2533,7 @@ const normalizeDevis = d => ({
 });
 
 function MargesDevis({ prefill }) {
+  const C = useAppTheme();
   // Affiche immédiatement le cache localStorage pendant le chargement Supabase
   const [devisList, setDevisList] = useState(() => {
     try { const c = localStorage.getItem(CACHE_KEY); return c ? JSON.parse(c) : []; } catch { return []; }
@@ -2770,6 +2762,8 @@ const renderModule = (page, prefill) => {
 };
 
 export default function AppHub() {
+  const C = useAppTheme();
+  const T = { h1: { fontSize:22, fontWeight:800, color:C.text }, h2: { fontSize:17, fontWeight:700, color:C.text }, h3: { fontSize:14, fontWeight:700, color:C.text }, body: { fontSize:14, color:C.text }, sm: { fontSize:12, color:C.textMid }, xs: { fontSize:11, color:C.textSoft } };
   const location = useLocation();
   const { module: initModule, prefill: initPrefill } = location.state || {};
   const navigate = useNavigate();
@@ -2794,7 +2788,7 @@ export default function AppHub() {
         </button>
         <div style={{width:1,height:20,background:"#334155"}}/>
         <span style={{fontSize:17}}>{current.icon}</span>
-        <span style={{color:C.navText,fontWeight:700,fontSize:15}}>{current.titre}</span>
+        <span style={{color:"#F8FAFC",fontWeight:700,fontSize:15}}>{current.titre}</span>
         <span style={{color:"#64748B",fontSize:13}}>— {current.sousTitre}</span>
         {/* Raccourcis */}
         <div style={{marginLeft:"auto",display:"flex",gap:6}}>
@@ -2858,7 +2852,7 @@ export default function AppHub() {
 
               {/* Badge */}
               <div style={{position:"absolute",top:14,right:14}}>
-                <span style={{background:m.actif?C.greenL:C.orangeL,color:m.actif?C.green:C.orange,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>{m.actif?"Disponible":"Bientôt"}</span>
+                <span style={{background:m.actif?SEM.greenL:SEM.orangeL,color:m.actif?SEM.green:SEM.orange,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>{m.actif?"Disponible":"Bientôt"}</span>
               </div>
 
               <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:12}}>
