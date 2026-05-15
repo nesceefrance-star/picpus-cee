@@ -309,10 +309,18 @@ export default function Statistiques() {
     const init = async () => {
       await fetchDossiers()
       if (profile.role === 'admin') await fetchProfiles()
-      const { data } = await supabase.from('simulations').select('dossier_id, mwh_cumac')
+      // On récupère les simulations triées du plus récent au plus ancien.
+      // Pour chaque dossier, on prend la dernière simulation uniquement.
+      // Les dossiers "perdu" sont exclus via activeDossiers (pas ici).
+      const { data } = await supabase
+        .from('simulations')
+        .select('dossier_id, mwh_cumac')
+        .order('created_at', { ascending: false })
       if (data) {
         const map = {}
-        for (const s of data) { if (!map[s.dossier_id]) map[s.dossier_id] = s.mwh_cumac }
+        for (const s of data) {
+          if (s.mwh_cumac && !map[s.dossier_id]) map[s.dossier_id] = s.mwh_cumac
+        }
         setSimuMap(map)
       }
       setLoading(false)
