@@ -13,7 +13,6 @@ import Collapse from '@mui/material/Collapse'
 import Divider from '@mui/material/Divider'
 import Tooltip from '@mui/material/Tooltip'
 import IconButton from '@mui/material/IconButton'
-import Avatar from '@mui/material/Avatar'
 import Typography from '@mui/material/Typography'
 
 // MUI Icons
@@ -27,17 +26,12 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import PeopleIcon from '@mui/icons-material/People'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
-import ChevronRightIcon from '@mui/icons-material/ChevronRight'
-import LogoutIcon from '@mui/icons-material/Logout'
 import ElectricBoltIcon from '@mui/icons-material/ElectricBolt'
 import EngineeringIcon from '@mui/icons-material/Engineering'
 import SettingsIcon from '@mui/icons-material/Settings'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import BoltIcon from '@mui/icons-material/Bolt'
 import TravelExploreIcon from '@mui/icons-material/TravelExplore'
-import LightModeIcon from '@mui/icons-material/LightMode'
-import DarkModeIcon from '@mui/icons-material/DarkMode'
 import BarChartIcon from '@mui/icons-material/BarChart'
 import MapIcon from '@mui/icons-material/Map'
 
@@ -60,7 +54,7 @@ const STATUTS_STAGNANT = ['visio_planifiee','visio_effectuee','visite_planifiee'
 export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }) {
   const navigate   = useNavigate()
   const location   = useLocation()
-  const { profile, signOut, theme, toggleTheme, dossiers, user } = useStore()
+  const { profile, dossiers, user } = useStore()
   const isAdmin    = profile?.role === 'admin'
 
   // Badge alertes : dossiers stagnants (+14j sans activité, statuts actifs)
@@ -87,13 +81,6 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
     else navigate(path)
     onMobileClose?.()
   }
-
-  const handleLogout = async () => {
-    await signOut()
-    navigate('/login')
-  }
-
-  const initials = [profile?.prenom?.[0], profile?.nom?.[0]].filter(Boolean).join('').toUpperCase() || '?'
 
   // ── Item générique ──────────────────────────────────────────────────────────
   const Item = ({ icon, label, path, module, indent = false, badge = 0 }) => {
@@ -171,20 +158,14 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
   const drawerContent = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', background: DARK.bg, overflow: 'hidden' }}>
 
-      {/* Logo + toggle */}
-      <Box sx={{ display: 'flex', alignItems: 'center', height: 56, px: 1.5, flexShrink: 0, borderBottom: `1px solid ${DARK.border}` }}>
-        <ElectricBoltIcon sx={{ color: DARK.accent, fontSize: 24, flexShrink: 0 }} />
+      {/* Logo — sans toggle (géré par la top bar) */}
+      <Box sx={{ display: 'flex', alignItems: 'center', height: 52, px: 1.5, flexShrink: 0, borderBottom: `1px solid ${DARK.border}` }}>
+        <ElectricBoltIcon sx={{ color: DARK.accent, fontSize: 22, flexShrink: 0 }} />
         {open && (
-          <Typography sx={{ ml: 1.2, fontSize: 15, fontWeight: 800, color: '#fff', letterSpacing: '-.01em', flex: 1, fontFamily: 'inherit' }}>
+          <Typography sx={{ ml: 1.2, fontSize: 14, fontWeight: 800, color: '#fff', letterSpacing: '-.01em', fontFamily: 'inherit' }}>
             SOFT.IA
           </Typography>
         )}
-        <Tooltip title={open ? 'Réduire' : 'Agrandir'} placement="right">
-          <IconButton onClick={onToggle} size="small"
-            sx={{ color: DARK.textSoft, ml: open ? 0 : 'auto', '&:hover': { color: '#fff', background: DARK.bgHover } }}>
-            {open ? <ChevronLeftIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
-          </IconButton>
-        </Tooltip>
       </Box>
 
       {/* Navigation */}
@@ -256,45 +237,9 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
         </List>
       </Box>
 
-      {/* Footer — paramètres + profil + déconnexion */}
+      {/* Footer — paramètres uniquement (profil/logout dans la top bar) */}
       <Box sx={{ borderTop: `1px solid ${DARK.border}`, p: 1, flexShrink: 0 }}>
-
         <Item icon={<SettingsIcon fontSize="small" />} label="Paramètres" path="/parametres" />
-        {open ? (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, px: 1, py: 0.8, borderRadius: 2, '&:hover': { background: DARK.bgHover }, cursor: 'default' }}>
-            <Avatar sx={{ width: 32, height: 32, fontSize: 13, fontWeight: 700, background: DARK.accent }}>
-              {initials}
-            </Avatar>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#fff', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {profile?.prenom} {profile?.nom}
-              </Typography>
-              <Typography sx={{ fontSize: 11, color: DARK.textSoft, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {profile?.role === 'admin' ? 'Administrateur' : 'Commercial'}
-              </Typography>
-            </Box>
-            <Tooltip title="Déconnexion" placement="top">
-              <IconButton onClick={handleLogout} size="small"
-                sx={{ color: DARK.textSoft, '&:hover': { color: '#FC8181', background: 'transparent' } }}>
-                <LogoutIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-            <Tooltip title={`${profile?.prenom} ${profile?.nom}`} placement="right">
-              <Avatar sx={{ width: 32, height: 32, fontSize: 13, fontWeight: 700, background: DARK.accent, cursor: 'default' }}>
-                {initials}
-              </Avatar>
-            </Tooltip>
-            <Tooltip title="Déconnexion" placement="right">
-              <IconButton onClick={handleLogout} size="small"
-                sx={{ color: DARK.textSoft, '&:hover': { color: '#FC8181' } }}>
-                <LogoutIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        )}
       </Box>
     </Box>
   )
