@@ -94,7 +94,7 @@ export default function Dashboard() {
     color: C.textMid, marginBottom: 5,
     textTransform: 'uppercase', letterSpacing: .4,
   }
-  const { dossiers, fetchDossiers, setCurrentDossier, deleteDossier, deleteDossiers, user, profile, signOut, profiles, fetchProfiles, session } = useStore()
+  const { dossiers, fetchDossiers, setCurrentDossier, deleteDossier, deleteDossiers, user, profile, profiles, fetchProfiles, session } = useStore()
   const [showModal, setShowModal]               = useState(false)
   const [search, setSearch]                     = useState('')
   const [filtreStatut, setFiltreStatut]         = useState('all')
@@ -431,26 +431,6 @@ export default function Dashboard() {
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" }}>
-
-      {/* ── Nav ── */}
-      <div style={{ background: C.nav, borderBottom: '1px solid #334155', padding: `0 ${isMobile ? 12 : 24}px`, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <span style={{ fontSize: isMobile ? 17 : 20, fontWeight: 900, color: '#60A5FA', letterSpacing: 2 }}>PICPUS</span>
-          {!isMobile && <span style={{ color: '#64748B', fontSize: 13 }}>/ CRM CEE</span>}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 8, overflowX: 'auto' }}>
-          {!isMobile && <button onClick={() => navigate('/')} style={{ background: 'transparent', border: 'none', color: '#94A3B8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: '5px 10px', borderRadius: 6, whiteSpace: 'nowrap' }}>🏠 Dashboard</button>}
-          {!isMobile && <button onClick={() => navigate('/hub')} style={{ background: 'transparent', border: 'none', color: '#94A3B8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: '5px 10px', borderRadius: 6, whiteSpace: 'nowrap' }}>🔧 Hub</button>}
-          {isAdmin && (
-            <button onClick={() => navigate('/admin/users')} style={{ background: '#1D4ED822', border: '1px solid #2563EB66', color: '#60A5FA', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', padding: '5px 10px', borderRadius: 6, whiteSpace: 'nowrap' }}>👥{!isMobile && ' Utilisateurs'}</button>
-          )}
-          {!isMobile && <div style={{ width: 1, height: 20, background: '#334155', margin: '0 2px', flexShrink: 0 }}/>}
-          {!isMobile && <span style={{ fontSize: 11, color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>{user?.email}</span>}
-          <button onClick={signOut} style={{ background: 'transparent', border: '1px solid #334155', color: '#94A3B8', borderRadius: 7, padding: '5px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-            {isMobile ? '↪' : 'Déco'}
-          </button>
-        </div>
-      </div>
 
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: isMobile ? '16px 12px' : isCompact ? '20px 16px' : '28px 24px' }}>
 
