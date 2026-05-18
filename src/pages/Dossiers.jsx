@@ -89,6 +89,11 @@ export default function Dossiers() {
   const [deletingIds, setDeletingIds]           = useState(new Set())
   const [simuMap, setSimuMap]                   = useState({})
   const [viewMode, setViewMode]                 = useState('list') // 'list' | 'kanban'
+  // Export
+  const [showExport, setShowExport]             = useState(false)
+  const [exportFiche, setExportFiche]           = useState('all')
+  const [exportDateFrom, setExportDateFrom]     = useState('')
+  const [exportDateTo, setExportDateTo]         = useState('')
 
   const isAdmin = profile?.role === 'admin'
   const isMobile = window.innerWidth < 700
@@ -99,15 +104,18 @@ export default function Dossiers() {
     fetchDossiers().then(() => setLoading(false))
   }, [profile?.id])
 
-  // Simulations pour MWh cumac + prime estimée
+  // Simulations pour MWh cumac — prend la plus récente par dossier
   useEffect(() => {
     if (!user?.id) return
     const load = async () => {
-      const { data } = await supabase.from('simulations').select('dossier_id, mwh_cumac')
+      const { data } = await supabase
+        .from('simulations')
+        .select('dossier_id, mwh_cumac')
+        .order('created_at', { ascending: false })
       if (!data) return
       const map = {}
       for (const s of data) {
-        if (!map[s.dossier_id]) map[s.dossier_id] = { mwh_cumac: s.mwh_cumac }
+        if (s.mwh_cumac && !map[s.dossier_id]) map[s.dossier_id] = { mwh_cumac: s.mwh_cumac }
       }
       setSimuMap(map)
     }
@@ -189,6 +197,85 @@ export default function Dossiers() {
     setDeletingIds(new Set())
   }
 
+  // ── Export CSV ────────────────────────────────────────────────────────────────
+  // Parse une adresse texte "123 Rue X, 75001 Paris" → { adresse, cp, ville }
+  const parseAdresse = (str) => {
+    if (!str) return { adresse: '', cp: '', ville: '' }
+    const m = str.match(/^(.*?)[,\s]+(\d{5})[,\s]+(.+)$/)
+    if (m) return { adresse: m[1].trim(), cp: m[2], ville: m[3].trim() }
+    return { adresse: str.trim(), cp: '', ville: '' }
+  }
+
+  const exportDossiers = () => {
+    // Filtrage pour l'export
+    const rows = myDossiers.filter(d => {
+      if (exportFiche !== 'all' && d.fiche_cee !== exportFiche) return false
+      if (exportDateFrom && new Date(d.created_at) < new Date(exportDateFrom)) return false
+      if (exportDateTo   && new Date(d.created_at) > new Date(exportDateTo + 'T23:59:59')) return false
+      return true
+    })
+
+    const STATUT_LABEL = Object.fromEntries(STATUTS.map(s => [s.id, s.label]))
+    const headers = [
+      'Référence', 'Statut', 'Fiche CEE',
+      'Raison sociale', 'SIRET',
+      'Nom contact', 'Téléphone', 'Email',
+      'Adresse siège', 'CP siège', 'Ville siège',
+      'Adresse site', 'CP site', 'Ville site',
+      'Volume CUMAC (MWh)', 'Prime brute (€)',
+      'Date création',
+    ]
+
+    const csvRows = rows.map(d => {
+      const p    = d.prospects || {}
+      const site = parseAdresse(d.adresse_site)
+      const mwh  = simuMap[d.id]?.mwh_cumac
+      const cell = (v) => {
+        const s = String(v ?? '')
+        return s.includes(';') || s.includes('"') || s.includes('\n')
+          ? `"${s.replace(/"/g, '""')}"` : s
+      }
+      return [
+        cell(d.ref),
+        cell(STATUT_LABEL[d.statut] || d.statut),
+        cell(d.fiche_cee),
+        cell(p.raison_sociale),
+        cell(p.siret),
+        cell(p.contact_nom),
+        cell(p.contact_tel),
+        cell(p.contact_email),
+        cell(p.adresse),
+        cell(p.code_postal),
+        cell(p.ville),
+        cell(site.adresse),
+        cell(site.cp),
+        cell(site.ville),
+        cell(mwh != null ? mwh.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) : ''),
+        cell(d.prime_estimee != null ? d.prime_estimee.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) : ''),
+        cell(d.created_at ? new Date(d.created_at).toLocaleDateString('fr-FR') : ''),
+      ].join(';')
+    })
+
+    const csv  = '﻿' + [headers.join(';'), ...csvRows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    const date = new Date().toISOString().slice(0, 10)
+    a.href     = url
+    a.download = `dossiers_export_${date}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    setShowExport(false)
+  }
+
+  // Compte des dossiers qui seront exportés
+  const exportCount = myDossiers.filter(d => {
+    if (exportFiche !== 'all' && d.fiche_cee !== exportFiche) return false
+    if (exportDateFrom && new Date(d.created_at) < new Date(exportDateFrom)) return false
+    if (exportDateTo   && new Date(d.created_at) > new Date(exportDateTo + 'T23:59:59')) return false
+    return true
+  }).length
+
   // Même colonnes que Dashboard
   const COLS = '28px 72px 1fr 90px 110px 72px 105px 105px 70px 62px 34px'
 
@@ -221,6 +308,10 @@ export default function Dossiers() {
                 ))}
               </div>
             )}
+            <button onClick={() => setShowExport(true)}
+              style={{ background: C.surface, color: C.textMid, border: `1px solid ${C.border}`, borderRadius: 9, padding: '11px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+              ⬇︎ Exporter
+            </button>
             <button onClick={() => setShowModal(true)}
               style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 9, padding: '11px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
               ➕ Nouveau dossier
@@ -439,6 +530,106 @@ export default function Dossiers() {
           prefillTech={wizardPrefill?.tech}
           prefillPrixMwh={wizardPrefill?.prixMwh}
         />
+      )}
+
+      {/* ── Modal Export CSV ── */}
+      {showExport && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)',
+          zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: "system-ui,'Segoe UI',Arial,sans-serif",
+        }} onClick={e => e.target === e.currentTarget && setShowExport(false)}>
+          <div style={{
+            background: C.surface, border: `1px solid ${C.border}`,
+            borderRadius: 14, padding: '28px 28px 24px',
+            width: '100%', maxWidth: 520, boxShadow: '0 20px 60px rgba(0,0,0,.2)',
+          }}>
+            {/* Titre */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: C.text }}>Exporter les dossiers</div>
+                <div style={{ fontSize: 12, color: C.textSoft, marginTop: 2 }}>Format CSV · compatible Excel</div>
+              </div>
+              <button onClick={() => setShowExport(false)} style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: C.textSoft, lineHeight: 1 }}>×</button>
+            </div>
+
+            {/* Filtre fiche CEE */}
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>Fiche CEE</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {['all', ...fiches].map(f => {
+                  const meta   = FICHE_META[f]
+                  const color  = meta?.color || C.accent
+                  const label  = f === 'all' ? 'Toutes' : (meta?.label || f)
+                  const active = exportFiche === f
+                  const count  = f === 'all' ? myDossiers.length : myDossiers.filter(d => d.fiche_cee === f).length
+                  return (
+                    <button key={f} onClick={() => setExportFiche(f)} style={{
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      background: active ? color : C.bg,
+                      color: active ? '#fff' : (f === 'all' ? C.textSoft : color),
+                      border: `1px solid ${active ? 'transparent' : (f === 'all' ? C.border : color + '66')}`,
+                      borderRadius: 20, padding: '5px 12px',
+                      fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    }}>
+                      {label}
+                      <span style={{
+                        fontSize: 10, fontWeight: 700,
+                        background: active ? 'rgba(255,255,255,.2)' : color + '22',
+                        color: active ? '#fff' : color,
+                        borderRadius: 10, padding: '1px 6px',
+                      }}>{count}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Filtre dates */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>Période (date de création)</div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 4 }}>Du</div>
+                  <input type="date" value={exportDateFrom} onChange={e => setExportDateFrom(e.target.value)}
+                    style={{ ...INP, padding: '9px 12px', width: '100%', boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 11, color: C.textSoft, marginBottom: 4 }}>Au</div>
+                  <input type="date" value={exportDateTo} onChange={e => setExportDateTo(e.target.value)}
+                    style={{ ...INP, padding: '9px 12px', width: '100%', boxSizing: 'border-box' }} />
+                </div>
+                {(exportDateFrom || exportDateTo) && (
+                  <button onClick={() => { setExportDateFrom(''); setExportDateTo('') }}
+                    style={{ background: 'transparent', border: 'none', color: C.textSoft, cursor: 'pointer', fontSize: 18, marginTop: 18, padding: '0 4px' }}>×</button>
+                )}
+              </div>
+            </div>
+
+            {/* Colonnes exportées (info) */}
+            <div style={{ background: C.bg, borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: 11, color: C.textSoft, lineHeight: 1.7 }}>
+              <strong style={{ color: C.textMid }}>Colonnes exportées :</strong><br />
+              Référence · Statut · Fiche CEE · Raison sociale · SIRET · Nom contact · Téléphone · Email · Adresse siège · CP · Ville · Adresse site · CP site · Ville site · Volume CUMAC · Prime brute · Date création
+            </div>
+
+            {/* Footer */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <span style={{ fontSize: 13, color: C.textSoft }}>
+                <strong style={{ color: C.text }}>{exportCount}</strong> dossier{exportCount !== 1 ? 's' : ''} à exporter
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setShowExport(false)}
+                  style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid, borderRadius: 8, padding: '9px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  Annuler
+                </button>
+                <button onClick={exportDossiers} disabled={exportCount === 0}
+                  style={{ background: exportCount === 0 ? C.border : '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 700, cursor: exportCount === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                  ⬇︎ Télécharger le CSV
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
