@@ -92,6 +92,7 @@ export default function Dossiers() {
   // Export
   const [showExport, setShowExport]             = useState(false)
   const [exportFiche, setExportFiche]           = useState('all')
+  const [exportStatut, setExportStatut]         = useState('all')
   const [exportDateFrom, setExportDateFrom]     = useState('')
   const [exportDateTo, setExportDateTo]         = useState('')
 
@@ -209,7 +210,8 @@ export default function Dossiers() {
   const exportDossiers = () => {
     // Filtrage pour l'export
     const rows = myDossiers.filter(d => {
-      if (exportFiche !== 'all' && d.fiche_cee !== exportFiche) return false
+      if (exportFiche   !== 'all' && d.fiche_cee !== exportFiche)   return false
+      if (exportStatut  !== 'all' && d.statut    !== exportStatut) return false
       if (exportDateFrom && new Date(d.created_at) < new Date(exportDateFrom)) return false
       if (exportDateTo   && new Date(d.created_at) > new Date(exportDateTo + 'T23:59:59')) return false
       return true
@@ -578,6 +580,37 @@ export default function Dossiers() {
                         background: active ? 'rgba(255,255,255,.2)' : color + '22',
                         color: active ? '#fff' : color,
                         borderRadius: 10, padding: '1px 6px',
+                      }}>{count}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Filtre statut */}
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>Statut</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {[{ id: 'all', label: 'Tous', color: C.accent }, ...STATUTS].map(s => {
+                  const active = exportStatut === s.id
+                  const color  = s.id === 'all' ? C.accent : s.color
+                  const count  = s.id === 'all' ? myDossiers.length : myDossiers.filter(d => d.statut === s.id).length
+                  if (count === 0 && s.id !== 'all') return null
+                  return (
+                    <button key={s.id} onClick={() => setExportStatut(s.id)} style={{
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      background: active ? color : C.bg,
+                      color: active ? '#fff' : color,
+                      border: `1px solid ${active ? 'transparent' : color + '66'}`,
+                      borderRadius: 20, padding: '4px 11px',
+                      fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    }}>
+                      {s.label}
+                      <span style={{
+                        fontSize: 10, fontWeight: 700,
+                        background: active ? 'rgba(255,255,255,.2)' : color + '22',
+                        color: active ? '#fff' : color,
+                        borderRadius: 10, padding: '1px 5px',
                       }}>{count}</span>
                     </button>
                   )
