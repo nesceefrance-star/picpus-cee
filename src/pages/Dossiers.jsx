@@ -223,8 +223,7 @@ export default function Dossiers() {
     if (p.surface_ventilee != null && p.surface_ventilee !== '') return p.surface_ventilee
     if (p.surface_isolant != null && p.surface_isolant !== '') return p.surface_isolant
     if (p.surfaces && typeof p.surfaces === 'object') {
-      const first = Object.values(p.surfaces).find(v => Number(v) > 0)
-      return first != null ? Number(first) : ''
+      return Number(p.surfaces.chauffage) || ''
     }
     return ''
   }
