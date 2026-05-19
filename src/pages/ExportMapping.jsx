@@ -417,35 +417,56 @@ export default function ExportMapping() {
             {/* Table mapping */}
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
               {/* Header */}
-              <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1fr', gap: 12, padding: '10px 16px', background: C.bg, borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .5 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1fr 180px', gap: 12, padding: '10px 16px', background: C.bg, borderBottom: `1px solid ${C.border}`, fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: .5 }}>
                 <span>#</span>
                 <span>Colonne du modèle</span>
                 <span>Donnée dossier à insérer</span>
+                <span>Exemple · 1er dossier</span>
               </div>
 
-              {templateHeaders.map((h, i) => (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1fr', gap: 12, padding: '10px 16px', borderBottom: i < templateHeaders.length - 1 ? `1px solid ${C.border}` : 'none', alignItems: 'center', background: i % 2 === 0 ? C.surface : C.bg }}>
-                  <span style={{ fontSize: 11, color: C.textSoft, fontWeight: 700 }}>{i + 1}</span>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={h}>
-                    {h}
+              {templateHeaders.map((h, i) => {
+                const fieldId   = mapping[h] || ''
+                const sampleDossier = myDossiers[0]
+                const sampleVal = fieldId && sampleDossier ? getValue(sampleDossier, fieldId) : ''
+                const hasVal    = sampleVal !== '' && sampleVal != null
+                return (
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1fr 180px', gap: 12, padding: '10px 16px', borderBottom: i < templateHeaders.length - 1 ? `1px solid ${C.border}` : 'none', alignItems: 'center', background: i % 2 === 0 ? C.surface : C.bg }}>
+                    <span style={{ fontSize: 11, color: C.textSoft, fontWeight: 700 }}>{i + 1}</span>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={h}>
+                      {h}
+                    </div>
+                    <select
+                      value={fieldId}
+                      onChange={e => setMapping(m => ({ ...m, [h]: e.target.value }))}
+                      style={{ ...INP, color: fieldId ? C.text : C.textSoft }}
+                    >
+                      {FIELD_GROUPS_ORDER.map(group => {
+                        const fields = DOSSIER_FIELDS.filter(f => f.group === group)
+                        if (group === '') return fields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)
+                        return (
+                          <optgroup key={group} label={group}>
+                            {fields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+                          </optgroup>
+                        )
+                      })}
+                    </select>
+                    <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      title={hasVal ? String(sampleVal) : ''}>
+                      {!fieldId ? (
+                        <span style={{ color: C.textSoft, fontStyle: 'italic' }}>—</span>
+                      ) : !sampleDossier ? (
+                        <span style={{ color: C.textSoft, fontStyle: 'italic' }}>aucun dossier</span>
+                      ) : hasVal ? (
+                        <span style={{ color: '#16A34A', fontWeight: 600, background: '#DCFCE7', borderRadius: 5, padding: '2px 7px', display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {String(sampleVal)}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#D97706', fontStyle: 'italic', fontSize: 11 }}>vide sur ce dossier</span>
+                      )}
+                    </div>
                   </div>
-                  <select
-                    value={mapping[h] || ''}
-                    onChange={e => setMapping(m => ({ ...m, [h]: e.target.value }))}
-                    style={{ ...INP, color: mapping[h] ? C.text : C.textSoft }}
-                  >
-                    {FIELD_GROUPS_ORDER.map(group => {
-                      const fields = DOSSIER_FIELDS.filter(f => f.group === group)
-                      if (group === '') return fields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)
-                      return (
-                        <optgroup key={group} label={group}>
-                          {fields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
-                        </optgroup>
-                      )
-                    })}
-                  </select>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
