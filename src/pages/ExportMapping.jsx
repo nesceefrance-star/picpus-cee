@@ -147,6 +147,12 @@ export default function ExportMapping() {
   const [filterFiche,      setFilterFiche]      = useState('all')
   const [filterStatut,     setFilterStatut]     = useState('all')
   const [previewAll,       setPreviewAll]       = useState(false)
+  const [exportName,       setExportName]       = useState('')
+  const [exportHistory,    setExportHistory]    = useState(() => {
+    try { return JSON.parse(localStorage.getItem('picpus_export_history') || '[]') } catch { return [] }
+  })
+  const [editingHistoryId, setEditingHistoryId] = useState(null)
+  const [editingName,      setEditingName]      = useState('')
 
   const isAdmin    = profile?.role === 'admin'
   const myDossiers = isAdmin ? dossiers : dossiers.filter(d => d.assigne_a === user?.id)
@@ -228,6 +234,56 @@ export default function ExportMapping() {
       setMapping(saved ? JSON.parse(saved) : {})
     } catch { setMapping({}) }
 
+    // Nom par défaut pour l'export
+    const dateStr = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    setExportName(file.name.replace(/\.[^.]+$/, '') + ' · ' + dateStr)
+    setStep(2)
+  }
+
+  // ── Historique des exports ────────────────────────────────────────────────
+
+  const HISTORY_KEY = 'picpus_export_history'
+
+  const persistHistory = (entries) => {
+    setExportHistory(entries)
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(entries)) } catch {}
+  }
+
+  const addToHistory = (format, count) => {
+    const entry = {
+      id: Date.now(),
+      name: exportName || templateName,
+      templateName,
+      templateHeaders,
+      mapping,
+      filterFiche,
+      filterStatut,
+      exportedAt: new Date().toISOString(),
+      exportCount: count,
+      mappedCount: templateHeaders.filter(h => mapping[h]).length,
+      format,
+    }
+    persistHistory([entry, ...exportHistory].slice(0, 30))
+  }
+
+  const deleteHistoryEntry = (id) => persistHistory(exportHistory.filter(e => e.id !== id))
+
+  const clearHistory = () => persistHistory([])
+
+  const renameHistoryEntry = (id) => {
+    if (!editingName.trim()) { setEditingHistoryId(null); return }
+    persistHistory(exportHistory.map(e => e.id === id ? { ...e, name: editingName.trim() } : e))
+    setEditingHistoryId(null)
+  }
+
+  const loadFromHistory = (entry) => {
+    setTemplateName(entry.templateName)
+    setTemplateHeaders(entry.templateHeaders)
+    setMapping(entry.mapping || {})
+    setFilterFiche(entry.filterFiche || 'all')
+    setFilterStatut(entry.filterStatut || 'all')
+    setExportName(entry.name)
+    setPreviewAll(false)
     setStep(2)
   }
 
@@ -293,7 +349,9 @@ export default function ExportMapping() {
     const rows = buildRows()
     const esc  = (v) => { const s = String(v ?? ''); return s.includes(';') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s }
     const csv  = '﻿' + [templateHeaders.map(esc).join(';'), ...rows.map(r => r.map(esc).join(';'))].join('\n')
-    trigger(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), `export_${today()}.csv`)
+    const filename = `${(exportName || 'export').replace(/[/\\:*?"<>|]/g, '_')}_${today()}.csv`
+    trigger(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename)
+    addToHistory('csv', rows.length)
   }
 
   // ── Téléchargement XLSX ───────────────────────────────────────────────────
@@ -304,7 +362,9 @@ export default function ExportMapping() {
     const ws   = XLSX.utils.aoa_to_sheet(data)
     const wb   = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Export')
-    XLSX.writeFile(wb, `export_${today()}.xlsx`)
+    const filename = `${(exportName || 'export').replace(/[/\\:*?"<>|]/g, '_')}_${today()}.xlsx`
+    XLSX.writeFile(wb, filename)
+    addToHistory('xlsx', rows.length)
   }
 
   const today   = () => new Date().toISOString().slice(0, 10)
@@ -377,6 +437,7 @@ export default function ExportMapping() {
 
         {/* ── ÉTAPE 1 : Import ── */}
         {step === 1 && (
+          <>
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '32px 36px' }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Importer votre modèle de tableau</div>
             <div style={{ fontSize: 13, color: C.textMid, marginBottom: 28 }}>
@@ -408,6 +469,65 @@ export default function ExportMapping() {
 
             <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFileChange} style={{ display: 'none' }} />
           </div>
+
+          {/* ── Historique ── */}
+          {exportHistory.length > 0 && (
+            <div style={{ marginTop: 28 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Reprendre un export récent</div>
+                <button onClick={clearHistory} style={{ background: 'none', border: 'none', color: C.textSoft, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', padding: '2px 6px' }}>
+                  Tout effacer
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {exportHistory.map(entry => (
+                  <div key={entry.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px' }}>
+                    {/* Format badge */}
+                    <span style={{ fontSize: 10, fontWeight: 700, background: entry.format === 'xlsx' ? '#DCFCE7' : '#DBEAFE', color: entry.format === 'xlsx' ? '#16A34A' : '#2563EB', borderRadius: 5, padding: '2px 7px', flexShrink: 0, textTransform: 'uppercase' }}>
+                      {entry.format}
+                    </span>
+
+                    {/* Nom (éditable) */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {editingHistoryId === entry.id ? (
+                        <input
+                          autoFocus
+                          value={editingName}
+                          onChange={e => setEditingName(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') renameHistoryEntry(entry.id); if (e.key === 'Escape') setEditingHistoryId(null) }}
+                          onBlur={() => renameHistoryEntry(entry.id)}
+                          style={{ fontSize: 13, fontWeight: 600, color: C.text, background: C.surface, border: `1px solid ${C.accent}`, borderRadius: 5, padding: '2px 8px', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', outline: 'none' }}
+                        />
+                      ) : (
+                        <div
+                          onClick={() => { setEditingHistoryId(entry.id); setEditingName(entry.name) }}
+                          title="Cliquer pour renommer"
+                          style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'text' }}>
+                          {entry.name}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 11, color: C.textSoft, marginTop: 1 }}>
+                        {new Date(entry.exportedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {' · '}{entry.exportCount} dossier{entry.exportCount !== 1 ? 's' : ''}
+                        {' · '}{entry.mappedCount}/{entry.templateHeaders?.length} col. mappées
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <button onClick={() => loadFromHistory(entry)}
+                      style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: 7, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      Reprendre →
+                    </button>
+                    <button onClick={() => deleteHistoryEntry(entry.id)}
+                      style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.textSoft, borderRadius: 7, padding: '6px 8px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, lineHeight: 1 }}>
+                      🗑
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          </>
         )}
 
         {/* ── ÉTAPE 2 : Mapping ── */}
@@ -559,6 +679,17 @@ export default function ExportMapping() {
                   )
                 })}
               </div>
+            </div>
+
+            {/* Nom de l'export */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: C.textSoft, whiteSpace: 'nowrap' }}>Nom de l'export</label>
+              <input
+                value={exportName}
+                onChange={e => setExportName(e.target.value)}
+                placeholder="Ex : Dépôt ATEE juin 2026"
+                style={{ flex: 1, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '8px 12px', color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none' }}
+              />
             </div>
 
             {/* Barre résumé + boutons export */}
