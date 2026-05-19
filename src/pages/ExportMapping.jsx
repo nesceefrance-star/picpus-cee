@@ -135,7 +135,7 @@ function getZoneClimatique(entry) {
 
 export default function ExportMapping() {
   const C          = useAppTheme()
-  const { dossiers, user, profile } = useStore()
+  const { dossiers, fetchDossiers, user, profile } = useStore()
   const fileInputRef = useRef(null)
 
   const [isDragging,       setIsDragging]       = useState(false)
@@ -151,6 +151,15 @@ export default function ExportMapping() {
   const isAdmin    = profile?.role === 'admin'
   const myDossiers = isAdmin ? dossiers : dossiers.filter(d => d.assigne_a === user?.id)
   const fiches     = [...new Set(myDossiers.map(d => d.fiche_cee).filter(Boolean))]
+
+  // ── Re-fetch dossiers dès que le profil est connu (même logique que Dossiers.jsx)
+  // Nécessaire car AppLayout peut appeler fetchDossiers avant que profile soit chargé,
+  // ce qui applique le filtre assigne_a au lieu de renvoyer tous les dossiers pour un admin.
+  useEffect(() => {
+    if (!profile?.id) return
+    const load = async () => { await fetchDossiers() }
+    load()
+  }, [profile?.id])
 
   // ── Chargement simulations ────────────────────────────────────────────────
 
