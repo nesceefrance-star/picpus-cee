@@ -235,6 +235,12 @@ export default function Dossiers() {
     return SECTEUR_LABELS[s] || s
   }
 
+  const getZoneClimatique = (entry) => {
+    if (!entry) return ''
+    const p = entry.parametres || {}
+    return p.zone_climatique || p.zone || ''
+  }
+
   const getFonctionnalites = (entry) => {
     if (!entry) return ''
     const p = entry.parametres || {}
@@ -272,7 +278,7 @@ export default function Dossiers() {
       'Adresse siège', 'CP siège', 'Ville siège',
       'Adresse site', 'CP site', 'Ville site',
       'Volume CUMAC (MWh)', 'Prime brute (€)',
-      'Superficie (m²)', 'Secteur d\'activité', 'Fonctionnalités',
+      'Superficie (m²)', 'Secteur d\'activité', 'Fonctionnalités', 'Zone climatique',
       'Date création',
     ]
 
@@ -306,6 +312,7 @@ export default function Dossiers() {
         cell(getSuperficie(simu)),
         cell(getSecteur(simu)),
         cell(getFonctionnalites(simu)),
+        cell(getZoneClimatique(simu)),
         cell(d.created_at ? new Date(d.created_at).toLocaleDateString('fr-FR') : ''),
       ].join(';')
     })
@@ -694,7 +701,7 @@ export default function Dossiers() {
             {/* Colonnes exportées (info) */}
             <div style={{ background: C.bg, borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: 11, color: C.textSoft, lineHeight: 1.7 }}>
               <strong style={{ color: C.textMid }}>Colonnes exportées :</strong><br />
-              Référence · Statut · Fiche CEE · Raison sociale · SIRET · Nom contact · Téléphone · Email · Adresse siège · CP · Ville · Adresse site · CP site · Ville site · Volume CUMAC · Prime brute · Superficie (m²) · Secteur d'activité · Fonctionnalités · Date création
+              Référence · Statut · Fiche CEE · Raison sociale · SIRET · Nom contact · Téléphone · Email · Adresse siège · CP · Ville · Adresse site · CP site · Ville site · Volume CUMAC · Prime brute · Superficie (m²) · Secteur d'activité · Fonctionnalités · Zone climatique · Date création
             </div>
 
             {/* Footer */}
