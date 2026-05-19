@@ -32,34 +32,39 @@ const FICHE_META = {
 }
 
 // Champs disponibles groupés
+// Les champs marqués split:true sont extraits automatiquement depuis contact_nom
 const DOSSIER_FIELDS = [
-  { id: '',                   label: '— Ne pas remplir —',      group: '' },
-  { id: 'ref',                label: 'Référence dossier',       group: 'Dossier' },
-  { id: 'statut',             label: 'Statut',                  group: 'Dossier' },
-  { id: 'fiche_cee',          label: 'Fiche CEE',               group: 'Dossier' },
-  { id: 'created_at',         label: 'Date création',           group: 'Dossier' },
-  { id: 'raison_sociale',     label: 'Raison sociale',          group: 'Prospect' },
-  { id: 'siret',              label: 'SIRET',                   group: 'Prospect' },
-  { id: 'naf',                label: 'Code NAF',                group: 'Prospect' },
-  { id: 'contact_nom',        label: 'Nom contact',             group: 'Prospect' },
-  { id: 'contact_prenom',     label: 'Prénom contact',          group: 'Prospect' },
-  { id: 'contact_tel',        label: 'Téléphone',               group: 'Prospect' },
-  { id: 'contact_email',      label: 'Email',                   group: 'Prospect' },
-  { id: 'adresse_siege',      label: 'Adresse siège',           group: 'Prospect' },
-  { id: 'cp_siege',           label: 'CP siège',                group: 'Prospect' },
-  { id: 'ville_siege',        label: 'Ville siège',             group: 'Prospect' },
-  { id: 'adresse_site',       label: 'Adresse site complète',   group: 'Site travaux' },
-  { id: 'adresse_site_rue',   label: 'Rue site',                group: 'Site travaux' },
-  { id: 'adresse_site_cp',    label: 'CP site',                 group: 'Site travaux' },
-  { id: 'adresse_site_ville', label: 'Ville site',              group: 'Site travaux' },
-  { id: 'prime_estimee',      label: 'Prime brute (€)',         group: 'Financier' },
-  { id: 'marge_nette',        label: 'Marge nette (€)',         group: 'Financier' },
-  { id: 'mwh_cumac',          label: 'Volume CUMAC (MWh)',      group: 'CEE' },
-  { id: 'superficie',         label: 'Superficie (m²)',         group: 'CEE' },
-  { id: 'secteur',            label: "Secteur d'activité",      group: 'CEE' },
-  { id: 'fonctionnalites',    label: 'Fonctionnalités',         group: 'CEE' },
-  { id: 'zone_climatique',    label: 'Zone climatique',         group: 'CEE' },
+  { id: '',                    label: '— Ne pas remplir —',               group: '' },
+  { id: 'ref',                 label: 'Référence dossier',                group: 'Dossier' },
+  { id: 'statut',              label: 'Statut',                           group: 'Dossier' },
+  { id: 'fiche_cee',           label: 'Fiche CEE',                        group: 'Dossier' },
+  { id: 'created_at',          label: 'Date création',                    group: 'Dossier' },
+  { id: 'raison_sociale',      label: 'Raison sociale',                   group: 'Prospect' },
+  { id: 'siret',               label: 'SIRET',                            group: 'Prospect' },
+  { id: 'naf',                 label: 'Code NAF',                         group: 'Prospect' },
+  { id: 'contact_nom_complet', label: 'Nom complet contact',              group: 'Prospect' },
+  { id: 'contact_prenom',      label: 'Prénom contact ✂ (auto-extrait)', group: 'Prospect', split: true },
+  { id: 'contact_nom_famille', label: 'Nom de famille ✂ (auto-extrait)', group: 'Prospect', split: true },
+  { id: 'contact_tel',         label: 'Téléphone',                        group: 'Prospect' },
+  { id: 'contact_email',       label: 'Email',                            group: 'Prospect' },
+  { id: 'adresse_siege',       label: 'Adresse siège',                    group: 'Prospect' },
+  { id: 'cp_siege',            label: 'CP siège',                         group: 'Prospect' },
+  { id: 'ville_siege',         label: 'Ville siège',                      group: 'Prospect' },
+  { id: 'adresse_site',        label: 'Adresse site complète',            group: 'Site travaux' },
+  { id: 'adresse_site_rue',    label: 'Rue site',                         group: 'Site travaux' },
+  { id: 'adresse_site_cp',     label: 'CP site',                          group: 'Site travaux' },
+  { id: 'adresse_site_ville',  label: 'Ville site',                       group: 'Site travaux' },
+  { id: 'prime_estimee',       label: 'Prime brute (€)',                  group: 'Financier' },
+  { id: 'marge_nette',         label: 'Marge nette (€)',                  group: 'Financier' },
+  { id: 'mwh_cumac',           label: 'Volume CUMAC (MWh)',               group: 'CEE' },
+  { id: 'superficie',          label: 'Superficie (m²)',                  group: 'CEE' },
+  { id: 'secteur',             label: "Secteur d'activité",               group: 'CEE' },
+  { id: 'fonctionnalites',     label: 'Fonctionnalités',                  group: 'CEE' },
+  { id: 'zone_climatique',     label: 'Zone climatique',                  group: 'CEE' },
 ]
+
+// Champs qui utilisent le découpage automatique du nom
+const SPLIT_FIELDS = new Set(['contact_prenom', 'contact_nom_famille'])
 
 const FIELD_GROUPS_ORDER = ['', 'Dossier', 'Prospect', 'Site travaux', 'Financier', 'CEE']
 
@@ -69,6 +74,15 @@ const SECTEUR_LABELS = {
   bureaux: 'Bureaux', commerce: 'Commerce', enseignement: 'Enseignement',
   sante: 'Santé', hotellerie: 'Hôtellerie', restauration: 'Restauration',
   industrie: 'Industrie', logistique: 'Logistique', autre: 'Autre',
+}
+
+// Découpe "Prénom NOM" → { prenom, nom }
+// Convention : 1er mot = prénom, reste = nom de famille
+function splitName(full) {
+  if (!full) return { prenom: '', nom: '' }
+  const parts = full.trim().split(/\s+/)
+  if (parts.length === 1) return { prenom: parts[0], nom: '' }
+  return { prenom: parts[0], nom: parts.slice(1).join(' ') }
 }
 
 function parseAdresse(str) {
@@ -222,8 +236,9 @@ export default function ExportMapping() {
       case 'raison_sociale':     return p.raison_sociale || ''
       case 'siret':              return p.siret || ''
       case 'naf':                return p.naf || ''
-      case 'contact_nom':        return p.contact_nom || ''
-      case 'contact_prenom':     return p.contact_prenom || ''
+      case 'contact_nom_complet': return p.contact_nom || ''
+      case 'contact_prenom':     return splitName(p.contact_nom).prenom
+      case 'contact_nom_famille':return splitName(p.contact_nom).nom
       case 'contact_tel':        return p.contact_tel || ''
       case 'contact_email':      return p.contact_email || ''
       case 'adresse_siege':      return p.adresse || ''
@@ -457,8 +472,13 @@ export default function ExportMapping() {
                       ) : !sampleDossier ? (
                         <span style={{ color: C.textSoft, fontStyle: 'italic' }}>aucun dossier</span>
                       ) : hasVal ? (
-                        <span style={{ color: '#16A34A', fontWeight: 600, background: '#DCFCE7', borderRadius: 5, padding: '2px 7px', display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {String(sampleVal)}
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: '100%', overflow: 'hidden' }}>
+                          {SPLIT_FIELDS.has(fieldId) && (
+                            <span style={{ fontSize: 9, background: '#FEF3C7', color: '#D97706', borderRadius: 4, padding: '1px 5px', fontWeight: 700, flexShrink: 0 }}>✂ auto</span>
+                          )}
+                          <span style={{ color: '#16A34A', fontWeight: 600, background: '#DCFCE7', borderRadius: 5, padding: '2px 7px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {String(sampleVal)}
+                          </span>
                         </span>
                       ) : (
                         <span style={{ color: '#D97706', fontStyle: 'italic', fontSize: 11 }}>vide sur ce dossier</span>
