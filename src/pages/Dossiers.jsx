@@ -111,12 +111,14 @@ export default function Dossiers() {
     const load = async () => {
       const { data } = await supabase
         .from('simulations')
-        .select('dossier_id, mwh_cumac')
+        .select('dossier_id, mwh_cumac, fiche_cee, parametres')
         .order('created_at', { ascending: false })
       if (!data) return
       const map = {}
       for (const s of data) {
-        if (s.mwh_cumac && !map[s.dossier_id]) map[s.dossier_id] = { mwh_cumac: s.mwh_cumac }
+        if (!map[s.dossier_id]) {
+          map[s.dossier_id] = { mwh_cumac: s.mwh_cumac || null, fiche_cee: s.fiche_cee, parametres: s.parametres }
+        }
       }
       setSimuMap(map)
     }
@@ -207,6 +209,52 @@ export default function Dossiers() {
     return { adresse: str.trim(), cp: '', ville: '' }
   }
 
+  // Helpers pour extraire superficie, secteur et fonctionnalités depuis simulations.parametres
+  const SECTEUR_LABELS = {
+    bureaux: 'Bureaux', commerce: 'Commerce', enseignement: 'Enseignement',
+    sante: 'Santé', hotellerie: 'Hôtellerie', restauration: 'Restauration',
+    industrie: 'Industrie', logistique: 'Logistique', autre: 'Autre',
+  }
+
+  const getSuperficie = (entry) => {
+    if (!entry) return ''
+    const p = entry.parametres || {}
+    if (p.surface_m2 != null && p.surface_m2 !== '') return p.surface_m2
+    if (p.surface_ventilee != null && p.surface_ventilee !== '') return p.surface_ventilee
+    if (p.surface_isolant != null && p.surface_isolant !== '') return p.surface_isolant
+    if (p.surfaces && typeof p.surfaces === 'object') {
+      const total = Object.values(p.surfaces).reduce((sum, v) => sum + (Number(v) || 0), 0)
+      return total > 0 ? total : ''
+    }
+    return ''
+  }
+
+  const getSecteur = (entry) => {
+    if (!entry) return ''
+    const s = entry.parametres?.secteur
+    if (!s) return ''
+    return SECTEUR_LABELS[s] || s
+  }
+
+  const getFonctionnalites = (entry) => {
+    if (!entry) return ''
+    const p = entry.parametres || {}
+    const f = entry.fiche_cee || ''
+    if (f === 'BAT-TH-116' && p.surfaces && typeof p.surfaces === 'object') {
+      const LABELS = { chauffage: 'Chauffage', refroidissement: 'Refroidissement', ecs: 'ECS', eclairage: 'Éclairage', auxiliaires: 'Auxiliaires' }
+      const active = Object.entries(p.surfaces)
+        .filter(([, v]) => Number(v) > 0)
+        .map(([k]) => LABELS[k] || k)
+      return active.join(', ')
+    }
+    if (f === 'BAT-TH-163') return 'Chauffage / Climatisation (PAC)'
+    if (f === 'BAT-TH-142') return 'Chauffage (Destratification)'
+    if (f === 'IND-BA-110') return 'Récupération chaleur air comprimé'
+    if (f === 'BAT-TH-125') return 'Ventilation simple flux'
+    if (f === 'BAT-TH-126') return 'Ventilation double flux'
+    return ''
+  }
+
   const exportDossiers = () => {
     // Filtrage pour l'export
     const rows = myDossiers.filter(d => {
@@ -225,13 +273,15 @@ export default function Dossiers() {
       'Adresse siège', 'CP siège', 'Ville siège',
       'Adresse site', 'CP site', 'Ville site',
       'Volume CUMAC (MWh)', 'Prime brute (€)',
+      'Superficie (m²)', 'Secteur d\'activité', 'Fonctionnalités',
       'Date création',
     ]
 
     const csvRows = rows.map(d => {
-      const p    = d.prospects || {}
-      const site = parseAdresse(d.adresse_site)
-      const mwh  = simuMap[d.id]?.mwh_cumac
+      const p      = d.prospects || {}
+      const site   = parseAdresse(d.adresse_site)
+      const mwh    = simuMap[d.id]?.mwh_cumac
+      const simu   = simuMap[d.id]
       const cell = (v) => {
         const s = String(v ?? '')
         return s.includes(';') || s.includes('"') || s.includes('\n')
@@ -254,6 +304,9 @@ export default function Dossiers() {
         cell(site.ville),
         cell(mwh != null ? mwh.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) : ''),
         cell(d.prime_estimee != null ? d.prime_estimee.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) : ''),
+        cell(getSuperficie(simu)),
+        cell(getSecteur(simu)),
+        cell(getFonctionnalites(simu)),
         cell(d.created_at ? new Date(d.created_at).toLocaleDateString('fr-FR') : ''),
       ].join(';')
     })
@@ -642,7 +695,7 @@ export default function Dossiers() {
             {/* Colonnes exportées (info) */}
             <div style={{ background: C.bg, borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: 11, color: C.textSoft, lineHeight: 1.7 }}>
               <strong style={{ color: C.textMid }}>Colonnes exportées :</strong><br />
-              Référence · Statut · Fiche CEE · Raison sociale · SIRET · Nom contact · Téléphone · Email · Adresse siège · CP · Ville · Adresse site · CP site · Ville site · Volume CUMAC · Prime brute · Date création
+              Référence · Statut · Fiche CEE · Raison sociale · SIRET · Nom contact · Téléphone · Email · Adresse siège · CP · Ville · Adresse site · CP site · Ville site · Volume CUMAC · Prime brute · Superficie (m²) · Secteur d'activité · Fonctionnalités · Date création
             </div>
 
             {/* Footer */}
