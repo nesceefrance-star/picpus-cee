@@ -40,6 +40,7 @@ import LightModeIcon from '@mui/icons-material/LightMode'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
 import BarChartIcon from '@mui/icons-material/BarChart'
 import MapIcon from '@mui/icons-material/Map'
+import TableChartIcon from '@mui/icons-material/TableChart'
 
 const DRAWER_OPEN  = 240
 const DRAWER_MINI  = 64
@@ -208,6 +209,9 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
 
           {/* Carte */}
           <Item icon={<MapIcon fontSize="small" />} label="Carte" path="/carte" />
+
+          {/* Export personnalisé */}
+          <Item icon={<TableChartIcon fontSize="small" />} label="Export personnalisé" path="/export-mapping" />
 
           <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
 

@@ -17,6 +17,7 @@ import VisiteTechniqueDetail from './pages/VisiteTechniqueDetail'
 import RapportPublic from './pages/RapportPublic'
 import Planning from './pages/Planning'
 import Statistiques from './pages/Statistiques'
+import ExportMapping from './pages/ExportMapping'
 import Carte from './pages/Carte'
 import SimulateurRapide from './pages/SimulateurRapide'
 import EmailGenerateur from './pages/EmailGenerateur'
@@ -109,6 +110,7 @@ export default function AppRouter() {
           <Route path="/carte"           element={<WithLayout><Carte /></WithLayout>} />
           <Route path="/simulateur"      element={<WithLayout><SimulateurRapide /></WithLayout>} />
           <Route path="/emails"          element={<WithLayout><EmailGenerateur /></WithLayout>} />
+          <Route path="/export-mapping"   element={<WithLayout><ExportMapping /></WithLayout>} />
           <Route path="/leads"           element={<WithLayout><Suspense fallback={<div style={{padding:40,color:'#64748B'}}>Chargement…</div>}><LeadsModule /></Suspense></WithLayout>} />
           <Route path="/rapport/:token"  element={<RapportPublic />} />
           <Route path="*"               element={<Navigate to="/" replace />} />

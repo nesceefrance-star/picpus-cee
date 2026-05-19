@@ -18,7 +18,8 @@ const PAGE_TITLES = {
   '/relances':     'Agent relances',
   '/assistante':   'Mon assistante',
   '/parametres':   'Paramètres',
-  '/admin/users':  'Utilisateurs',
+  '/admin/users':   'Utilisateurs',
+  '/export-mapping': 'Export personnalisé',
 }
 
 // Statuts actifs — excluent perdu, facture, archive
