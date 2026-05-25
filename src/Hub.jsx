@@ -734,7 +734,7 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
     // Fetch complet : dossier + prospect
     const { data, error } = await supabase
       .from('dossiers')
-      .select('id, ref, fiche_cee, adresse_site, prospect_id, prospects(raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_tel, contact_email, naf)')
+      .select('id, ref, fiche_cee, adresse_site, prospect_id, prospects(raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_tel, contact_email)')
       .eq('id', id)
       .maybeSingle();
     setLoadingDossier(false);
@@ -747,7 +747,7 @@ function ModalNouveauDevis({ onConfirm, onCancel, dossiersList = [] }) {
     if (!p.raison_sociale && data.prospect_id) {
       const { data: pr } = await supabase
         .from('prospects')
-        .select('raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_tel, contact_email, naf')
+        .select('raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_tel, contact_email')
         .eq('id', data.prospect_id)
         .maybeSingle();
       if (pr) p = pr;
