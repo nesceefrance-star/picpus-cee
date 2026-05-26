@@ -745,7 +745,7 @@ export default function Dashboard() {
                                     {t.dossiers && (
                                       <span onClick={e => { e.stopPropagation(); const d = myDossiers.find(x => x.id === t.dossier_id); if (d) openDossier(d) }}
                                         style={{ fontSize: 11, color: C.accent, cursor: 'pointer', fontWeight: 600 }}>
-                                        📂 {t.dossiers.ref}
+                                        📂 {t.dossiers.prospects?.raison_sociale || t.dossiers.ref}
                                       </span>
                                     )}
                                     {/* Qui a coché parmi les partagés */}
