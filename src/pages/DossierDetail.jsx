@@ -337,61 +337,68 @@ export default function DossierDetail() {
 
         {/* ── Tab: Dossier ── */}
         {activeTab === 'dossier' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 16, alignItems: 'start' }}>
-            {/* Colonne gauche */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <ClientCard
-                dossier={dossier}
-                dossierId={id}
-                adresseSiteInit={adresseSite}
-                onSaved={(newProspect, newAdresse) => {
-                  if (newProspect) setDossier(d => ({ ...d, prospects: newProspect }))
-                  if (newAdresse) setAdresseSite(newAdresse)
-                }}
-              />
-              {/* Notes */}
-              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Notes</span>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    {notesSaved && <span style={{ fontSize: 11, color: '#16A34A', fontWeight: 600 }}>✓ Sauvegardé</span>}
-                    <button onClick={saveNotes} disabled={savingNotes}
-                      style={{ padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: savingNotes ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: 'none', background: C.accent, color: '#fff', opacity: savingNotes ? .6 : 1 }}>
-                      {savingNotes ? '…' : 'Sauvegarder'}
-                    </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Grille client + simulation */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 16, alignItems: 'start' }}>
+              {/* Colonne gauche */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <ClientCard
+                  dossier={dossier}
+                  dossierId={id}
+                  adresseSiteInit={adresseSite}
+                  onSaved={(newProspect, newAdresse) => {
+                    if (newProspect) setDossier(d => ({ ...d, prospects: newProspect }))
+                    if (newAdresse) setAdresseSite(newAdresse)
+                  }}
+                />
+                {/* Notes */}
+                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px 22px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Notes</span>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {notesSaved && <span style={{ fontSize: 11, color: '#16A34A', fontWeight: 600 }}>✓ Sauvegardé</span>}
+                      <button onClick={saveNotes} disabled={savingNotes}
+                        style={{ padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: savingNotes ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: 'none', background: C.accent, color: '#fff', opacity: savingNotes ? .6 : 1 }}>
+                        {savingNotes ? '…' : 'Sauvegarder'}
+                      </button>
+                    </div>
                   </div>
+                  <textarea value={notesForm} onChange={e => setNotesForm(e.target.value)}
+                    placeholder="Ajoute des notes sur ce dossier…" rows={6}
+                    style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, lineHeight: 1.6, outline: 'none', fontFamily: 'inherit', resize: 'vertical' }} />
                 </div>
-                <textarea value={notesForm} onChange={e => setNotesForm(e.target.value)}
-                  placeholder="Ajoute des notes sur ce dossier…" rows={6}
-                  style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, lineHeight: 1.6, outline: 'none', fontFamily: 'inherit', resize: 'vertical' }} />
+              </div>
+
+              {/* Colonne droite : Simulation */}
+              <div>
+                <SimulationCard
+                  dossier={dossier}
+                  dossierId={id}
+                  simulation={simulation}
+                  sFormInit={sFormInit}
+                  onSaved={(newSim, updatedDossier) => {
+                    setSimulation(newSim)
+                    if (updatedDossier) setDossier(updatedDossier)
+                  }}
+                />
               </div>
             </div>
 
-            {/* ── Générateur de mail montage ── */}
+            {/* ── Générateur de mail montage (pleine largeur, en bas) ── */}
             {(() => {
               const p   = dossier.prospects || {}
               const prm = simulation?.parametres || {}
-
-              // Split prénom / nom depuis contact_nom
               const parts  = (p.contact_nom || '').trim().split(/\s+/)
               const prenom = parts[0] || ''
               const nom    = parts.slice(1).join(' ') || ''
-
-              // Superficie selon fiche
               let superficie = ''
-              const fiche = dossier.fiche_cee || ''
-              if (prm.surface_m2)       superficie = prm.surface_m2 + ' m²'
+              if (prm.surface_m2)            superficie = prm.surface_m2 + ' m²'
               else if (prm.surface_ventilee) superficie = prm.surface_ventilee + ' m²'
               else if (prm.surface_isolant)  superficie = prm.surface_isolant + ' m²'
               else if (prm.surfaces?.chauffage) superficie = prm.surfaces.chauffage + ' m²'
-
-              // Secteur
               const SECTEURS = { bureaux: 'Bureaux', commerce: 'Commerce', enseignement: 'Enseignement', sante: 'Santé', hotellerie: 'Hôtellerie', restauration: 'Restauration', industrie: 'Industrie', logistique: 'Logistique' }
-              const secteur = SECTEURS[prm.secteur] || prm.secteur || ''
-
-              // Adresse siège
+              const secteur      = SECTEURS[prm.secteur] || prm.secteur || ''
               const adresseSiege = [p.adresse, p.code_postal, p.ville].filter(Boolean).join(', ')
-
               const text = `Informations du signataire :
 Nom : ${nom}
 Prénom : ${prenom}
@@ -404,57 +411,27 @@ Nom du site : ${p.raison_sociale || ''}
 Adresse complète : ${adresseSite || ''}
 Secteur des travaux : ${secteur}
 Surface : ${superficie}
-Fiche CEE : ${fiche}
-
-Merci également de préciser si le site dépend d'une structure. Si oui, merci de renseigner :
+Fiche CEE : ${dossier.fiche_cee || ''}
 
 Le nom de la structure : ${p.raison_sociale || ''}
 Le numéro SIRET : ${p.siret || ''}
 L'adresse du siège social : ${adresseSiege}`
-
-              const copy = () => {
-                navigator.clipboard.writeText(text).then(() => {
-                  setMailCopied(true)
-                  setTimeout(() => setMailCopied(false), 2500)
-                })
-              }
-
+              const copy = () => navigator.clipboard.writeText(text).then(() => {
+                setMailCopied(true)
+                setTimeout(() => setMailCopied(false), 2500)
+              })
               return (
                 <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '18px 22px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>✉️ Mail montage dossier</span>
-                    <button onClick={copy} style={{
-                      background: mailCopied ? '#16A34A' : C.accent, color: '#fff',
-                      border: 'none', borderRadius: 7, padding: '5px 14px',
-                      fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-                      transition: 'background .2s',
-                    }}>
+                    <button onClick={copy} style={{ background: mailCopied ? '#16A34A' : C.accent, color: '#fff', border: 'none', borderRadius: 7, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'background .2s' }}>
                       {mailCopied ? '✓ Copié !' : '📋 Copier'}
                     </button>
                   </div>
-                  <pre style={{
-                    margin: 0, fontFamily: 'inherit', fontSize: 12, lineHeight: 1.7,
-                    color: C.textMid, background: C.bg, borderRadius: 8,
-                    padding: '12px 14px', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                    border: `1px solid ${C.border}`, maxHeight: 320, overflowY: 'auto',
-                  }}>{text}</pre>
+                  <pre style={{ margin: 0, fontFamily: 'inherit', fontSize: 12, lineHeight: 1.7, color: C.textMid, background: C.bg, borderRadius: 8, padding: '12px 14px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', border: `1px solid ${C.border}`, maxHeight: 280, overflowY: 'auto' }}>{text}</pre>
                 </div>
               )
             })()}
-
-            {/* Colonne droite : Simulation */}
-            <div>
-              <SimulationCard
-                dossier={dossier}
-                dossierId={id}
-                simulation={simulation}
-                sFormInit={sFormInit}
-                onSaved={(newSim, updatedDossier) => {
-                  setSimulation(newSim)
-                  if (updatedDossier) setDossier(updatedDossier)
-                }}
-              />
-            </div>
           </div>
         )}
 
