@@ -310,7 +310,15 @@ export default function Dashboard() {
     if (!editTitre.trim()) return
     const echeance = editDate ? (editTime ? `${editDate}T${editTime}:00` : `${editDate}T00:00:00`) : null
     await supabase.from('taches').update({ titre: editTitre.trim(), echeance }).eq('id', id)
-    setTaches(prev => prev.map(t => t.id === id ? { ...t, titre: editTitre.trim(), echeance } : t))
+    setTaches(prev => {
+      const updated = prev.map(t => t.id === id ? { ...t, titre: editTitre.trim(), echeance } : t)
+      return updated.sort((a, b) => {
+        if (!a.echeance && !b.echeance) return 0
+        if (!a.echeance) return 1
+        if (!b.echeance) return -1
+        return new Date(a.echeance) - new Date(b.echeance)
+      })
+    })
     setEditingTacheId(null)
   }
 
