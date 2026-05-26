@@ -405,7 +405,7 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
   // Étape 2 — Client
   const [client, setClient] = useState({
     raison_sociale: '', siret: '', adresse: '', code_postal: '', ville: '',
-    contact_nom: '', contact_email: '', contact_tel: '',
+    contact_nom: '', contact_email: '', contact_tel: '', contact_fonction: '',
   })
   const setC = (k, v) => setClient(c => ({ ...c, [k]: v }))
 
@@ -647,7 +647,7 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
       const { data: prospect, error: e1 } = await createProspect({
         raison_sociale: client.raison_sociale, siret: client.siret,
         adresse: client.adresse, code_postal: client.code_postal, ville: client.ville,
-        contact_nom: client.contact_nom, contact_email: client.contact_email, contact_tel: client.contact_tel,
+        contact_nom: client.contact_nom, contact_email: client.contact_email, contact_tel: client.contact_tel, contact_fonction: client.contact_fonction || null,
       })
       if (e1) throw new Error(e1.message || e1.details || JSON.stringify(e1))
       if (!prospect) throw new Error('Prospect non créé (vérifiez les permissions Supabase)')
@@ -663,6 +663,7 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
           ref,
           prime_estimee: simulation?.prime ?? null,
           montant_devis: simulation?.coutTotal ?? null,
+          adresse_site: tech.adresse_site_label || null,
           notes: `Zone ${tech.zone_climatique} | h=${tech.hauteur_m}m | ${tech.surface_m2}m² | ${nbDestratEffectif} destrats | P_conv=${pConvectif}kW P_rad=${pRadiatif}kW | ${simulation?.kwhCumac?.toLocaleString('fr')} kWh cumac | Marge: ${simulation?.marge}€`,
         }))
         if (!e2) break
@@ -868,7 +869,8 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
                 <Field label="Ville" value={client.ville} onChange={v => setC('ville', v)} placeholder="Lauwin-Planque" />
                 <div style={{ gridColumn: '1/-1' }}><Field label="Adresse" value={client.adresse} onChange={v => setC('adresse', v)} placeholder="771 Rue de la Plaine" /></div>
                 <Field label="Code postal" value={client.code_postal} onChange={v => setC('code_postal', v)} placeholder="59553" />
-                <Field label="Contact" value={client.contact_nom} onChange={v => setC('contact_nom', v)} placeholder="Fabien Van De Ginste" />
+                <Field label="Contact (Nom Prénom)" value={client.contact_nom} onChange={v => setC('contact_nom', v)} placeholder="Fabien Van De Ginste" />
+                <Field label="Fonction" value={client.contact_fonction} onChange={v => setC('contact_fonction', v)} placeholder="Directeur technique" />
                 <Field label="Email contact" value={client.contact_email} onChange={v => setC('contact_email', v)} type="email" placeholder="contact@societe.fr" />
                 <Field label="Téléphone" value={client.contact_tel} onChange={v => setC('contact_tel', v)} placeholder="06 XX XX XX XX" />
               </div>

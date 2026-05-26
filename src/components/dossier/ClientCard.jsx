@@ -43,9 +43,9 @@ export default function ClientCard({ dossier, dossierId, adresseSiteInit, onSave
   }
 
   const save = async () => {
-    const { raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_email, contact_tel } = pForm
+    const { raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_email, contact_tel, contact_fonction } = pForm
     const [prospectData] = await Promise.all([
-      updateProspect(dossier.prospects.id, { raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_email, contact_tel }),
+      updateProspect(dossier.prospects.id, { raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_email, contact_tel, contact_fonction: contact_fonction || null }),
       adresseForm
         ? supabase.from('dossiers').update({ adresse_site: adresseForm }).eq('id', dossierId)
         : Promise.resolve(),
@@ -110,7 +110,8 @@ export default function ClientCard({ dossier, dossierId, adresseSiteInit, onSave
 
             <div style={{ height: 1, background: C.border, margin: '10px 0' }} />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
-              <Field label="Contact" value={pForm.contact_nom} onChange={v => setP('contact_nom', v)} />
+              <Field label="Contact (Nom Prénom)" value={pForm.contact_nom} onChange={v => setP('contact_nom', v)} />
+              <Field label="Fonction" value={pForm.contact_fonction || ''} onChange={v => setP('contact_fonction', v)} />
               <Field label="Téléphone" value={pForm.contact_tel} onChange={v => setP('contact_tel', v)} />
               <div style={{ gridColumn: '1/-1' }}><Field label="Email" value={pForm.contact_email} onChange={v => setP('contact_email', v)} type="email" /></div>
             </div>
@@ -128,6 +129,7 @@ export default function ClientCard({ dossier, dossierId, adresseSiteInit, onSave
             )}
             <div style={{ height: 1, background: C.border, margin: '8px 0' }} />
             <InfoRow label="Contact" value={p.contact_nom} />
+            {p.contact_fonction && <InfoRow label="Fonction" value={p.contact_fonction} />}
             <InfoRow label="Email" value={p.contact_email} />
             <InfoRow label="Tél" value={p.contact_tel} />
           </div>

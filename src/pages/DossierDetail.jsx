@@ -402,7 +402,7 @@ export default function DossierDetail() {
               const text = `Informations du signataire :
 Nom : ${nom}
 Prénom : ${prenom}
-Fonction :
+Fonction : ${p.contact_fonction || ''}
 Numéro de téléphone : ${p.contact_tel || ''}
 Adresse mail : ${p.contact_email || ''}
 
@@ -423,7 +423,10 @@ L'adresse du siège social : ${adresseSiege}`
               return (
                 <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '18px 22px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>✉️ Mail montage dossier</span>
+                    <div>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>✉️ Mail montage dossier</span>
+                      <span style={{ fontSize: 11, color: C.textSoft, marginLeft: 8 }}>· mis à jour automatiquement après chaque sauvegarde</span>
+                    </div>
                     <button onClick={copy} style={{ background: mailCopied ? '#16A34A' : C.accent, color: '#fff', border: 'none', borderRadius: 7, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'background .2s' }}>
                       {mailCopied ? '✓ Copié !' : '📋 Copier'}
                     </button>
