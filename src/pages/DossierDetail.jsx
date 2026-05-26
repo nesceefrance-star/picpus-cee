@@ -55,6 +55,7 @@ export default function DossierDetail() {
   const [notesForm,     setNotesForm]     = useState('')
   const [savingNotes,   setSavingNotes]   = useState(false)
   const [notesSaved,    setNotesSaved]    = useState(false)
+  const [mailCopied,    setMailCopied]    = useState(false)
 
   // Badge counts for tabs (loaded lazily by sub-components)
   const [appelCount,   setAppelCount]   = useState(0)
@@ -365,6 +366,81 @@ export default function DossierDetail() {
                   style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, lineHeight: 1.6, outline: 'none', fontFamily: 'inherit', resize: 'vertical' }} />
               </div>
             </div>
+
+            {/* ── Générateur de mail montage ── */}
+            {(() => {
+              const p   = dossier.prospects || {}
+              const prm = simulation?.parametres || {}
+
+              // Split prénom / nom depuis contact_nom
+              const parts  = (p.contact_nom || '').trim().split(/\s+/)
+              const prenom = parts[0] || ''
+              const nom    = parts.slice(1).join(' ') || ''
+
+              // Superficie selon fiche
+              let superficie = ''
+              const fiche = dossier.fiche_cee || ''
+              if (prm.surface_m2)       superficie = prm.surface_m2 + ' m²'
+              else if (prm.surface_ventilee) superficie = prm.surface_ventilee + ' m²'
+              else if (prm.surface_isolant)  superficie = prm.surface_isolant + ' m²'
+              else if (prm.surfaces?.chauffage) superficie = prm.surfaces.chauffage + ' m²'
+
+              // Secteur
+              const SECTEURS = { bureaux: 'Bureaux', commerce: 'Commerce', enseignement: 'Enseignement', sante: 'Santé', hotellerie: 'Hôtellerie', restauration: 'Restauration', industrie: 'Industrie', logistique: 'Logistique' }
+              const secteur = SECTEURS[prm.secteur] || prm.secteur || ''
+
+              // Adresse siège
+              const adresseSiege = [p.adresse, p.code_postal, p.ville].filter(Boolean).join(', ')
+
+              const text = `Informations du signataire :
+Nom : ${nom}
+Prénom : ${prenom}
+Fonction :
+Numéro de téléphone : ${p.contact_tel || ''}
+Adresse mail : ${p.contact_email || ''}
+
+Informations du site / chantier :
+Nom du site : ${p.raison_sociale || ''}
+Adresse complète : ${adresseSite || ''}
+Secteur des travaux : ${secteur}
+Surface : ${superficie}
+Fiche CEE : ${fiche}
+
+Merci également de préciser si le site dépend d'une structure. Si oui, merci de renseigner :
+
+Le nom de la structure : ${p.raison_sociale || ''}
+Le numéro SIRET : ${p.siret || ''}
+L'adresse du siège social : ${adresseSiege}`
+
+              const copy = () => {
+                navigator.clipboard.writeText(text).then(() => {
+                  setMailCopied(true)
+                  setTimeout(() => setMailCopied(false), 2500)
+                })
+              }
+
+              return (
+                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '18px 22px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>✉️ Mail montage dossier</span>
+                    <button onClick={copy} style={{
+                      background: mailCopied ? '#16A34A' : C.accent, color: '#fff',
+                      border: 'none', borderRadius: 7, padding: '5px 14px',
+                      fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                      transition: 'background .2s',
+                    }}>
+                      {mailCopied ? '✓ Copié !' : '📋 Copier'}
+                    </button>
+                  </div>
+                  <pre style={{
+                    margin: 0, fontFamily: 'inherit', fontSize: 12, lineHeight: 1.7,
+                    color: C.textMid, background: C.bg, borderRadius: 8,
+                    padding: '12px 14px', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    border: `1px solid ${C.border}`, maxHeight: 320, overflowY: 'auto',
+                  }}>{text}</pre>
+                </div>
+              )
+            })()}
 
             {/* Colonne droite : Simulation */}
             <div>
