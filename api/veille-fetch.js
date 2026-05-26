@@ -47,13 +47,13 @@ function parseRSS(xml) {
     const link = isAtom ? getAttr('link', 'href') : (get('link') || getAttr('link', 'href'))
     const pubDate = get('pubDate') || get('published') || get('updated') || get('dc:date')
     const description = get('description') || get('summary') || get('content') || get('content:encoded') || ''
-    const guid = get('guid') || get('id') || link || `${title}-${pubDate}`
+    const guid = get('guid') || get('id') || link || (title ? `title-${title.slice(0, 80)}` : null)
 
     if (title && guid) {
       items.push({
         title: title.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#039;/g, "'"),
         link: link || null,
-        pubDate: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
+        pubDate: pubDate ? new Date(pubDate).toISOString() : null,
         description: description.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').slice(0, 800),
         guid,
       })
@@ -85,11 +85,13 @@ export default async function handler(req, res) {
   // Le cron Vercel appelle en GET sans token — on accepte les deux
   if (req.method === 'POST') {
     const token = req.headers.authorization?.replace('Bearer ', '')
-    if (token) {
-      const { error } = await supabase.auth.getUser(token)
-      if (error) return res.status(401).json({ error: 'unauthorized' })
-    }
+    if (!token) return res.status(401).json({ error: 'unauthorized' })
+    const { error } = await supabase.auth.getUser(token)
+    if (error) return res.status(401).json({ error: 'unauthorized' })
   }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY)
+    return res.status(500).json({ error: 'missing env: SUPABASE_SERVICE_ROLE_KEY' })
 
   try {
     // 1. Charger toutes les sources actives
@@ -100,7 +102,7 @@ export default async function handler(req, res) {
 
     if (srcErr) throw srcErr
 
-    let totalNew = 0
+    let itemsProcessed = 0
     const errors = []
 
     // 2. Pour chaque source, fetcher et parser le RSS
@@ -127,7 +129,7 @@ export default async function handler(req, res) {
             .upsert({
               guid: item.guid,
               source_nom: source.nom,
-              source_categorie: arrete && source.categorie !== 'arrete' ? 'arrete' : source.categorie,
+              source_categorie: arrete && source.categorie !== 'arrete' ? 'arrete' : (source.categorie || null),
               titre: item.title.slice(0, 500),
               url: item.link,
               description: item.description || null,
@@ -135,7 +137,7 @@ export default async function handler(req, res) {
               date_publication: item.pubDate,
             }, { onConflict: 'guid', ignoreDuplicates: true })
 
-          if (!upsertErr) totalNew++
+          if (!upsertErr) itemsProcessed++
         }
 
         // Mettre à jour derniere_maj de la source
@@ -146,7 +148,7 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({ new_items: totalNew, errors: errors.length ? errors : undefined })
+    return res.status(200).json({ items_processed: itemsProcessed, errors: errors.length ? errors : undefined })
   } catch (e) {
     return res.status(500).json({ error: e.message })
   }
