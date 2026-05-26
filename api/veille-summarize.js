@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     .eq('id', item_id)
     .single()
   if (itemErr || !item) return res.status(404).json({ error: 'item non trouvé' })
-  if (item.resume_ia) return res.status(200).json({ resume_ia: item.resume_ia, points_cles: item.points_cles })
+  if (item.resume_ia) return res.status(200).json({ resume_ia: item.resume_ia, points_cles: item.points_cles, fiches_impactees: item.fiches_impactees || [] })
 
   // 2. Tenter de récupérer le contenu de la page (best effort)
   let pageContent = item.description || ''
@@ -89,7 +89,9 @@ Réponds UNIQUEMENT en JSON valide avec cette structure :
         max_tokens: 800,
         messages: [{ role: 'user', content: prompt }],
       }),
+      signal: AbortSignal.timeout(15000),
     })
+    if (!claudeRes.ok) throw new Error(`Claude API error: ${claudeRes.status}`)
 
     const claudeData = await claudeRes.json()
     const raw = claudeData.content?.[0]?.text || ''
