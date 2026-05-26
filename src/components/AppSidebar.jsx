@@ -41,6 +41,7 @@ import DarkModeIcon from '@mui/icons-material/DarkMode'
 import BarChartIcon from '@mui/icons-material/BarChart'
 import MapIcon from '@mui/icons-material/Map'
 import TableChartIcon from '@mui/icons-material/TableChart'
+import CellTowerIcon from '@mui/icons-material/CellTower'
 
 const DRAWER_OPEN  = 240
 const DRAWER_MINI  = 64
@@ -212,6 +213,9 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
 
           {/* Export personnalisé */}
           <Item icon={<TableChartIcon fontSize="small" />} label="Export personnalisé" path="/export-mapping" />
+
+          {/* Veille CEE */}
+          <Item icon={<CellTowerIcon fontSize="small" />} label="Veille CEE" path="/veille" />
 
           <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
 
