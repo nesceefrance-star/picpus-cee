@@ -1265,17 +1265,35 @@ function LushaContactModal({ contact, societeNom, onClose, onEnregistrer, lushaC
 }
 
 // ─── LIGNE CONTACT ────────────────────────────────────────────────
-function ContactRow({ contact, societeNom, onEnrichirLusha, lushaLoading, onSetLinkedin, onSetTel2, isFirst, lushaCredits }) {
+function ContactRow({ contact, societeNom, onEnrichirLusha, lushaLoading, onSetLinkedin, onSetTels, isFirst, lushaCredits }) {
   const C = useC();
-  const [editingLi,   setEditingLi]   = useState(false);
-  const [liInput,     setLiInput]     = useState(contact.linkedin_url ?? '');
-  const [editingTel2, setEditingTel2] = useState(false);
-  const [tel2Input,   setTel2Input]   = useState(contact.tel2 ?? '');
+  const [editingLi,  setEditingLi]  = useState(false);
+  const [liInput,    setLiInput]    = useState(contact.linkedin_url ?? '');
+  const [tels,       setTels]       = useState(contact.tels_manuels ?? []);
+  const [editingIdx, setEditingIdx] = useState(null); // index en cours d'édition, -1 = nouvel ajout
+  const [telInput,   setTelInput]   = useState('');
 
-  const saveTel2 = () => {
-    onSetTel2?.(contact.id, tel2Input.trim());
-    setEditingTel2(false);
+  const saveTels = (newTels) => {
+    const clean = newTels.filter(t => t.trim());
+    setTels(clean);
+    onSetTels?.(contact.id, clean);
   };
+
+  const startEdit = (idx) => { setEditingIdx(idx); setTelInput(idx === -1 ? '' : tels[idx]); };
+
+  const confirmEdit = () => {
+    if (editingIdx === -1) {
+      if (telInput.trim()) saveTels([...tels, telInput.trim()]);
+    } else {
+      const next = [...tels];
+      if (telInput.trim()) next[editingIdx] = telInput.trim();
+      else next.splice(editingIdx, 1);
+      saveTels(next);
+    }
+    setEditingIdx(null);
+  };
+
+  const removeTel = (idx, e) => { e.stopPropagation(); const next = [...tels]; next.splice(idx, 1); saveTels(next); };
 
   const handleOpenLinkedin = () => {
     if (contact.linkedin_url) window.open(contact.linkedin_url, '_blank');
@@ -1300,35 +1318,40 @@ function ContactRow({ contact, societeNom, onEnrichirLusha, lushaLoading, onSetL
             {contact.lusha_fetched && <Badge label="Lusha ✓" color={C.lusha} bg={`${C.lusha}15`} />}
           </div>
           {(contact.email || contact.tel_societe) && (
-            <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
               {contact.email && <a href={`mailto:${contact.email}`} style={{ fontSize: 11, color: C.accent, textDecoration: 'none' }}>✉ {contact.email}</a>}
-              {contact.tel_societe && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <a href={`tel:${contact.tel_societe}`} style={{ fontSize: 11, color: C.green, textDecoration: 'none' }}>☎ {contact.tel_societe}</a>
-                  {/* Deuxième numéro sauvegardé */}
-                  {contact.tel2 && !editingTel2 && (
-                    <a href={`tel:${contact.tel2}`} onClick={e => { e.preventDefault(); setTel2Input(contact.tel2); setEditingTel2(true); }}
-                      style={{ fontSize: 11, color: C.yellow, textDecoration: 'none' }}>📱 {contact.tel2}</a>
-                  )}
-                  {/* Input édition tel2 */}
-                  {editingTel2 ? (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      <input autoFocus value={tel2Input} onChange={e => setTel2Input(e.target.value)}
-                        placeholder="06 XX XX XX XX"
-                        onKeyDown={e => { if (e.key === 'Enter') saveTel2(); if (e.key === 'Escape') setEditingTel2(false); }}
-                        onBlur={saveTel2}
-                        style={{ width: 130, padding: '2px 6px', borderRadius: 5, border: `1px solid ${C.borderLight}`, background: C.bgInput, color: C.text, fontSize: 11, outline: 'none', fontFamily: 'inherit' }} />
-                    </span>
-                  ) : (
-                    !contact.tel2 && (
-                      <button onClick={() => { setTel2Input(''); setEditingTel2(true); }}
-                        title="Ajouter un 2e numéro"
-                        style={{ background: 'none', border: `1px dashed ${C.borderLight}`, borderRadius: 4, color: C.textDim, cursor: 'pointer', fontSize: 10, padding: '1px 5px', fontFamily: 'inherit', lineHeight: 1.4 }}>
-                        + num
-                      </button>
-                    )
-                  )}
-                </span>
+              {contact.tel_societe && <a href={`tel:${contact.tel_societe}`} style={{ fontSize: 11, color: C.green, textDecoration: 'none' }}>☎ {contact.tel_societe}</a>}
+
+              {/* Numéros manuels supplémentaires */}
+              {tels.map((t, i) => (
+                editingIdx === i ? (
+                  <input key={i} autoFocus value={telInput} onChange={e => setTelInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); if (e.key === 'Escape') setEditingIdx(null); }}
+                    onBlur={confirmEdit}
+                    style={{ width: 130, padding: '2px 7px', borderRadius: 5, border: `1px solid ${C.yellow}`, background: C.bgInput, color: C.text, fontSize: 11, outline: 'none', fontFamily: 'inherit' }} />
+                ) : (
+                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                    <a href={`tel:${t}`} onClick={e => { e.preventDefault(); startEdit(i); }}
+                      title="Cliquer pour modifier"
+                      style={{ fontSize: 11, color: C.yellow, textDecoration: 'none', cursor: 'text' }}>📱 {t}</a>
+                    <button onClick={e => removeTel(i, e)} title="Supprimer"
+                      style={{ background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', fontSize: 10, padding: '0 2px', lineHeight: 1, fontFamily: 'inherit' }}>×</button>
+                  </span>
+                )
+              ))}
+
+              {/* Input nouvel ajout */}
+              {editingIdx === -1 ? (
+                <input autoFocus value={telInput} onChange={e => setTelInput(e.target.value)}
+                  placeholder="06 XX XX XX XX"
+                  onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); if (e.key === 'Escape') setEditingIdx(null); }}
+                  onBlur={confirmEdit}
+                  style={{ width: 130, padding: '2px 7px', borderRadius: 5, border: `1px solid ${C.borderLight}`, background: C.bgInput, color: C.text, fontSize: 11, outline: 'none', fontFamily: 'inherit' }} />
+              ) : (
+                <button onClick={() => startEdit(-1)} title="Ajouter un numéro"
+                  style={{ background: 'none', border: `1px dashed ${C.borderLight}`, borderRadius: 4, color: C.textDim, cursor: 'pointer', fontSize: 10, padding: '1px 6px', fontFamily: 'inherit', lineHeight: 1.5 }}>
+                  + num
+                </button>
               )}
             </div>
           )}
@@ -1607,7 +1630,7 @@ function ManuelModal({ onClose, onAnnuler, onCreer, saving, form, setForm }) {
 }
 
 // ─── CARTE SOCIÉTÉ ────────────────────────────────────────────────
-function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastre, onEnrichirLusha, onGmb, onSetLinkedin, onSetTel2, onConvertir, onSupprimer, onNextAction, onSaveCommentaire, lushaCredits }) {
+function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastre, onEnrichirLusha, onGmb, onSetLinkedin, onSetTels, onConvertir, onSupprimer, onNextAction, onSaveCommentaire, lushaCredits }) {
   const C = useC();
   const [open,           setOpen]          = useState(false);
   const [showMap,        setShowMap]       = useState(false);
@@ -1729,7 +1752,7 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
               {(soc.contacts ?? []).map((contact, idx) => (
                 <ContactRow key={contact.id} contact={contact} societeNom={soc.raison_sociale}
                   onEnrichirLusha={onEnrichirLusha} lushaLoading={lushaLoading} onSetLinkedin={onSetLinkedin}
-                  onSetTel2={onSetTel2} lushaCredits={lushaCredits}
+                  onSetTels={onSetTels} lushaCredits={lushaCredits}
                   isFirst={idx === 0} />
               ))}
             </div>
@@ -1766,7 +1789,7 @@ export default function LeadsModule() {
     searchQuery, setSearchQuery, filterStatut, setFilterStatut, sortBy, setSortBy,
     importerExcel, analyserImport, clearAnalyse, analyseData, analyseEnCours,
     enrichirCadastre, enrichirLusha, enrichirContactLusha, enrichirGMB, gmbLoading,
-    setLinkedinUrl, setContactTel2, setStatutSociete, convertirEnDossier, supprimerSociete,
+    setLinkedinUrl, setContactTels, setStatutSociete, convertirEnDossier, supprimerSociete,
     setNextAction, setCommentaireSociete, creerLeadManuel,
     creerBatchDepuisSIRENE, ajouterSocieteManuelle,
     lushaCredits, sauvegarderReveal, verifierCacheLusha,
@@ -2024,7 +2047,7 @@ export default function LeadsModule() {
                 <SocieteCard key={soc.id} soc={soc}
                   cadastreLoading={cadastreLoading} lushaLoading={lushaLoading} gmbLoading={gmbLoading}
                   onCadastre={enrichirCadastre} onEnrichirLusha={enrichirContactLusha} onGmb={enrichirGMB}
-                  onSetLinkedin={setLinkedinUrl} onSetTel2={setContactTel2} onConvertir={convertirEnDossier}
+                  onSetLinkedin={setLinkedinUrl} onSetTels={setContactTels} onConvertir={convertirEnDossier}
                   onSupprimer={supprimerSociete}
                   onNextAction={setNextAction} onSaveCommentaire={setCommentaireSociete}
                   lushaCredits={lushaCredits} />
