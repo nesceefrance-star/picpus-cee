@@ -1265,10 +1265,17 @@ function LushaContactModal({ contact, societeNom, onClose, onEnregistrer, lushaC
 }
 
 // ─── LIGNE CONTACT ────────────────────────────────────────────────
-function ContactRow({ contact, societeNom, onEnrichirLusha, lushaLoading, onSetLinkedin, isFirst, lushaCredits }) {
+function ContactRow({ contact, societeNom, onEnrichirLusha, lushaLoading, onSetLinkedin, onSetTel2, isFirst, lushaCredits }) {
   const C = useC();
-  const [editingLi, setEditingLi] = useState(false);
-  const [liInput,   setLiInput]   = useState(contact.linkedin_url ?? '');
+  const [editingLi,   setEditingLi]   = useState(false);
+  const [liInput,     setLiInput]     = useState(contact.linkedin_url ?? '');
+  const [editingTel2, setEditingTel2] = useState(false);
+  const [tel2Input,   setTel2Input]   = useState(contact.tel2 ?? '');
+
+  const saveTel2 = () => {
+    onSetTel2?.(contact.id, tel2Input.trim());
+    setEditingTel2(false);
+  };
 
   const handleOpenLinkedin = () => {
     if (contact.linkedin_url) window.open(contact.linkedin_url, '_blank');
@@ -1293,9 +1300,36 @@ function ContactRow({ contact, societeNom, onEnrichirLusha, lushaLoading, onSetL
             {contact.lusha_fetched && <Badge label="Lusha ✓" color={C.lusha} bg={`${C.lusha}15`} />}
           </div>
           {(contact.email || contact.tel_societe) && (
-            <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
               {contact.email && <a href={`mailto:${contact.email}`} style={{ fontSize: 11, color: C.accent, textDecoration: 'none' }}>✉ {contact.email}</a>}
-              {contact.tel_societe && <a href={`tel:${contact.tel_societe}`} style={{ fontSize: 11, color: C.green, textDecoration: 'none' }}>☎ {contact.tel_societe}</a>}
+              {contact.tel_societe && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <a href={`tel:${contact.tel_societe}`} style={{ fontSize: 11, color: C.green, textDecoration: 'none' }}>☎ {contact.tel_societe}</a>
+                  {/* Deuxième numéro sauvegardé */}
+                  {contact.tel2 && !editingTel2 && (
+                    <a href={`tel:${contact.tel2}`} onClick={e => { e.preventDefault(); setTel2Input(contact.tel2); setEditingTel2(true); }}
+                      style={{ fontSize: 11, color: C.yellow, textDecoration: 'none' }}>📱 {contact.tel2}</a>
+                  )}
+                  {/* Input édition tel2 */}
+                  {editingTel2 ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <input autoFocus value={tel2Input} onChange={e => setTel2Input(e.target.value)}
+                        placeholder="06 XX XX XX XX"
+                        onKeyDown={e => { if (e.key === 'Enter') saveTel2(); if (e.key === 'Escape') setEditingTel2(false); }}
+                        onBlur={saveTel2}
+                        style={{ width: 130, padding: '2px 6px', borderRadius: 5, border: `1px solid ${C.borderLight}`, background: C.bgInput, color: C.text, fontSize: 11, outline: 'none', fontFamily: 'inherit' }} />
+                    </span>
+                  ) : (
+                    !contact.tel2 && (
+                      <button onClick={() => { setTel2Input(''); setEditingTel2(true); }}
+                        title="Ajouter un 2e numéro"
+                        style={{ background: 'none', border: `1px dashed ${C.borderLight}`, borderRadius: 4, color: C.textDim, cursor: 'pointer', fontSize: 10, padding: '1px 5px', fontFamily: 'inherit', lineHeight: 1.4 }}>
+                        + num
+                      </button>
+                    )
+                  )}
+                </span>
+              )}
             </div>
           )}
           {contact.lusha_fetched && (contact.lusha_email || contact.lusha_phone) && (
@@ -1573,7 +1607,7 @@ function ManuelModal({ onClose, onAnnuler, onCreer, saving, form, setForm }) {
 }
 
 // ─── CARTE SOCIÉTÉ ────────────────────────────────────────────────
-function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastre, onEnrichirLusha, onGmb, onSetLinkedin, onConvertir, onSupprimer, onNextAction, onSaveCommentaire, lushaCredits }) {
+function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastre, onEnrichirLusha, onGmb, onSetLinkedin, onSetTel2, onConvertir, onSupprimer, onNextAction, onSaveCommentaire, lushaCredits }) {
   const C = useC();
   const [open,           setOpen]          = useState(false);
   const [showMap,        setShowMap]       = useState(false);
@@ -1695,7 +1729,7 @@ function SocieteCard({ soc, cadastreLoading, lushaLoading, gmbLoading, onCadastr
               {(soc.contacts ?? []).map((contact, idx) => (
                 <ContactRow key={contact.id} contact={contact} societeNom={soc.raison_sociale}
                   onEnrichirLusha={onEnrichirLusha} lushaLoading={lushaLoading} onSetLinkedin={onSetLinkedin}
-                  lushaCredits={lushaCredits}
+                  onSetTel2={onSetTel2} lushaCredits={lushaCredits}
                   isFirst={idx === 0} />
               ))}
             </div>
@@ -1732,7 +1766,7 @@ export default function LeadsModule() {
     searchQuery, setSearchQuery, filterStatut, setFilterStatut, sortBy, setSortBy,
     importerExcel, analyserImport, clearAnalyse, analyseData, analyseEnCours,
     enrichirCadastre, enrichirLusha, enrichirContactLusha, enrichirGMB, gmbLoading,
-    setLinkedinUrl, setStatutSociete, convertirEnDossier, supprimerSociete,
+    setLinkedinUrl, setContactTel2, setStatutSociete, convertirEnDossier, supprimerSociete,
     setNextAction, setCommentaireSociete, creerLeadManuel,
     creerBatchDepuisSIRENE, ajouterSocieteManuelle,
     lushaCredits, sauvegarderReveal, verifierCacheLusha,
@@ -1990,7 +2024,7 @@ export default function LeadsModule() {
                 <SocieteCard key={soc.id} soc={soc}
                   cadastreLoading={cadastreLoading} lushaLoading={lushaLoading} gmbLoading={gmbLoading}
                   onCadastre={enrichirCadastre} onEnrichirLusha={enrichirContactLusha} onGmb={enrichirGMB}
-                  onSetLinkedin={setLinkedinUrl} onConvertir={convertirEnDossier}
+                  onSetLinkedin={setLinkedinUrl} onSetTel2={setContactTel2} onConvertir={convertirEnDossier}
                   onSupprimer={supprimerSociete}
                   onNextAction={setNextAction} onSaveCommentaire={setCommentaireSociete}
                   lushaCredits={lushaCredits} />

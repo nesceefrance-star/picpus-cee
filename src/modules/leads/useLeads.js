@@ -880,6 +880,11 @@ export function useLeads() {
     setSocietes(prev => prev.map(s => ({ ...s, contacts: s.contacts.map(c => c.id === contactId ? { ...c, linkedin_url: url } : c) })));
   }, []);
 
+  const setContactTel2 = useCallback(async (contactId, tel2) => {
+    await supabase.from('leads_contacts').update({ tel2: tel2 || null }).eq('id', contactId);
+    setSocietes(prev => prev.map(s => ({ ...s, contacts: s.contacts.map(c => c.id === contactId ? { ...c, tel2 } : c) })));
+  }, []);
+
   const setStatutSociete = useCallback(async (importId, statut) => {
     await supabase.from('leads_import').update({ statut_qualification: statut }).eq('id', importId);
     setSocietes(prev => prev.map(s => s.id === importId ? { ...s, statut_qualification: statut } : s));
@@ -1179,7 +1184,7 @@ export function useLeads() {
     // Actions
     importerExcel, analyserImport, clearAnalyse, analyseData, analyseEnCours,
     enrichirCadastre, enrichirLusha, enrichirContactLusha, enrichirGMB, gmbLoading,
-    setLinkedinUrl, setStatutSociete, convertirEnDossier, supprimerSociete,
+    setLinkedinUrl, setContactTel2, setStatutSociete, convertirEnDossier, supprimerSociete,
     setNextAction, setCommentaireSociete, creerLeadManuel,
     refresh: () => { loadBatches(); loadSocietes(selectedBatchId); },
     // SIRENE / manuel
