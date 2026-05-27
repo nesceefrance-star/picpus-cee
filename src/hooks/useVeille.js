@@ -47,12 +47,13 @@ export default function useVeille() {
     setFetching(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const r = await fetch('/api/veille-fetch', {
+      const r = await fetch('/api/claude', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
+        body: JSON.stringify({ action: 'veille-fetch' }),
       })
       const result = await r.json()
       if (result.items_processed > 0) await fetchItems()
@@ -66,13 +67,13 @@ export default function useVeille() {
 
   const generateSummary = useCallback(async (itemId) => {
     const { data: { session } } = await supabase.auth.getSession()
-    const r = await fetch('/api/veille-summarize', {
+    const r = await fetch('/api/claude', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session?.access_token}`,
       },
-      body: JSON.stringify({ item_id: itemId }),
+      body: JSON.stringify({ action: 'veille-summarize', item_id: itemId }),
     })
     const result = await r.json()
     if (result.resume_ia) {
