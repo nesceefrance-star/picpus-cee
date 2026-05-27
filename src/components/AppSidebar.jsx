@@ -214,9 +214,6 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
           {/* Export personnalisé */}
           <Item icon={<TableChartIcon fontSize="small" />} label="Export personnalisé" path="/export-mapping" />
 
-          {/* Veille CEE */}
-          <Item icon={<CellTowerIcon fontSize="small" />} label="Veille CEE" path="/veille" />
-
           <Divider sx={{ my: 1, borderColor: DARK.border, mx: 2 }} />
 
           {/* Prospection */}
@@ -245,6 +242,7 @@ export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }
             <Item icon={<SearchIcon fontSize="small" />}        label="Vérificateur CEE"     path="/hub" module="verificateur" indent />
             <Item icon={<ReceiptLongIcon fontSize="small" />}  label="Générateur de devis"  path="/hub" module="marges"       indent />
             <Item icon={<EngineeringIcon fontSize="small" />}  label="Visites techniques"   path="/visites"                   indent />
+            <Item icon={<CellTowerIcon fontSize="small" />}    label="Veille CEE"           path="/veille"                    indent />
           </Collapse>
 
           {/* Admin */}
