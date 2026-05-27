@@ -180,6 +180,7 @@ export default function Veille() {
   const [activeTab, setActiveTab] = useState(null)
   const [selectedItem, setSelectedItem] = useState(null)
   const [generating, setGenerating] = useState(false)
+  const [viewMode, setViewMode] = useState('list')
 
   const dossierFiches = [...new Set(dossiers.map(d => d.fiche_cee).filter(Boolean))]
 
@@ -202,17 +203,18 @@ export default function Veille() {
 
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
   const tabKey = k => k === '__saved' ? '__saved' : k
+  const maxW = viewMode === 'grid' ? 980 : 680
 
   return (
     <div style={{ minHeight: '100vh', background: V.bg, fontFamily: "system-ui,'Segoe UI',Arial,sans-serif" }}>
 
       {/* Header sticky */}
       <div style={{ background: V.headerBg, borderBottom: `1px solid ${V.border}`, padding: '16px 20px', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ maxWidth: 680, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ maxWidth: maxW, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontSize: 11, color: V.textSoft, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 }}>{today}</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: V.text, letterSpacing: '-0.02em' }}>
-              📡 Veille CEE
+              📡 Actualités CEE
               {newCount > 0 && (
                 <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, background: V.arrete, color: '#fff', borderRadius: 10, padding: '2px 8px' }}>
                   {newCount} nouveau{newCount > 1 ? 'x' : ''}
@@ -220,16 +222,29 @@ export default function Veille() {
               )}
             </div>
           </div>
-          <button onClick={triggerFetch} disabled={fetching} title="Actualiser les sources"
-            style={{ background: fetching ? V.border : V.btnBg, border: `1px solid ${V.border}`, color: V.textMid, borderRadius: 8, padding: '8px 12px', fontSize: 12, cursor: fetching ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
-            {fetching ? '⏳' : '🔄'} {fetching ? 'Actualisation…' : 'Actualiser'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Toggle vue */}
+            <div style={{ display: 'flex', border: `1px solid ${V.border}`, borderRadius: 8, overflow: 'hidden' }}>
+              <button onClick={() => setViewMode('list')} title="Vue liste"
+                style={{ background: viewMode === 'list' ? V.btnBg : 'transparent', border: 'none', color: viewMode === 'list' ? V.text : V.textSoft, padding: '7px 10px', fontSize: 15, cursor: 'pointer', lineHeight: 1, display: 'flex', alignItems: 'center' }}>
+                ☰
+              </button>
+              <button onClick={() => setViewMode('grid')} title="Vue grille"
+                style={{ background: viewMode === 'grid' ? V.btnBg : 'transparent', border: 'none', borderLeft: `1px solid ${V.border}`, color: viewMode === 'grid' ? V.text : V.textSoft, padding: '7px 10px', fontSize: 15, cursor: 'pointer', lineHeight: 1, display: 'flex', alignItems: 'center' }}>
+                ⊞
+              </button>
+            </div>
+            <button onClick={triggerFetch} disabled={fetching} title="Actualiser les sources"
+              style={{ background: fetching ? V.border : V.btnBg, border: `1px solid ${V.border}`, color: V.textMid, borderRadius: 8, padding: '8px 12px', fontSize: 12, cursor: fetching ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+              {fetching ? '⏳' : '🔄'} {fetching ? 'Actualisation…' : 'Actualiser'}
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Tabs filtres sticky */}
       <div style={{ background: V.headerBg, borderBottom: `1px solid ${V.border}`, overflowX: 'auto', position: 'sticky', top: 72, zIndex: 99 }}>
-        <div style={{ display: 'flex', gap: 2, padding: '0 16px', maxWidth: 680, margin: '0 auto', minWidth: 'max-content' }}>
+        <div style={{ display: 'flex', gap: 2, padding: '0 16px', maxWidth: maxW, margin: '0 auto', minWidth: 'max-content' }}>
           {TABS.map(tab => {
             const k = tabKey(tab.key)
             const active = activeTab === k
@@ -244,7 +259,7 @@ export default function Veille() {
       </div>
 
       {/* Feed */}
-      <div style={{ maxWidth: 680, margin: '0 auto', padding: '16px 12px 80px' }}>
+      <div style={{ maxWidth: maxW, margin: '0 auto', padding: '16px 12px 80px' }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px 0', color: V.textSoft }}>
             <div style={{ fontSize: 24, marginBottom: 12 }}>⏳</div>
@@ -259,6 +274,16 @@ export default function Veille() {
               style={{ background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
               {fetching ? '⏳ Chargement…' : '🔄 Charger les actualités'}
             </button>
+          </div>
+        ) : viewMode === 'grid' ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12, alignItems: 'start' }}>
+            {items.map(item =>
+              item.source_categorie === 'arrete' ? (
+                <ArreteCard key={item.id} item={item} dossierFiches={dossierFiches} onOpen={handleOpen} onToggleSave={toggleSauvegarde} V={V} />
+              ) : (
+                <ItemCard key={item.id} item={item} onOpen={handleOpen} onToggleSave={toggleSauvegarde} V={V} />
+              )
+            )}
           </div>
         ) : (
           items.map(item =>
