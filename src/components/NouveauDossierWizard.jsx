@@ -584,6 +584,7 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
 
   const [existingProspect, setExistingProspect] = useState(null) // client pré-rempli depuis DB
 
+  // Sélection depuis la raison sociale → pré-remplit tout (société + contact)
   const handleSelectExistingProspect = (p) => {
     setExistingProspect(p)
     setClient({
@@ -597,6 +598,17 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
       contact_tel:      p.contact_tel      || '',
       contact_fonction: p.contact_fonction || '',
     })
+  }
+
+  // Sélection depuis le nom du contact → pré-remplit uniquement les coordonnées contact
+  const handleSelectExistingContact = (p) => {
+    setClient(c => ({
+      ...c,
+      contact_nom:      p.contact_nom      || c.contact_nom,
+      contact_email:    p.contact_email    || c.contact_email,
+      contact_tel:      p.contact_tel      || c.contact_tel,
+      contact_fonction: p.contact_fonction || c.contact_fonction,
+    }))
   }
 
   const [prixMwh, setPrixMwh] = useState(prefillPrixMwh || '7.5')
@@ -984,7 +996,7 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
                 <Field label="Ville" value={client.ville} onChange={v => setC('ville', v)} placeholder="Lauwin-Planque" />
                 <div style={{ gridColumn: '1/-1' }}><Field label="Adresse siège" value={client.adresse} onChange={v => setC('adresse', v)} placeholder="771 Rue de la Plaine" /></div>
                 <Field label="Code postal" value={client.code_postal} onChange={v => setC('code_postal', v)} placeholder="59553" />
-                <ContactNomAutocomplete value={client.contact_nom} onChange={v => setC('contact_nom', v)} onSelectExisting={handleSelectExistingProspect} />
+                <ContactNomAutocomplete value={client.contact_nom} onChange={v => setC('contact_nom', v)} onSelectExisting={handleSelectExistingContact} />
                 <Field label="Fonction" value={client.contact_fonction} onChange={v => setC('contact_fonction', v)} placeholder="Directeur technique" />
                 <Field label="Email contact" value={client.contact_email} onChange={v => setC('contact_email', v)} type="email" placeholder="contact@societe.fr" />
                 <Field label="Téléphone" value={client.contact_tel} onChange={v => setC('contact_tel', v)} placeholder="06 XX XX XX XX" />
