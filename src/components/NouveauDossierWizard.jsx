@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import useStore from '../store/useStore'
 import { nextRef } from '../lib/genRef'
+import { supabase } from '../lib/supabase'
 
 // ── Fiches CEE disponibles ────────────────────────────────────────────────────
 // ── Fiches CEE disponibles — ajouter ici les nouvelles fiches au fil du temps ─
@@ -241,26 +242,37 @@ function Field({ label, value, onChange, type = 'text', placeholder, required, s
   )
 }
 
-function RaisonSocialeAutocomplete({ value, onChange, onSelect }) {
-  const [suggestions, setSuggestions] = useState([])
-  const [open, setOpen] = useState(false)
+function RaisonSocialeAutocomplete({ value, onChange, onSelect, onSelectExisting }) {
+  const [existing, setExisting]     = useState([])
+  const [sirene, setSirene]         = useState([])
+  const [open, setOpen]             = useState(false)
   const timer = useRef(null)
 
   const search = (q) => {
     onChange(q)
     clearTimeout(timer.current)
-    if (q.length < 2) { setSuggestions([]); setOpen(false); return }
+    if (q.length < 2) { setExisting([]); setSirene([]); setOpen(false); return }
     timer.current = setTimeout(async () => {
+      // Clients existants Supabase
+      const { data } = await supabase
+        .from('prospects')
+        .select('id, raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_email, contact_tel, contact_fonction')
+        .ilike('raison_sociale', `%${q}%`)
+        .limit(5)
+      setExisting(data || [])
+      // SIRENE
       try {
-        const res = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(q)}&limit=6`)
-        const data = await res.json()
-        setSuggestions(data.results || [])
-        setOpen(true)
-      } catch { setSuggestions([]) }
+        const res = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(q)}&limit=5`)
+        const d = await res.json()
+        setSirene(d.results || [])
+      } catch { setSirene([]) }
+      setOpen(true)
     }, 350)
   }
 
-  const select = (item) => {
+  const close = () => { setExisting([]); setSirene([]); setOpen(false) }
+
+  const selectSirene = (item) => {
     const siege = item.siege || {}
     onSelect({
       raison_sociale: item.nom_complet || item.nom_raison_sociale || '',
@@ -269,27 +281,102 @@ function RaisonSocialeAutocomplete({ value, onChange, onSelect }) {
       code_postal: siege.code_postal || '',
       ville: siege.libelle_commune || '',
     })
-    setSuggestions([]); setOpen(false)
+    close()
   }
+
+  const hasAny = existing.length > 0 || sirene.length > 0
 
   return (
     <div style={{ position: 'relative', marginBottom: 14 }}>
       <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>
         Raison sociale <span style={{ color: '#EF4444' }}>*</span>
-        <span style={{ marginLeft: 6, fontSize: 10, color: '#2563EB', fontWeight: 400, textTransform: 'none' }}>autocomplétion SIRET</span>
+        <span style={{ marginLeft: 6, fontSize: 10, color: '#2563EB', fontWeight: 400, textTransform: 'none' }}>clients existants + SIRET</span>
       </label>
-      <input value={value} onChange={e => search(e.target.value)} onBlur={() => setTimeout(() => setOpen(false), 200)}
+      <input value={value} onChange={e => search(e.target.value)} onBlur={() => setTimeout(() => setOpen(false), 250)}
         placeholder="KIABI LOGISTIQUE…"
+        style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
+      />
+      {open && hasAny && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#FFFFFF', border: `1px solid ${C.border}`, borderRadius: 8, zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,.12)', maxHeight: 300, overflowY: 'auto' }}>
+          {existing.length > 0 && <>
+            <div style={{ padding: '5px 14px 4px', fontSize: 10, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: 0.5, background: '#EFF6FF', borderBottom: `1px solid ${C.border}` }}>
+              📁 Clients existants
+            </div>
+            {existing.map(p => (
+              <div key={p.id} onClick={() => { onSelectExisting(p); close() }}
+                style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.border}`, background: 'transparent' }}
+                onMouseEnter={e => e.currentTarget.style.background = '#EFF6FF'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#2563EB', flex: 1 }}>{p.raison_sociale}</span>
+                  <span style={{ fontSize: 10, background: '#DBEAFE', color: '#2563EB', borderRadius: 4, padding: '1px 6px', fontWeight: 600, flexShrink: 0 }}>Existant</span>
+                </div>
+                <div style={{ fontSize: 11, color: C.textMid, marginTop: 2 }}>
+                  {p.contact_nom && <span>{p.contact_nom} · </span>}
+                  {p.siret && <span>SIRET {p.siret} · </span>}
+                  {p.ville && <span>{p.code_postal} {p.ville}</span>}
+                </div>
+              </div>
+            ))}
+          </>}
+          {sirene.length > 0 && <>
+            <div style={{ padding: '5px 14px 4px', fontSize: 10, fontWeight: 700, color: C.textSoft, textTransform: 'uppercase', letterSpacing: 0.5, background: C.bg, borderBottom: `1px solid ${C.border}` }}>
+              🔍 SIRENE — nouvelles entreprises
+            </div>
+            {sirene.map((s, i) => (
+              <div key={i} onClick={() => selectSirene(s)}
+                style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.border}` }}
+                onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{s.nom_complet || s.nom_raison_sociale}</div>
+                <div style={{ fontSize: 11, color: C.textMid, marginTop: 2 }}>SIRET {s.siege?.siret || '—'} · {s.siege?.libelle_commune || ''} ({s.siege?.code_postal || ''})</div>
+              </div>
+            ))}
+          </>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ContactNomAutocomplete({ value, onChange, onSelectExisting }) {
+  const [suggestions, setSuggestions] = useState([])
+  const [open, setOpen]               = useState(false)
+  const timer = useRef(null)
+
+  const search = (q) => {
+    onChange(q)
+    clearTimeout(timer.current)
+    if (q.length < 2) { setSuggestions([]); setOpen(false); return }
+    timer.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from('prospects')
+        .select('id, raison_sociale, siret, adresse, code_postal, ville, contact_nom, contact_email, contact_tel, contact_fonction')
+        .ilike('contact_nom', `%${q}%`)
+        .limit(5)
+      setSuggestions(data || [])
+      setOpen((data || []).length > 0)
+    }, 350)
+  }
+
+  return (
+    <div style={{ marginBottom: 14, position: 'relative' }}>
+      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 5, textTransform: 'uppercase', letterSpacing: .4 }}>
+        Contact (Nom Prénom)
+      </label>
+      <input value={value ?? ''} onChange={e => search(e.target.value)} onBlur={() => setTimeout(() => setOpen(false), 250)}
+        placeholder="Fabien Van De Ginste"
         style={{ width: '100%', boxSizing: 'border-box', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '9px 12px', color: C.text, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
       />
       {open && suggestions.length > 0 && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#FFFFFF', border: `1px solid ${C.border}`, borderRadius: 8, zIndex: 200, boxShadow: '0 8px 24px rgba(0,0,0,.12)', maxHeight: 220, overflowY: 'auto' }}>
-          {suggestions.map((s, i) => (
-            <div key={i} onClick={() => select(s)} style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.border}` }}
-              onMouseEnter={e => e.currentTarget.style.background = C.bg}
+          {suggestions.map(p => (
+            <div key={p.id} onClick={() => { onSelectExisting(p); setSuggestions([]); setOpen(false) }}
+              style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.border}`, background: 'transparent' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#EFF6FF'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{s.nom_complet || s.nom_raison_sociale}</div>
-              <div style={{ fontSize: 11, color: C.textMid, marginTop: 2 }}>SIRET {s.siege?.siret || '—'} · {s.siege?.libelle_commune || ''} ({s.siege?.code_postal || ''})</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{p.contact_nom}</div>
+              <div style={{ fontSize: 11, color: C.textMid, marginTop: 2 }}>{p.raison_sociale}{p.ville ? ` · ${p.ville}` : ''}</div>
             </div>
           ))}
         </div>
@@ -493,6 +580,23 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
       resistance_r_103: '',
       cout_installation_103: '',
     }))
+  }
+
+  const [existingProspect, setExistingProspect] = useState(null) // client pré-rempli depuis DB
+
+  const handleSelectExistingProspect = (p) => {
+    setExistingProspect(p)
+    setClient({
+      raison_sociale:   p.raison_sociale   || '',
+      siret:            p.siret            || '',
+      adresse:          p.adresse          || '',
+      code_postal:      p.code_postal      || '',
+      ville:            p.ville            || '',
+      contact_nom:      p.contact_nom      || '',
+      contact_email:    p.contact_email    || '',
+      contact_tel:      p.contact_tel      || '',
+      contact_fonction: p.contact_fonction || '',
+    })
   }
 
   const [prixMwh, setPrixMwh] = useState(prefillPrixMwh || '7.5')
@@ -862,14 +966,25 @@ export default function NouveauDossierWizard({ onClose, onCreate, prefillFiche, 
                   </div>
                 </div>
               )}
+              {existingProspect && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#EFF6FF', border: `1px solid ${C.accent}`, borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>
+                  <span style={{ fontSize: 16 }}>📁</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#2563EB' }}>Informations pré-remplies depuis vos clients existants</div>
+                    <div style={{ fontSize: 11, color: '#475569', marginTop: 1 }}>Seul le site des travaux (étape suivante) reste à renseigner.</div>
+                  </div>
+                  <button onClick={() => setExistingProspect(null)} style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: 16, padding: 2 }}>×</button>
+                </div>
+              )}
               <RaisonSocialeAutocomplete value={client.raison_sociale} onChange={v => setC('raison_sociale', v)}
-                onSelect={d => setClient(c => ({ ...c, raison_sociale: d.raison_sociale, siret: d.siret || c.siret, adresse: d.adresse || c.adresse, code_postal: d.code_postal || c.code_postal, ville: d.ville || c.ville }))} />
+                onSelect={d => setClient(c => ({ ...c, raison_sociale: d.raison_sociale, siret: d.siret || c.siret, adresse: d.adresse || c.adresse, code_postal: d.code_postal || c.code_postal, ville: d.ville || c.ville }))}
+                onSelectExisting={handleSelectExistingProspect} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
                 <Field label="SIRET" value={client.siret} onChange={v => setC('siret', v)} placeholder="34772795000094" />
                 <Field label="Ville" value={client.ville} onChange={v => setC('ville', v)} placeholder="Lauwin-Planque" />
-                <div style={{ gridColumn: '1/-1' }}><Field label="Adresse" value={client.adresse} onChange={v => setC('adresse', v)} placeholder="771 Rue de la Plaine" /></div>
+                <div style={{ gridColumn: '1/-1' }}><Field label="Adresse siège" value={client.adresse} onChange={v => setC('adresse', v)} placeholder="771 Rue de la Plaine" /></div>
                 <Field label="Code postal" value={client.code_postal} onChange={v => setC('code_postal', v)} placeholder="59553" />
-                <Field label="Contact (Nom Prénom)" value={client.contact_nom} onChange={v => setC('contact_nom', v)} placeholder="Fabien Van De Ginste" />
+                <ContactNomAutocomplete value={client.contact_nom} onChange={v => setC('contact_nom', v)} onSelectExisting={handleSelectExistingProspect} />
                 <Field label="Fonction" value={client.contact_fonction} onChange={v => setC('contact_fonction', v)} placeholder="Directeur technique" />
                 <Field label="Email contact" value={client.contact_email} onChange={v => setC('contact_email', v)} type="email" placeholder="contact@societe.fr" />
                 <Field label="Téléphone" value={client.contact_tel} onChange={v => setC('contact_tel', v)} placeholder="06 XX XX XX XX" />
