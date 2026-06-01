@@ -21,17 +21,19 @@ export default async function handler(req, res) {
   const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
   if (authErr || !user) return res.status(401).json({ error: 'unauthorized' })
 
-  const { dossierId, statut, statut_date } = req.body
+  const { dossierId, statut, statut_date, date_fin_travaux } = req.body
   if (!dossierId || !statut) return res.status(400).json({ error: 'dossierId et statut requis' })
 
   const updates = { statut }
   if (statut_date) updates.statut_date = new Date(statut_date).toISOString()
+  if (date_fin_travaux) updates.date_fin_travaux = date_fin_travaux
+  else if (date_fin_travaux === null) updates.date_fin_travaux = null
 
   const { data, error } = await supabase
     .from('dossiers')
     .update(updates)
     .eq('id', dossierId)
-    .select('id, statut, statut_date, ref')
+    .select('id, statut, statut_date, date_fin_travaux, ref')
     .single()
 
   if (error) return res.status(500).json({ error: error.message })

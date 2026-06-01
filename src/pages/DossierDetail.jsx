@@ -47,6 +47,7 @@ export default function DossierDetail() {
   const [loading,       setLoading]       = useState(true)
   const [savingStatut,  setSavingStatut]  = useState(false)
   const [statutForm,    setStatutForm]    = useState({ statut: '', date: new Date().toISOString().split('T')[0] })
+  const [dateFinTravaux, setDateFinTravaux] = useState('')
   const [statutSaved,   setStatutSaved]   = useState(false)
   const [statutError,   setStatutError]   = useState('')
   const [pendingStatut, setPendingStatut] = useState(null)
@@ -121,17 +122,21 @@ export default function DossierDetail() {
       const r = await fetch('/api/dossier-status-update', {
         method: 'POST',
         headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dossierId: id, statut: statutForm.statut, statut_date: statutForm.date }),
+        body: JSON.stringify({
+          dossierId: id,
+          statut: statutForm.statut,
+          statut_date: statutForm.date,
+          ...(statutForm.statut === 'travaux' && dateFinTravaux ? { date_fin_travaux: dateFinTravaux } : {}),
+        }),
       })
       const d = await r.json()
       if (d.error) {
         setStatutError(d.error)
       } else if (d.dossier) {
-        setDossier(prev => ({ ...prev, statut: d.dossier.statut, statut_date: d.dossier.statut_date }))
-        // Sync store Zustand pour que la liste reflète le changement
-        updateDossier(id, { statut: d.dossier.statut, statut_date: d.dossier.statut_date })
-        await logActivite(id, 'statut', `Statut → ${d.dossier.statut}${statutForm.date ? ` (${new Date(statutForm.date).toLocaleDateString('fr-FR')})` : ''}`)
-        setStatutSaved(true); setPendingStatut(null)
+        setDossier(prev => ({ ...prev, statut: d.dossier.statut, statut_date: d.dossier.statut_date, date_fin_travaux: d.dossier.date_fin_travaux ?? prev.date_fin_travaux }))
+        updateDossier(id, { statut: d.dossier.statut, statut_date: d.dossier.statut_date, date_fin_travaux: d.dossier.date_fin_travaux })
+        await logActivite(id, 'statut', `Statut → ${d.dossier.statut}${statutForm.date ? ` (${new Date(statutForm.date).toLocaleDateString('fr-FR')})` : ''}${dateFinTravaux ? ` · fin travaux ${new Date(dateFinTravaux).toLocaleDateString('fr-FR')}` : ''}`)
+        setStatutSaved(true); setPendingStatut(null); setDateFinTravaux('')
         setTimeout(() => setStatutSaved(false), 3000)
       } else {
         setStatutError('Réponse inattendue du serveur')
@@ -297,13 +302,23 @@ export default function DossierDetail() {
             return (
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Passer à <span style={{ color: s.color }}>{s.label}</span></span>
-                <input type="date" value={statutForm.date} onChange={e => setStatutForm(f => ({ ...f, date: e.target.value }))}
-                  style={{ fontSize: 12, color: C.text, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '5px 10px', fontFamily: 'inherit' }} />
-                <button onClick={changeStatut} disabled={savingStatut}
-                  style={{ padding: '6px 16px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: savingStatut ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: 'none', background: s.color, color: '#fff', opacity: savingStatut ? .6 : 1 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: C.textSoft, textTransform: 'uppercase', letterSpacing: 0.4 }}>Date de changement</label>
+                  <input type="date" value={statutForm.date} onChange={e => setStatutForm(f => ({ ...f, date: e.target.value }))}
+                    style={{ fontSize: 12, color: C.text, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, padding: '5px 10px', fontFamily: 'inherit' }} />
+                </div>
+                {pendingStatut === 'travaux' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: '#C2410C', textTransform: 'uppercase', letterSpacing: 0.4 }}>📅 Date fin travaux <span style={{ color: '#EF4444' }}>*</span></label>
+                    <input type="date" value={dateFinTravaux} onChange={e => setDateFinTravaux(e.target.value)}
+                      style={{ fontSize: 12, color: C.text, background: '#FFF7ED', border: `1px solid ${dateFinTravaux ? '#C2410C' : '#FED7AA'}`, borderRadius: 7, padding: '5px 10px', fontFamily: 'inherit' }} />
+                  </div>
+                )}
+                <button onClick={changeStatut} disabled={savingStatut || (pendingStatut === 'travaux' && !dateFinTravaux)}
+                  style={{ padding: '6px 16px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: (savingStatut || (pendingStatut === 'travaux' && !dateFinTravaux)) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', border: 'none', background: s.color, color: '#fff', opacity: (savingStatut || (pendingStatut === 'travaux' && !dateFinTravaux)) ? .5 : 1 }}>
                   {savingStatut ? '…' : 'Confirmer'}
                 </button>
-                <button onClick={() => { setPendingStatut(null); setStatutError('') }}
+                <button onClick={() => { setPendingStatut(null); setStatutError(''); setDateFinTravaux('') }}
                   style={{ padding: '6px 12px', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${C.border}`, background: 'transparent', color: C.textMid }}>
                   Annuler
                 </button>

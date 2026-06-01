@@ -22,24 +22,28 @@ const PAGE_TITLES = {
   '/export-mapping': 'Export personnalisé',
 }
 
-// Statuts actifs — excluent perdu, facture, archive
+// Alertes stagnant uniquement entre Contacté et Devis envoyé (inclus)
+// Au-delà (travaux, dépôt, conforme, facturé) pas besoin de relance
 const STATUTS_STAGNANT = [
-  'simulation','prospect','contacte',
+  'contacte',
   'visio_planifiee','visio_effectuee',
   'visite_planifiee','visite_effectuee',
-  'devis','ah','conforme',
+  'devis',
 ]
 const STATUT_LABELS = {
-  simulation:       'Simulation',
-  prospect:         'Prospect',
-  contacte:         'Contacté',
-  visio_planifiee:  'Visio planifiée',
-  visio_effectuee:  'Visio effectuée',
-  visite_planifiee: 'Visite planifiée',
-  visite_effectuee: 'Visite effectuée',
-  devis:            'Devis envoyé',
-  ah:               'AH signé',
-  conforme:         'Conforme',
+  simulation:        'Simulation',
+  prospect:          'Prospect',
+  contacte:          'Contacté',
+  visio_planifiee:   'Visio planifiée',
+  visio_effectuee:   'Visio effectuée',
+  visite_planifiee:  'Visite planifiée',
+  visite_effectuee:  'Visite effectuée',
+  devis:             'Devis envoyé',
+  devis_valide:      'Devis validé',
+  travaux:           'Travaux en cours',
+  depot_delegataire: 'Dépôt délégitaire',
+  ah:                'AH signé',
+  conforme:          'Conforme',
 }
 
 // ── Icônes SVG discrètes ─────────────────────────────────────────────────────
@@ -122,7 +126,22 @@ export default function AppPageHeader() {
     _sub:   t.dossiers?.ref ? `${t.dossiers.ref}${t.dossiers.prospects?.raison_sociale ? ' — ' + t.dossiers.prospects.raison_sociale : ''}` : null,
   })).sort((a, b) => b.jours - a.jours)
 
-  const notifCount = stagnantList.length + overdueList.length
+  // ── Fin de travaux imminente (J-10 ou dépassée) ────────────────────────────
+  const travauxAlertList = myDossiers.filter(d => {
+    if (d.statut !== 'travaux' || !d.date_fin_travaux) return false
+    const daysLeft = Math.floor((new Date(d.date_fin_travaux) - now) / 86400000)
+    return daysLeft <= 10  // inclut J-10 et les dates dépassées
+  }).map(d => {
+    const daysLeft = Math.floor((new Date(d.date_fin_travaux) - now) / 86400000)
+    return {
+      ...d,
+      _type: 'travaux',
+      daysLeft,
+      _label: d.prospects?.raison_sociale || d.ref || '—',
+    }
+  }).sort((a, b) => a.daysLeft - b.daysLeft)
+
+  const notifCount = stagnantList.length + overdueList.length + travauxAlertList.length
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleLogout = async () => {
@@ -270,6 +289,50 @@ export default function AppPageHeader() {
                                 </span>
                               </div>
                               {t._sub && <div style={{ fontSize: 11, color: '#64748B', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t._sub}</div>}
+                            </div>
+                          </button>
+                        ))}
+                      </>
+                    )}
+
+                    {/* ── Fin de travaux imminente ── */}
+                    {travauxAlertList.length > 0 && (
+                      <>
+                        <div style={{ padding: '7px 14px 4px', fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                          Fin de travaux ({travauxAlertList.length})
+                        </div>
+                        {travauxAlertList.map(d => (
+                          <button
+                            key={d.id}
+                            onClick={() => { setNotifOpen(false); navigate(`/dossier/${d.id}`) }}
+                            style={{
+                              display: 'flex', alignItems: 'flex-start', gap: 10,
+                              width: '100%', padding: '8px 14px', background: 'transparent',
+                              border: 'none', borderBottom: '1px solid #1E3A5F',
+                              cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#273549' }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                          >
+                            <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>🔨</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: '#F8FAFC', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {d.ref || d.id.slice(0, 8)}
+                                </span>
+                                <span style={{ fontSize: 10, fontWeight: 700,
+                                  color: d.daysLeft < 0 ? '#FCA5A5' : d.daysLeft <= 3 ? '#FCD34D' : '#86EFAC',
+                                  background: d.daysLeft < 0 ? '#3f1515' : d.daysLeft <= 3 ? '#3f2e00' : '#14351f',
+                                  borderRadius: 4, padding: '2px 6px', flexShrink: 0 }}>
+                                  {d.daysLeft < 0 ? `Dépassé +${Math.abs(d.daysLeft)}j` : d.daysLeft === 0 ? "Auj." : `J-${d.daysLeft}`}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {d._label}
+                              </div>
+                              <div style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                                Fin prévue : {new Date(d.date_fin_travaux).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })} — Préparer les docs CEE
+                              </div>
                             </div>
                           </button>
                         ))}

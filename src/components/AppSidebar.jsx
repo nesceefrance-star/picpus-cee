@@ -57,7 +57,8 @@ const DARK = {
   accentBg:  '#1e3a6e',
 }
 
-const STATUTS_STAGNANT = ['visio_planifiee','visio_effectuee','visite_planifiee','visite_effectuee','devis','ah']
+// Alertes stagnant uniquement entre Contacté et Devis envoyé (inclus)
+const STATUTS_STAGNANT = ['contacte','visio_planifiee','visio_effectuee','visite_planifiee','visite_effectuee','devis']
 
 export default function AppSidebar({ open, onToggle, mobileOpen, onMobileClose }) {
   const navigate   = useNavigate()
